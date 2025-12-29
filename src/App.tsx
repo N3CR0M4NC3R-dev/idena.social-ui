@@ -149,7 +149,7 @@ function App() {
             setFindPastsBlocksUrl(inputFindPastsBlocksUrl);
 
             (async function() {
-                const pastBlocksWithTxsResult = await getPastBlocksWithTxs(inputFindPastsBlocksUrl, 10135627);
+                const { blocksWithTxs: pastBlocksWithTxsResult } = await getPastBlocksWithTxs(inputFindPastsBlocksUrl, 10135627);
 
                 if (pastBlocksWithTxsResult.length === 1 && pastBlocksWithTxsResult[0] === 10135627) {
                     setFindPastsBlocksUrlInvalid(false);
