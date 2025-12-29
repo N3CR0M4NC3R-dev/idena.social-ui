@@ -67,15 +67,15 @@ function App() {
     const [ads, setAds] = useState<AdDetailsExtra[]>([]);
     const [currentAd, setCurrentAd] = useState<AdDetailsExtra | null>(null);
     const currentAdRef = useRef(currentAd);
-    const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(false);
+    const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(true);
     const [pastBlocksWithTxs, setPastBlocksWithTxs] = useState<number[]>([]);
     const pastBlocksWithTxsRef = useRef(pastBlocksWithTxs);
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
-    const [findPastsBlocksUrl, setFindPastsBlocksUrl] = useState<string>('');
+    const [findPastsBlocksUrl, setFindPastsBlocksUrl] = useState<string>(findPastsBlocksUrlInit);
     const findPastsBlocksUrlRef = useRef(findPastsBlocksUrl);
     const [findPastsBlocksUrlInvalid, setFindPastsBlocksUrlInvalid] = useState<boolean>(false);
     const findPastsBlocksUrlInvalidRef = useRef(findPastsBlocksUrlInvalid);
-    const [inputFindPastsBlocksUrl, setInputFindPastsBlocksUrl] = useState<string>('');
+    const [inputFindPastsBlocksUrl, setInputFindPastsBlocksUrl] = useState<string>(findPastsBlocksUrlInit);
     const [inputFindPastsBlocksUrlApplied, setInputFindPastsBlocksUrlApplied] = useState<boolean>(true);
 
     useEffect(() => {
@@ -406,12 +406,19 @@ function App() {
                         const pastBlocksInRangeForNextBlock = (pastBlocksWithTxsRef.current[0] > nextPastBlock) && (pastBlocksWithTxsRef.current[pastBlocksWithTxsRef.current.length - 1] < nextPastBlock);
 
                         if (noPastBlocksWithTxsGathered || pastBlocksAlreadyProcessed) {
-                            const pastBlocksWithTxsResult = await getPastBlocksWithTxs(findPastsBlocksUrlRef.current, nextPastBlock);
-                            setPastBlocksWithTxs(pastBlocksWithTxsResult);
-                            if (!pastBlocksWithTxsResult[0]) {
+                            const { initialblockNumber, blocksWithTxs } = await getPastBlocksWithTxs(findPastsBlocksUrlRef.current, nextPastBlock);
+                            setPastBlocksWithTxs(blocksWithTxs);
+
+                            if (!blocksWithTxs[0]) {
                                 throw 'no more blocks';
                             }
-                            pendingBlock = pastBlocksWithTxsResult[0];
+
+                            if (nextPastBlock > initialblockNumber) {
+                                pendingBlock = nextPastBlock;
+                            } else {
+                                pendingBlock = blocksWithTxs[0];
+                            }
+                        
                         } else if (pastBlocksInRangeForNextBlock) {
                             const insertionIndex = pastBlocksWithTxsRef.current.findIndex(currentItem => currentItem <= nextPastBlock);
                             const finalIndex = insertionIndex === -1 ? pastBlocksWithTxsRef.current.length : insertionIndex;
