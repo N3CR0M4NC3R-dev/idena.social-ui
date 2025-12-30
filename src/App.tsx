@@ -11,7 +11,7 @@ import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines
 
 const idenaNodeUrl = 'https://restricted.idena.io';
 const idenaNodeApiKey = 'idena-restricted-node-key';
-const findPastsBlocksUrlInit = 'https://api.idena.social/find-blocks-with-txs';
+const findPastBlocksUrlInit = 'https://api.idena.social/find-blocks-with-txs';
 const contractAddress = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
 const firstBlock = 10135621;
 const makePostMethod = 'makePost';
@@ -68,15 +68,16 @@ function App() {
     const [currentAd, setCurrentAd] = useState<AdDetailsExtra | null>(null);
     const currentAdRef = useRef(currentAd);
     const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(true);
+    const useFindPastBlocksWithTxsApiRef = useRef(useFindPastBlocksWithTxsApi);
     const [pastBlocksWithTxs, setPastBlocksWithTxs] = useState<number[]>([]);
     const pastBlocksWithTxsRef = useRef(pastBlocksWithTxs);
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
-    const [findPastsBlocksUrl, setFindPastsBlocksUrl] = useState<string>(findPastsBlocksUrlInit);
-    const findPastsBlocksUrlRef = useRef(findPastsBlocksUrl);
-    const [findPastsBlocksUrlInvalid, setFindPastsBlocksUrlInvalid] = useState<boolean>(false);
-    const findPastsBlocksUrlInvalidRef = useRef(findPastsBlocksUrlInvalid);
-    const [inputFindPastsBlocksUrl, setInputFindPastsBlocksUrl] = useState<string>(findPastsBlocksUrlInit);
-    const [inputFindPastsBlocksUrlApplied, setInputFindPastsBlocksUrlApplied] = useState<boolean>(true);
+    const [findPastBlocksUrl, setFindPastBlocksUrl] = useState<string>(findPastBlocksUrlInit);
+    const findPastBlocksUrlRef = useRef(findPastBlocksUrl);
+    const [findPastBlocksUrlInvalid, setFindPastBlocksUrlInvalid] = useState<boolean>(false);
+    const findPastBlocksUrlInvalidRef = useRef(findPastBlocksUrlInvalid);
+    const [inputFindPastBlocksUrl, setInputFindPastBlocksUrl] = useState<string>(findPastBlocksUrlInit);
+    const [inputFindPastBlocksUrlApplied, setInputFindPastBlocksUrlApplied] = useState<boolean>(true);
 
     useEffect(() => {
         (async function() {
@@ -145,20 +146,20 @@ function App() {
     }, [inputPostersAddressApplied]);
 
     useEffect(() => {
-        if (inputFindPastsBlocksUrlApplied && useFindPastBlocksWithTxsApi) {
-            setFindPastsBlocksUrl(inputFindPastsBlocksUrl);
+        if (inputFindPastBlocksUrlApplied && useFindPastBlocksWithTxsApi) {
+            setFindPastBlocksUrl(inputFindPastBlocksUrl);
 
             (async function() {
-                const { blocksWithTxs: pastBlocksWithTxsResult } = await getPastBlocksWithTxs(inputFindPastsBlocksUrl, 10135627);
+                const { blocksWithTxs: pastBlocksWithTxsResult = [] } = await getPastBlocksWithTxs(inputFindPastBlocksUrl, 10135627);
 
                 if (pastBlocksWithTxsResult.length === 1 && pastBlocksWithTxsResult[0] === 10135627) {
-                    setFindPastsBlocksUrlInvalid(false);
+                    setFindPastBlocksUrlInvalid(false);
                 } else {
-                    setFindPastsBlocksUrlInvalid(true);
+                    setFindPastBlocksUrlInvalid(true);
                 }
             })();
         }
-    }, [inputFindPastsBlocksUrlApplied]);
+    }, [inputFindPastBlocksUrlApplied]);
 
     useEffect(() => {
         setCurrentAd(ads[0]);
@@ -202,16 +203,20 @@ function App() {
     }, [currentAd]);
 
     useEffect(() => {
+        useFindPastBlocksWithTxsApiRef.current = useFindPastBlocksWithTxsApi;
+    }, [useFindPastBlocksWithTxsApi]);
+
+    useEffect(() => {
         pastBlocksWithTxsRef.current = pastBlocksWithTxs;
     }, [pastBlocksWithTxs]);
 
     useEffect(() => {
-        findPastsBlocksUrlRef.current = findPastsBlocksUrl;
-    }, [findPastsBlocksUrl]);
+        findPastBlocksUrlRef.current = findPastBlocksUrl;
+    }, [findPastBlocksUrl]);
 
     useEffect(() => {
-        findPastsBlocksUrlInvalidRef.current = findPastsBlocksUrlInvalid;
-    }, [findPastsBlocksUrlInvalid]);
+        findPastBlocksUrlInvalidRef.current = findPastBlocksUrlInvalid;
+    }, [findPastBlocksUrlInvalid]);
 
     useEffect(() => {
         if (initialBlock) {
@@ -375,15 +380,15 @@ function App() {
         setUseFindPastBlocksWithTxsApi(useFindPastBlocksWithTxsApi);
 
         if (!useFindPastBlocksWithTxsApi) {
-            setFindPastsBlocksUrl('');
-            setFindPastsBlocksUrlInvalid(false);
+            setFindPastBlocksUrl('');
+            setFindPastBlocksUrlInvalid(false);
         } else {
-            if (findPastsBlocksUrl) {
-                setFindPastsBlocksUrl(findPastsBlocksUrl);
+            if (findPastBlocksUrl) {
+                setFindPastBlocksUrl(findPastBlocksUrl);
                 setPostersAddressInvalid(false);
             } else {
-                setInputFindPastsBlocksUrl(findPastsBlocksUrlInit);
-                setFindPastsBlocksUrl(findPastsBlocksUrlInit);
+                setInputFindPastBlocksUrl(findPastBlocksUrlInit);
+                setFindPastBlocksUrl(findPastBlocksUrlInit);
             }
         }
     };
@@ -400,13 +405,13 @@ function App() {
 
                     if (!nextPastBlock) {
                         pendingBlock = initialBlock - 1;
-                    } else if (useFindPastBlocksWithTxsApi && !findPastsBlocksUrlInvalidRef.current) {
+                    } else if (useFindPastBlocksWithTxsApiRef.current && !findPastBlocksUrlInvalidRef.current) {
                         const noPastBlocksWithTxsGathered = !pastBlocksWithTxsRef.current.length;
                         const pastBlocksAlreadyProcessed = (pastBlocksWithTxsRef.current[0] > nextPastBlock) && (pastBlocksWithTxsRef.current[pastBlocksWithTxsRef.current.length - 1] > nextPastBlock);
                         const pastBlocksInRangeForNextBlock = (pastBlocksWithTxsRef.current[0] > nextPastBlock) && (pastBlocksWithTxsRef.current[pastBlocksWithTxsRef.current.length - 1] < nextPastBlock);
 
                         if (noPastBlocksWithTxsGathered || pastBlocksAlreadyProcessed) {
-                            const { initialblockNumber, blocksWithTxs } = await getPastBlocksWithTxs(findPastsBlocksUrlRef.current, nextPastBlock);
+                            const { initialblockNumber, blocksWithTxs = [] } = await getPastBlocksWithTxs(findPastBlocksUrlRef.current, nextPastBlock);
                             setPastBlocksWithTxs(blocksWithTxs);
 
                             if (!blocksWithTxs[0]) {
@@ -494,14 +499,14 @@ function App() {
                 setBlockCaptured(pendingBlock);
                 setPosts((currentPosts) => recurseForward ? [...newPosts, ...currentPosts] : [...currentPosts, ...newPosts]);
 
-                await recurse(!recurseForward && Math.floor(Date.now() / 1000));
+                recurse(!recurseForward && Math.floor(Date.now() / 1000));
             } catch(error) {
                 console.error(error);
                 if (!recurseForward && error === 'no more blocks') {
                     setNoMorePastBlocks(true);
                     setScanningPastBlocks(false);
                 } else {
-                    await recurse(!recurseForward && Math.floor(Date.now() / 1000));
+                    recurse(!recurseForward && Math.floor(Date.now() / 1000));
                 }
             }
         };
@@ -567,11 +572,11 @@ function App() {
                         {useFindPastBlocksWithTxsApi && (
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <p className="mb-1">Api Url:</p>
-                                <input className="flex-1 mb-1 h-6.6 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputFindPastsBlocksUrlApplied} value={inputFindPastsBlocksUrl} onChange={e => setInputFindPastsBlocksUrl(e.target.value)} />
-                                {findPastsBlocksUrlInvalid && <p className="text-[11px] text-red-400">Invalid Api Url.</p>}
+                                <input className="flex-1 mb-1 h-6.6 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputFindPastBlocksUrlApplied} value={inputFindPastBlocksUrl} onChange={e => setInputFindPastBlocksUrl(e.target.value)} />
+                                {findPastBlocksUrlInvalid && <p className="text-[11px] text-red-400">Invalid Api Url.</p>}
                                 <div className="flex flex-row">
-                                    <button className={`w-16 h-7 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputFindPastsBlocksUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputFindPastsBlocksUrlApplied(!inputFindPastsBlocksUrlApplied)}>{inputFindPastsBlocksUrlApplied ? 'Change' : 'Apply'}</button>
-                                    {!inputFindPastsBlocksUrlApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
+                                    <button className={`w-16 h-7 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputFindPastBlocksUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputFindPastBlocksUrlApplied(!inputFindPastBlocksUrlApplied)}>{inputFindPastBlocksUrlApplied ? 'Change' : 'Apply'}</button>
+                                    {!inputFindPastBlocksUrlApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
                                 </div>
                             </div>
                         )}
