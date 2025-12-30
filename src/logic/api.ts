@@ -137,6 +137,6 @@ export const getPastBlocksWithTxs = async (findPastsBlocksUrl: string, blockNumb
         return result;
     } catch (error: unknown) {
         console.error(error);
-        return [];
+        return {};
     }
 };
