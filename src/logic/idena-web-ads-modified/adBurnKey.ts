@@ -1,6 +1,6 @@
-import { ProtoAdBurnKeySchema } from '../idena-sdk-js-modified/models/proto/models_pb';
+import { ProtoAdBurnKeySchema } from 'idena-sdk-js-lite';
 import { fromBinary } from '@bufbuild/protobuf';
-import { hexToUint8Array } from '../idena-sdk-js-modified';
+import { hexToUint8Array } from 'idena-sdk-js-lite';
 
 type BurnKey = { cid: string, target: string };
 

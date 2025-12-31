@@ -1,6 +1,6 @@
-import { ProtoProfileSchema } from '../idena-sdk-js-modified/models/proto/models_pb';
+import { ProtoProfileSchema } from 'idena-sdk-js-lite';
 import { fromBinary } from '@bufbuild/protobuf';
-import { hexToUint8Array } from '../idena-sdk-js-modified';
+import { hexToUint8Array } from 'idena-sdk-js-lite';
 
 type Ad = { cid: string, target: string, contract: string, author: string };
 

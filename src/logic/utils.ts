@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { hexToUint8Array } from "./idena-sdk-js-modified";
+import { hexToUint8Array } from "idena-sdk-js-lite";
 
 export function getDisplayAddress(address: string) {
     return `${address.slice(0, 7)}...${address.slice(-5)}`;

@@ -5,7 +5,7 @@ import {
     hexToUint8Array,
     Transaction,
     transactionType,
-} from './logic/idena-sdk-js-modified';
+} from 'idena-sdk-js-lite';
 import { getApprovedAds, getMaxFee, getPastBlocksWithTxs, getRpcClient, type AdDetailsExtra, type RpcClient } from './logic/api';
 import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines, hex2str, sanitizeStr } from './logic/utils';
 
@@ -44,13 +44,13 @@ function App() {
     const [viewOnlyNode, setViewOnlyNode] = useState<boolean>(false);
     const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
-    const [inputPostersAddress, setInputPostersAddress] = useState<string>('');
+    const [inputPostersAddress, setInputPostersAddress] = useState<string>(zeroAddress);
     const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState<boolean>(true);
     const [inputNodeUrl, setInputNodeUrl] = useState<string>(idenaNodeUrl);
     const [inputNodeKey, setInputNodeKey] = useState<string>(idenaNodeApiKey);
-    const [postersAddress, setPostersAddress] = useState<string>('');
+    const [postersAddress, setPostersAddress] = useState<string>(zeroAddress);
     const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
-    const [inputUseRpc, setInputUseRpc] = useState<boolean>(true);
+    const [inputUseRpc, setInputUseRpc] = useState<boolean>(false);
     const [inputPost, setInputPost] = useState<string>('');
     const [submittingPost, setSubmittingPost] = useState<boolean>(false);
     const [postDelayMessage, setPostDelayMessage] = useState<boolean>(false);

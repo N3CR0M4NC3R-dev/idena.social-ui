@@ -1,5 +1,5 @@
-import { hexToUint8Array } from '../idena-sdk-js-modified';
-import { ProtoAdSchema, type ProtoAd } from '../idena-sdk-js-modified/models/proto/models_pb';
+import { hexToUint8Array } from 'idena-sdk-js-lite';
+import { ProtoAdSchema, type ProtoAd } from 'idena-sdk-js-lite';
 import { fromBinary } from '@bufbuild/protobuf';
 
 export const adFallbackSrc = '/static/body-medium-pic-icn.svg';

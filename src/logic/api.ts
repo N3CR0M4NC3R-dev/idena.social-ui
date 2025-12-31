@@ -2,8 +2,8 @@ import {
     hexToUint8Array,
     toHexString,
     Transaction,
-    type TransactionType,
-} from './idena-sdk-js-modified';
+    type TransactionTypeValue,
+} from 'idena-sdk-js-lite';
 import { Profile } from './idena-web-ads-modified/profile';
 import { fetchAdVoting, isApprovedVoting } from './idena-web-ads-modified/utilsAds';
 import { Ad, AdBurnKey, type AdDetails } from './idena-web-ads-modified';
@@ -44,7 +44,7 @@ export type RpcClient = ReturnType<typeof getRpcClient>;
 type GetMaxFeeData = {
         from: string,
         to: string,
-        type: TransactionType,
+        type: TransactionTypeValue,
         amount: number,
         payload: any,
 }
