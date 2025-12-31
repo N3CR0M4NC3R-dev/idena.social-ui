@@ -4,16 +4,8 @@ import {
     Transaction,
     type TransactionTypeValue,
 } from 'idena-sdk-js-lite';
-import { Profile } from './idena-web-ads-modified/profile';
-import { fetchAdVoting, isApprovedVoting } from './idena-web-ads-modified/utilsAds';
-import { Ad, AdBurnKey, type AdDetails } from './idena-web-ads-modified';
 
 export type NodeDetails = { idenaNodeUrl: string, idenaNodeApiKey: string };
-export type AdDetailsExtra = AdDetails & {
-    cid: string,
-    author: string,
-    burnAmount: string,
-};
 
 export const getRpcClient = (nodeDetails: NodeDetails) => async (method: string, params: any[]) => {
     try {
@@ -62,62 +54,6 @@ export const getMaxFee = async (rpcClient: RpcClient, data: GetMaxFeeData) => {
     } catch (error) {
         console.error(error);
         return (0).toString();
-    }
-};
-
-export const getApprovedAds = async (rpcClient: RpcClient) => {
-    try {
-        const { result: getBurntCoinsResult } = await rpcClient('bcn_burntCoins', []);
-
-        const promises = [];
-
-        for (let index = 0; index < getBurntCoinsResult.length; index++) {
-            const burntCoin = getBurntCoinsResult[index];
-
-            const burntCoinWithKeyDecoded = {
-                ...burntCoin,
-                ...AdBurnKey.fromHex(burntCoin.key).burnKey,
-            };
-
-            promises.push((async () => {
-                const { result: getIdentityResult } = await rpcClient('dna_identity', [burntCoinWithKeyDecoded.address]);
-
-                if (getIdentityResult.profileHash) {
-                    const { result: getProfileResult } = await rpcClient('ipfs_get', [getIdentityResult.profileHash]);
-
-                    const { ads } = Profile.fromHex(getProfileResult);
-
-                    const ad = ads.find(({ cid }) => cid === burntCoinWithKeyDecoded.cid);
-
-                    if (ad && ad.contract) {
-                        const { result: batchDataResult } = await rpcClient('contract_batchReadData', [ad.contract, [
-                            { key: 'state', format: 'byte' },
-                            { key: 'fact', format: 'hex' },
-                            { key: 'result', format: 'byte' },
-                        ]]);
-
-                        const voting = fetchAdVoting(ad.contract, batchDataResult);
-                        const approvedBurntCoin = isApprovedVoting(voting, ad.cid) ? burntCoinWithKeyDecoded : null;
-
-                        if (approvedBurntCoin) {
-                            const { result: getCidResult } = await rpcClient('ipfs_get', [ad.cid]);
-                            return {
-                                ...Ad.fromHex(getCidResult).details,
-                                cid: ad.cid,
-                                author: ad.author,
-                                burnAmount: burntCoinWithKeyDecoded.amount
-                            } as AdDetailsExtra;
-                        }
-                    }
-                }
-            })());
-        }
-
-        const approvedAdOffers = (await Promise.all(promises)).filter((ad) => !!ad).sort((a, b) => parseInt(b.burnAmount) - parseInt(a.burnAmount));
-        return approvedAdOffers;
-    } catch (error) {
-        console.error(error);
-        return [];
     }
 };
 

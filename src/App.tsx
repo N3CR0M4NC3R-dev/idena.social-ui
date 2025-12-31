@@ -6,7 +6,8 @@ import {
     Transaction,
     transactionType,
 } from 'idena-sdk-js-lite';
-import { getApprovedAds, getMaxFee, getPastBlocksWithTxs, getRpcClient, type AdDetailsExtra, type RpcClient } from './logic/api';
+import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
+import { getMaxFee, getPastBlocksWithTxs, getRpcClient, type RpcClient } from './logic/api';
 import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines, hex2str, sanitizeStr } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
@@ -69,8 +70,8 @@ function App() {
     const currentBlockCapturedRef = useRef(currentBlockCaptured);
     const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(false);
     const [viewMorePosts, setViewMorePosts] = useState<Record<string, boolean[]>>({});
-    const [ads, setAds] = useState<AdDetailsExtra[]>([]);
-    const [currentAd, setCurrentAd] = useState<AdDetailsExtra | null>(null);
+    const [ads, setAds] = useState<ApprovedAd[]>([]);
+    const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
     const currentAdRef = useRef(currentAd);
     const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(true);
     const useFindPastBlocksWithTxsApiRef = useRef(useFindPastBlocksWithTxsApi);
@@ -122,8 +123,16 @@ function App() {
                 setViewOnlyNode(true);
             }
 
-            const ads = await getApprovedAds(rpcClient);
-            setAds(ads);
+            const adsClient = new IdenaApprovedAds({ idenaNodeUrl, idenaNodeApiKey });
+
+            try {
+                const ads = await adsClient.getApprovedAds();
+                setAds(ads);
+            } catch (error) {
+                console.error(error);
+                setAds([]);
+            }
+
         })();
     }, [rpcClient]);
 

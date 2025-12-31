@@ -44,14 +44,6 @@ export function hex2str(hex: string) {
     return new TextDecoder().decode(hexToUint8Array(hex));
 }
 
-export function hexToObject(hex: string) {
-    try {
-        return JSON.parse(hex2str(hex));
-    } catch {
-        return {};
-    }
-}
-
 export function sanitizeStr(str: string) {
     return new DOMParser().parseFromString(str, 'text/html').body.textContent || '';
 }
