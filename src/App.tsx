@@ -8,6 +8,7 @@ import {
 } from 'idena-sdk-js-lite';
 import { getApprovedAds, getMaxFee, getPastBlocksWithTxs, getRpcClient, type AdDetailsExtra, type RpcClient } from './logic/api';
 import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines, hex2str, sanitizeStr } from './logic/utils';
+import WhatIsIdenaPng from './assets/whatisidena.png';
 
 const idenaNodeUrl = 'https://restricted.idena.io';
 const idenaNodeApiKey = 'idena-restricted-node-key';
@@ -19,6 +20,10 @@ const thisChannelId = '';
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
+const defaultAdUrl = 'https://idena.io';
+const defaultAdImage = WhatIsIdenaPng;
+const defaultAdTitle = 'IDENA: Proof-of-Person blockchain';
+const defaultAdDesc = 'Coordination of individuals';
 
 const POLLING_INTERVAL = 5000;
 const SCANNING_INTERVAL = 10;
@@ -35,7 +40,7 @@ if (!DEBUG) {
     console.error = () => {};
 }
 
-type Post = { blockHeight: number, timestamp: number, postId: string, poster: string, message: string };
+type Post = { blockHeight: number, timestamp: number, postId: string, poster: string, message: string, transaction: string };
 type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, online: boolean };
 
 function App() {
@@ -493,7 +498,7 @@ function App() {
                         setPosters((currentPosters) => [...currentPosters, { address, stake, age, pubkey, state, online }]);
                     }
 
-                    newPosts.unshift({ blockHeight: getBlockByHeightResult.height, timestamp: getBlockByHeightResult.timestamp, postId, poster, message });
+                    newPosts.unshift({ blockHeight: getBlockByHeightResult.height, timestamp: getBlockByHeightResult.timestamp, postId, poster, message, transaction });
                 }
 
                 setBlockCaptured(pendingBlock);
@@ -515,14 +520,14 @@ function App() {
     const viewMoreHandler = (postId: string) => {
         const viewMorePostsItem = viewMorePosts[postId];
         viewMorePostsItem[1] = false;
-        setViewMorePosts({ ...viewMorePosts, postId: viewMorePostsItem })
-    }
+        setViewMorePosts({ ...viewMorePosts, postId: viewMorePostsItem });
+    };
 
     return (
         <main className="w-full flex flex-row p-2">
             <div className="flex-1 justify-items-end">
                 <div className="w-[288px] min-w-[288px] ml-2 mr-8 flex flex-col">
-                    <div className="text-[28px] mb-3">idena.social</div>
+                    <div className="text-[28px] mb-3"><a href={`https://scan.idena.io/contract/${contractAddress}`} target="_blank">idena.social</a></div>
                     <div className="mb-4 text-[14px]">
                         <div className="flex flex-col gap-2">
                             <div className="flex flex-row gap-1">
@@ -565,7 +570,7 @@ function App() {
                         <div>
                             <label className="inline-flex items-center cursor-pointer">
                                 <input type="checkbox" value="" className="sr-only peer" checked={useFindPastBlocksWithTxsApi} onChange={handleUseFindPastBlocksWithTxsApiToggle} />
-                                <div className={`relative w-9 h-5 bg-neutral-quaternary peer-focus:outline-none peer-focus:ring-brand-soft dark:peer-focus:ring-brand-soft rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-buffer after:content-[\'\'] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand ${useFindPastBlocksWithTxsApi ? 'bg-blue-500' : 'bg-gray-700'}`}></div>
+                                <div className={`relative w-9 h-5 bg-neutral-quaternary peer-focus:outline-none peer-focus:ring-brand-soft dark:peer-focus:ring-brand-soft rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-buffer after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand ${useFindPastBlocksWithTxsApi ? 'bg-blue-500' : 'bg-gray-700'}`}></div>
                                 <span className="select-none ms-3 text-sm font-medium text-heading">Scan blocks with helper Api</span>
                             </label>
                         </div>
@@ -638,7 +643,7 @@ function App() {
                                     </div>
                                     {displayViewMore && <div className="px-4 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => viewMoreHandler(post.postId)}>view more</a></div>}
                                     <div className="py-1 px-2">
-                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right">{`${displayDate}, ${displayTime} (Block #${post.blockHeight})`}</p>
+                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.transaction}`} target="_blank">{`${displayDate}, ${displayTime} (Block #${post.blockHeight})`}</a></p>
                                     </div>
                                 </div>
                             </li>
@@ -654,10 +659,12 @@ function App() {
             </div>
             <div className="flex-1 justify-items-start">
                 <div className="w-[288px] min-w-[288px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
-                    <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title}</p></div>
-                    <div className="px-1"><p>{currentAd?.desc}</p></div>
-                    <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url} target="_blank">{currentAd?.url}</a></div>
-                    <div className="my-3"><a className="h-[320px] w-[320px]" href={currentAd?.url} target="_blank"><img className="rounded-md" src={currentAd?.media} /></a></div>
+                    <div className="flex flex-col h-[90px] justify-center">
+                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAdTitle}</p></div>
+                        <div className="px-1"><p>{currentAd?.desc ?? defaultAdDesc}</p></div>
+                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAdUrl} target="_blank">{currentAd?.url ?? defaultAdUrl}</a></div>
+                    </div>
+                    <div className="my-3 h-[320px] w-[320px]"><a href={currentAd?.url ?? defaultAdUrl} target="_blank"><img className="rounded-md" src={currentAd?.media ?? defaultAdImage} /></a></div>
                     <div className="flex flex-row px-1">
                         <div className="w-16 flex-auto">
                             <div className="font-[600] text-gray-400"><p>Sponsored by</p></div>
