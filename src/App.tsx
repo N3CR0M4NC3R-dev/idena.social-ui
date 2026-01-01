@@ -7,9 +7,9 @@ import {
     transactionType,
 } from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getRecurseBackwardPendingBlock } from './logic/asyncUtils';
+import { getNewPostersAndPosts, getRecurseBackwardPendingBlock } from './logic/asyncUtils';
 import { getMaxFee, getPastBlocksWithTxs, getRpcClient, type RpcClient } from './logic/api';
-import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines, hex2str, sanitizeStr } from './logic/utils';
+import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
 const idenaNodeUrl = 'https://restricted.idena.io';
@@ -42,8 +42,8 @@ if (!DEBUG) {
     console.error = () => {};
 }
 
-type Post = { blockHeight: number, timestamp: number, postId: string, poster: string, message: string, transaction: string };
-type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, online: boolean };
+export type Post = { blockHeight: number, timestamp: number, postId: string, poster: string, message: string, transaction: string };
+export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, online: boolean };
 
 function App() {
     const [rpcClient, setRpcClient] = useState<RpcClient>(() => getRpcClient({ idenaNodeUrl, idenaNodeApiKey }));
@@ -442,52 +442,10 @@ function App() {
                     throw 'no transactions';
                 }
 
-                const newPosts: Post[] = [];
-
-                for (let index = 0; index < getBlockByHeightResult.transactions.length; index++) {
-                    const transaction = getBlockByHeightResult.transactions[index];
-
-                    const { result: getTxReceiptResult } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
-
-                    if (!getTxReceiptResult) {
-                        continue;
-                    }
-
-                    if (getTxReceiptResult.contract !== contractAddress.toLowerCase()) {
-                        continue;
-                    }
-
-                    if (getTxReceiptResult.method !== makePostMethod) {
-                        continue;
-                    }
-
-                    if (getTxReceiptResult.success !== true) {
-                        continue;
-                    }
-
-                    const poster = getTxReceiptResult.events[0].args[0];
-                    const postId = getTxReceiptResult.events[0].args[1];
-                    const channelId = hex2str(getTxReceiptResult.events[0].args[2]);
-                    const message = sanitizeStr(hex2str(getTxReceiptResult.events[0].args[3]));
-
-                    if (channelId !== thisChannelId) {
-                        continue;
-                    }
-
-                    if (!message) {
-                        continue;
-                    }
-
-                    if (!postersRef.current.some((item) => item.address === poster)) {
-                        const { result: getDnaIdentityResult } = await rpcClientRef.current('dna_identity', [poster]);
-                        const { address, stake, age, pubkey, state, online } = getDnaIdentityResult;
-                        setPosters((currentPosters) => [...currentPosters, { address, stake, age, pubkey, state, online }]);
-                    }
-
-                    newPosts.unshift({ blockHeight: getBlockByHeightResult.height, timestamp: getBlockByHeightResult.timestamp, postId, poster, message, transaction });
-                }
+                const { newPosters, newPosts } = await getNewPostersAndPosts(contractAddress, makePostMethod, thisChannelId, rpcClientRef, getBlockByHeightResult, postersRef);
 
                 setBlockCaptured(pendingBlock);
+                setPosters((currentPosters) => [...currentPosters, ...newPosters]);
                 setPosts((currentPosts) => recurseForward ? [...newPosts, ...currentPosts] : [...currentPosts, ...newPosts]);
 
                 if (recurseForward) {
