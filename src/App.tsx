@@ -1,15 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-    CallContractAttachment,
-    contractArgumentFormat,
-    hexToUint8Array,
-    Transaction,
-    transactionType,
-} from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getNewPostersAndPosts, getRecurseBackwardPendingBlock } from './logic/asyncUtils';
-import { getMaxFee, getPastBlocksWithTxs, getRpcClient, type RpcClient } from './logic/api';
-import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
+import { getNewPostersAndPosts, getRecurseBackwardPendingBlock, submitPost } from './logic/asyncUtils';
+import { getPastBlocksWithTxs, getRpcClient, type RpcClient } from './logic/api';
+import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
 const idenaNodeUrl = 'https://restricted.idena.io';
@@ -317,60 +310,9 @@ function App() {
         setInputPostDisabled(submittingPost || (inputUseRpc && viewOnlyNode) || postersAddressInvalid);
     }, [submittingPost, inputUseRpc, viewOnlyNode, postersAddressInvalid]);
 
-    const submitPost = async () => {
+    const submitPostHandler = async () => {
         setSubmittingPost(true);
-
-        const txAmount = 0.00001;
-        const args = [
-            {
-                format: contractArgumentFormat.String,
-                index: 0,
-                value: JSON.stringify({ message: inputPost }),
-            }
-        ];
-
-        const payload = new CallContractAttachment();
-        payload.setArgs(args);
-        payload.method = makePostMethod;
-
-        const maxFeeResult = await getMaxFee(rpcClient, {
-            from: postersAddress,
-            to: contractAddress,
-            type: transactionType.CallContractTx,
-            amount: txAmount,
-            payload: payload,
-        });
-
-        const { maxFeeDecimal, maxFeeDna } = calculateMaxFee(maxFeeResult, inputPost.length);
-
-        if (inputUseRpc) {
-            await rpcClient('contract_call', [
-                {
-                    from: postersAddress,
-                    contract: contractAddress,
-                    method: makePostMethod,
-                    amount: txAmount,
-                    args,
-                    maxFee: maxFeeDecimal,
-                }
-            ]);
-        } else {
-            const { result: getBalanceResult } = await rpcClient('dna_getBalance', [postersAddress]);
-            const { result: epochResult } = await rpcClient('dna_epoch', []);
-
-            const tx = new Transaction();
-            tx.type = transactionType.CallContractTx;
-            tx.to = hexToUint8Array(contractAddress);
-            tx.amount = txAmount * 1e18;
-            tx.nonce = getBalanceResult.nonce + 1;
-            tx.epoch = epochResult.epoch;
-            tx.maxFee = maxFeeDna;
-            tx.payload = payload.toBytes();
-            const txHex = tx.toHex();
-
-            const dnaLink = `https://app.idena.io/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${makePostMethod}`;
-            window.open(dnaLink, '_blank');
-        }
+        await submitPost(postersAddress, contractAddress, makePostMethod, inputPost, inputUseRpc, rpcClient, callbackUrl);;
     };
 
     const handleUseRpcToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -555,7 +497,7 @@ function App() {
                         onChange={e => setInputPost(e.target.value)}
                     />
                     <div className="flex flex-row gap-2">
-                        <button className={`h-9 w-27 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${!inputPost || inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={!inputPost || inputPostDisabled} onClick={submitPost}>{submittingPost ? 'Posting...' : 'Post!'}</button>
+                        <button className={`h-9 w-27 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${!inputPost || inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={!inputPost || inputPostDisabled} onClick={submitPostHandler}>{submittingPost ? 'Posting...' : 'Post!'}</button>
                         {postDelayMessage && <p className="mt-1.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>}
                     </div>
                 </div>

@@ -1,7 +1,8 @@
 import type { RefObject } from "react";
 import type { Post, Poster } from "../App";
-import { getPastBlocksWithTxs, type RpcClient } from "./api";
-import { hex2str, sanitizeStr } from "./utils";
+import { getMaxFee, getPastBlocksWithTxs, type RpcClient } from "./api";
+import { calculateMaxFee, hex2str, sanitizeStr } from "./utils";
+import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, Transaction, transactionType } from "idena-sdk-js-lite";
 
 export const getRecurseBackwardPendingBlock = async (
     initialBlock: number,
@@ -111,4 +112,66 @@ export const getNewPostersAndPosts = async (
     }
 
     return { newPosters, newPosts };
+};
+
+export const submitPost = async (
+    postersAddress: string,
+    contractAddress: string,
+    makePostMethod: string,
+    inputPost: string,
+    inputUseRpc: boolean,
+    rpcClient: RpcClient,
+    callbackUrl: string,
+) => {
+    const txAmount = 0.00001;
+    const args = [
+        {
+            format: contractArgumentFormat.String,
+            index: 0,
+            value: JSON.stringify({ message: inputPost }),
+        }
+    ];
+
+    const payload = new CallContractAttachment();
+    payload.setArgs(args);
+    payload.method = makePostMethod;
+
+    const maxFeeResult = await getMaxFee(rpcClient, {
+        from: postersAddress,
+        to: contractAddress,
+        type: transactionType.CallContractTx,
+        amount: txAmount,
+        payload: payload,
+    });
+
+    const { maxFeeDecimal, maxFeeDna } = calculateMaxFee(maxFeeResult, inputPost.length);
+
+    if (inputUseRpc) {
+        await rpcClient('contract_call', [
+            {
+                from: postersAddress,
+                contract: contractAddress,
+                method: makePostMethod,
+                amount: txAmount,
+                args,
+                maxFee: maxFeeDecimal,
+            }
+        ]);
+    } else {
+        const { result: getBalanceResult } = await rpcClient('dna_getBalance', [postersAddress]);
+        const { result: epochResult } = await rpcClient('dna_epoch', []);
+
+        const tx = new Transaction();
+        tx.type = transactionType.CallContractTx;
+        tx.to = hexToUint8Array(contractAddress);
+        tx.amount = txAmount * 1e18;
+        tx.nonce = getBalanceResult.nonce + 1;
+        tx.epoch = epochResult.epoch;
+        tx.maxFee = maxFeeDna;
+        tx.payload = payload.toBytes();
+        const txHex = tx.toHex();
+
+        const dnaLink = `https://app.idena.io/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${makePostMethod}`;
+        window.open(dnaLink, '_blank');
+    }
 };
