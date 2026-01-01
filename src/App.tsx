@@ -7,7 +7,7 @@ import {
     transactionType,
 } from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getMaxFee, getPastBlocksWithTxs, getRecurseBackwardPendingBlock, getRpcClient, type RpcClient } from './logic/api';
+import { getMaxFee, getPastBlocksWithTxs, getRecurseBackwardPendingBlock, getRpcClient, type RpcClient } from './logic/asyncUtils';
 import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines, hex2str, sanitizeStr } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
