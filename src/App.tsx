@@ -233,6 +233,7 @@ function App() {
         findPastBlocksUrlInvalidRef.current = findPastBlocksUrlInvalid;
     }, [findPastBlocksUrlInvalid]);
 
+    type RecurseForward = () => Promise<void>;
     useEffect(() => {
         if (initialBlock) {
             setScanningPastBlocks(true);
@@ -241,25 +242,27 @@ function App() {
 
             (async function recurseForward() {
                 recurseForwardIntervalId = setTimeout(postScannerFactory(true, recurseForward, currentBlockCapturedRef, setCurrentBlockCaptured), POLLING_INTERVAL);
-            })();
+            } as RecurseForward)();
 
             return () => clearInterval(recurseForwardIntervalId);
         }
     }, [initialBlock]);
 
+    type RecurseBackward = (time: number) => Promise<void>;
     useEffect(() => {
         if (scanningPastBlocks) {
             let recurseBackwardIntervalId: NodeJS.Timeout;
 
             const timeNow = Math.floor(Date.now() / 1000);
             const ttl = timeNow + SCAN_POSTS_TTL;
+
             (async function recurseBackward(time: number) {
                 if (time < ttl) {
                     recurseBackwardIntervalId = setTimeout(postScannerFactory(false, recurseBackward, pastBlockCapturedRef, setPastBlockCaptured), SCANNING_INTERVAL);
                 } else {
                     setScanningPastBlocks(false);
                 }
-            })(timeNow);
+            } as RecurseBackward)(timeNow);
 
             return () => clearInterval(recurseBackwardIntervalId);
         }
@@ -408,7 +411,7 @@ function App() {
         }
     };
 
-    const postScannerFactory = (recurseForward: boolean, recurse: (time: number) => Promise<void>, blockCapturedRef: React.RefObject<number>, setBlockCaptured: React.Dispatch<React.SetStateAction<number>>) => {
+    const postScannerFactory = (recurseForward: boolean, recurse: RecurseForward | RecurseBackward, blockCapturedRef: React.RefObject<number>, setBlockCaptured: React.Dispatch<React.SetStateAction<number>>) => {
         return async function postFinder() {
             try {
                 let pendingBlock;
@@ -487,14 +490,22 @@ function App() {
                 setBlockCaptured(pendingBlock);
                 setPosts((currentPosts) => recurseForward ? [...newPosts, ...currentPosts] : [...currentPosts, ...newPosts]);
 
-                recurse(!recurseForward && Math.floor(Date.now() / 1000));
+                if (recurseForward) {
+                    (recurse as RecurseForward)();
+                } else {
+                    (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
+                }
             } catch(error) {
                 console.error(error);
                 if (!recurseForward && error === 'no more blocks') {
                     setNoMorePastBlocks(true);
                     setScanningPastBlocks(false);
                 } else {
-                    recurse(!recurseForward && Math.floor(Date.now() / 1000));
+                    if (recurseForward) {
+                        (recurse as RecurseForward)();
+                    } else {
+                        (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
+                    }
                 }
             }
         };
