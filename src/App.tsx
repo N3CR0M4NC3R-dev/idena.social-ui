@@ -361,16 +361,22 @@ function App() {
                 if (recurseForward) {
                     pendingBlock = blockCapturedRef.current ? blockCapturedRef.current + 1 : initialBlock;
                 } else {
-                    pendingBlock = await getRecurseBackwardPendingBlock(
-                        initialBlock,
-                        firstBlock,
-                        blockCapturedRef,
-                        useFindPastBlocksWithTxsApiRef,
-                        findPastBlocksUrlInvalidRef,
-                        pastBlocksWithTxsRef,
-                        findPastBlocksUrlRef,
-                        setPastBlocksWithTxs,
-                    );
+                    let pastBlocksWithTxsGathered;
+                    try {
+                        ({ pendingBlock, pastBlocksWithTxsGathered } = await getRecurseBackwardPendingBlock(
+                            initialBlock,
+                            firstBlock,
+                            blockCapturedRef,
+                            useFindPastBlocksWithTxsApiRef,
+                            findPastBlocksUrlInvalidRef,
+                            pastBlocksWithTxsRef,
+                            findPastBlocksUrlRef,
+                        ));
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        pastBlocksWithTxsGathered && setPastBlocksWithTxs(pastBlocksWithTxsGathered);
+                    }
                 }
 
                 const { result: getBlockByHeightResult } = await rpcClientRef.current('bcn_blockAt', [pendingBlock]);

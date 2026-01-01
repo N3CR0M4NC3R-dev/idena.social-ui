@@ -12,9 +12,9 @@ export const getRecurseBackwardPendingBlock = async (
     findPastBlocksUrlInvalidRef: React.RefObject<boolean>,
     pastBlocksWithTxsRef: React.RefObject<number[]>,
     findPastBlocksUrlRef: React.RefObject<string>,
-    setPastBlocksWithTxs: React.Dispatch<React.SetStateAction<number[]>>,
 ) => {
     let pendingBlock;
+    let pastBlocksWithTxsGathered;
 
     const nextPastBlock = blockCapturedRef.current ? blockCapturedRef.current - 1 : undefined;
 
@@ -27,16 +27,16 @@ export const getRecurseBackwardPendingBlock = async (
 
         if (noPastBlocksWithTxsGathered || pastBlocksAlreadyProcessed) {
             const { initialblockNumber, blocksWithTxs = [] } = await getPastBlocksWithTxs(findPastBlocksUrlRef.current, nextPastBlock);
-            setPastBlocksWithTxs(blocksWithTxs);
+            pastBlocksWithTxsGathered = blocksWithTxs;
 
-            if (!blocksWithTxs[0]) {
+            if (!pastBlocksWithTxsGathered[0]) {
                 throw 'no more blocks';
             }
 
             if (nextPastBlock > initialblockNumber) {
                 pendingBlock = nextPastBlock;
             } else {
-                pendingBlock = blocksWithTxs[0];
+                pendingBlock = pastBlocksWithTxsGathered[0];
             }
         
         } else if (pastBlocksInRangeForNextBlock) {
@@ -54,7 +54,7 @@ export const getRecurseBackwardPendingBlock = async (
         throw 'no more blocks';
     }
 
-    return pendingBlock;
+    return { pendingBlock, pastBlocksWithTxsGathered };
 };
 
 export const getNewPostersAndPosts = async (
