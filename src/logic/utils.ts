@@ -47,12 +47,3 @@ export function hex2str(hex: string) {
 export function sanitizeStr(str: string) {
     return new DOMParser().parseFromString(str, 'text/html').body.textContent || '';
 }
-
-export function rmZeros(str: string) {
-    return str.replaceAll(/[.0]+$/g, '');
-}
-
-export function hex2decimalStr(hex: string) {
-    if (hex === '0x') return '';
-    return parseInt(rmZeros(hex), 16).toString();
-}

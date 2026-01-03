@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { getMaxFee, getPastBlocksWithTxs, type RpcClient } from "./api";
-import { calculateMaxFee, hex2decimalStr, hex2str, sanitizeStr } from "./utils";
+import { calculateMaxFee, hex2str, sanitizeStr } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, Transaction, transactionType } from "idena-sdk-js-lite";
 
 export type PostDomSettings = { textOverflows: boolean, textOverflowHidden: boolean, repliesHidden: boolean }
@@ -139,7 +139,7 @@ export const getNewPostersAndPosts = async (
         }
 
         const poster = getTxReceiptResult.events[0].args[0];
-        const postId = hex2decimalStr(getTxReceiptResult.events[0].args[1]);
+        const postId = getTxReceiptResult.events[0].args[1];
         const channelId = hex2str(getTxReceiptResult.events[0].args[2]);
         const message = sanitizeStr(hex2str(getTxReceiptResult.events[0].args[3]));
         const replyToPostId = hex2str(getTxReceiptResult.events[0].args[4]);
