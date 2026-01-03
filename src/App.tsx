@@ -1,14 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-    CallContractAttachment,
-    contractArgumentFormat,
-    hexToUint8Array,
-    Transaction,
-    transactionType,
-} from 'idena-sdk-js-lite';
+import { useEffect, useRef, useState, type FocusEventHandler } from 'react';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getMaxFee, getPastBlocksWithTxs, getRpcClient, type RpcClient } from './logic/api';
-import { calculateMaxFee, getDisplayAddress, getDisplayDateTime, getMessageLines, hex2str, sanitizeStr } from './logic/utils';
+import { getNewPostersAndPosts, getRecurseBackwardPendingBlock, getChildPostIds, submitPost, type Post, type Poster, type PastBlocksWithTxsGathered } from './logic/asyncUtils';
+import { getPastBlocksWithTxs, getRpcClient, type RpcClient } from './logic/api';
+import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
 const idenaNodeUrl = 'https://restricted.idena.io';
@@ -25,11 +19,12 @@ const defaultAdUrl = 'https://idena.io';
 const defaultAdImage = WhatIsIdenaPng;
 const defaultAdTitle = 'IDENA: Proof-of-Person blockchain';
 const defaultAdDesc = 'Coordination of individuals';
+const postTextHeight = 'max-h-[288px]';
+const replyPostTextHeight = 'max-h-[146px]';
 
 const POLLING_INTERVAL = 5000;
 const SCANNING_INTERVAL = 10;
 const SUBMITTING_POST_INTERVAL = 2000;
-const POST_DELAY_MESSAGE_INTERVAL = 1 * 60 * 1000;
 const ADS_INTERVAL = 10000;
 const SCAN_POSTS_TTL = 0.5 * 60;
 
@@ -40,9 +35,6 @@ if (!DEBUG) {
     console.warn = () => {};
     console.error = () => {};
 }
-
-type Post = { blockHeight: number, timestamp: number, postId: string, poster: string, message: string, transaction: string };
-type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, online: boolean };
 
 function App() {
     const [rpcClient, setRpcClient] = useState<RpcClient>(() => getRpcClient({ idenaNodeUrl, idenaNodeApiKey }));
@@ -57,25 +49,24 @@ function App() {
     const [postersAddress, setPostersAddress] = useState<string>(zeroAddress);
     const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
     const [inputUseRpc, setInputUseRpc] = useState<boolean>(false);
-    const [inputPost, setInputPost] = useState<string>('');
-    const [submittingPost, setSubmittingPost] = useState<boolean>(false);
-    const [postDelayMessage, setPostDelayMessage] = useState<boolean>(false);
-    const [posts, setPosts] = useState<Post[]>([]);
-    const [posters, setPosters] = useState<Poster[]>([]);
-    const postersRef = useRef(posters);
+    const [submittingPost, setSubmittingPost] = useState<string>('');
+    const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
+    const [posts, setPosts] = useState<Record<string, Post>>({});
+    const postsRef = useRef(posts);
+    const [posters, setPosters] = useState<Record<string, Poster>>({});
+    const [newPostsAdded, setNewPostsAdded] = useState<string[]>([]);
     const [initialBlock, setInitialBlock] = useState<number>(0);
     const [pastBlockCaptured, setPastBlockCaptured] = useState<number>(0);
     const pastBlockCapturedRef = useRef(pastBlockCaptured);
     const [currentBlockCaptured, setCurrentBlockCaptured] = useState<number>(0);
     const currentBlockCapturedRef = useRef(currentBlockCaptured);
     const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(false);
-    const [viewMorePosts, setViewMorePosts] = useState<Record<string, boolean[]>>({});
     const [ads, setAds] = useState<ApprovedAd[]>([]);
     const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
     const currentAdRef = useRef(currentAd);
     const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(true);
     const useFindPastBlocksWithTxsApiRef = useRef(useFindPastBlocksWithTxsApi);
-    const [pastBlocksWithTxs, setPastBlocksWithTxs] = useState<number[]>([]);
+    const [pastBlocksWithTxs, setPastBlocksWithTxs] = useState<PastBlocksWithTxsGathered>({ initialblockNumber: 0, blocksWithTxs: [] });
     const pastBlocksWithTxsRef = useRef(pastBlocksWithTxs);
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
     const [findPastBlocksUrl, setFindPastBlocksUrl] = useState<string>(findPastBlocksUrlInit);
@@ -84,6 +75,10 @@ function App() {
     const findPastBlocksUrlInvalidRef = useRef(findPastBlocksUrlInvalid);
     const [inputFindPastBlocksUrl, setInputFindPastBlocksUrl] = useState<string>(findPastBlocksUrlInit);
     const [inputFindPastBlocksUrlApplied, setInputFindPastBlocksUrlApplied] = useState<boolean>(true);
+    const [replyPostsTree, setReplyPostsTree] = useState<Record<string, string>>({});
+    const replyPostsTreeRef = useRef(replyPostsTree);
+    const [orphanedReplyPostsTree, setOrphanedReplyPostsTree] = useState<Record<string, string>>({});
+    const orphanedReplyPostsTreeRef = useRef(orphanedReplyPostsTree);
 
     useEffect(() => {
         (async function() {
@@ -180,7 +175,7 @@ function App() {
         if (ads.length) {
             setCurrentAd(ads[0]);
 
-            let rotateAdsIntervalId: any;
+            let rotateAdsIntervalId: NodeJS.Timeout;
 
             async function recurse() {
                 rotateAdsIntervalId = setTimeout(() => {
@@ -197,6 +192,10 @@ function App() {
     }, [ads]);
 
     useEffect(() => {
+        setOrderedPostIds(current => [...current]);
+    }, [replyPostsTree]);
+
+    useEffect(() => {
         rpcClientRef.current = rpcClient;
     }, [rpcClient]);
 
@@ -209,8 +208,8 @@ function App() {
     }, [pastBlockCaptured]);
 
     useEffect(() => {
-        postersRef.current = posters;
-    }, [posters]);
+        postsRef.current = posts;
+    }, [posts]);
 
     useEffect(() => {
         currentAdRef.current = currentAd;
@@ -233,143 +232,102 @@ function App() {
     }, [findPastBlocksUrlInvalid]);
 
     useEffect(() => {
+        replyPostsTreeRef.current = replyPostsTree;
+    }, [replyPostsTree]);
+
+    useEffect(() => {
+        orphanedReplyPostsTreeRef.current = orphanedReplyPostsTree;
+    }, [orphanedReplyPostsTree]);
+
+    type RecurseForward = () => Promise<void>;
+    useEffect(() => {
         if (initialBlock) {
             setScanningPastBlocks(true);
 
-            let recurseForwardIntervalId: any;
+            let recurseForwardIntervalId: NodeJS.Timeout;
 
             (async function recurseForward() {
                 recurseForwardIntervalId = setTimeout(postScannerFactory(true, recurseForward, currentBlockCapturedRef, setCurrentBlockCaptured), POLLING_INTERVAL);
-            })();
+            } as RecurseForward)();
 
             return () => clearInterval(recurseForwardIntervalId);
         }
     }, [initialBlock]);
 
+    type RecurseBackward = (time: number) => Promise<void>;
     useEffect(() => {
         if (scanningPastBlocks) {
-            let recurseBackwardIntervalId: any;
+            let recurseBackwardIntervalId: NodeJS.Timeout;
 
             const timeNow = Math.floor(Date.now() / 1000);
             const ttl = timeNow + SCAN_POSTS_TTL;
+
             (async function recurseBackward(time: number) {
                 if (time < ttl) {
                     recurseBackwardIntervalId = setTimeout(postScannerFactory(false, recurseBackward, pastBlockCapturedRef, setPastBlockCaptured), SCANNING_INTERVAL);
                 } else {
                     setScanningPastBlocks(false);
                 }
-            })(timeNow);
+            } as RecurseBackward)(timeNow);
 
             return () => clearInterval(recurseBackwardIntervalId);
         }
     }, [scanningPastBlocks]);
 
     useEffect(() => {
-        const messageDivs = document.getElementsByClassName('messageDiv');
+        const updatedPosts: Record<string, Post> = {};
 
-        for (let index = 0; index < messageDivs.length; index++) {
-            const div = messageDivs[index];
+        for (let index = 0; index < newPostsAdded.length; index++) {
+            const key = newPostsAdded[index];
+            const post = posts[key];
+            const messageDiv = document.getElementById(`post-text-${post.postId}`);
 
-            if (div.scrollHeight > div.clientHeight) {
-                setViewMorePosts(previous => {
-                    if (!previous?.[div.id]) {
-                        return { ...previous, [div.id]: [true, true] };
-                    }
-                    return previous;
-                });
+            if (messageDiv!.scrollHeight > messageDiv!.clientHeight) {
+                updatedPosts[post.postId] = { ...post, postDomSettings: { ...post.postDomSettings, textOverflows: true } };
             }
         }
 
-    }, [posts]);
+        setPosts(currentPosts => ({ ...currentPosts, ...updatedPosts }));
+
+    }, [newPostsAdded]);
 
     useEffect(() => {
-        let intervalSubmittingPost: any;
+        let intervalSubmittingPost: NodeJS.Timeout;
 
         if (submittingPost) {
             intervalSubmittingPost = setTimeout(() => {
-                setSubmittingPost(false);
+                setSubmittingPost('');
             }, SUBMITTING_POST_INTERVAL);
-        } else {
-            setInputPost('');
         }
 
         return () => clearInterval(intervalSubmittingPost);
     }, [submittingPost]);
 
     useEffect(() => {
-        let intervalPostDelayMessage: any;
-
-        if (submittingPost) {
-            setPostDelayMessage(true);
-            intervalPostDelayMessage = setTimeout(() => {
-                setPostDelayMessage(false);
-            }, POST_DELAY_MESSAGE_INTERVAL);
-        }
-
-        return () => clearInterval(intervalPostDelayMessage);
-    }, [submittingPost]);
-
-    useEffect(() => {
-        setInputPostDisabled(submittingPost || (inputUseRpc && viewOnlyNode) || postersAddressInvalid);
+        setInputPostDisabled(!!submittingPost || (inputUseRpc && viewOnlyNode) || postersAddressInvalid);
     }, [submittingPost, inputUseRpc, viewOnlyNode, postersAddressInvalid]);
 
-    const submitPost = async () => {
-        setSubmittingPost(true);
+    const submitPostHandler = async (postId: string) => {
+        const postTextareaElement = document.getElementById(`post-input-${postId}`) as HTMLTextAreaElement;
+        const inputText = postTextareaElement.value;
 
-        const txAmount = 0.00001;
-        const args = [
-            {
-                format: contractArgumentFormat.String,
-                index: 0,
-                value: JSON.stringify({ message: inputPost }),
-            }
-        ];
-
-        const payload = new CallContractAttachment();
-        payload.setArgs(args);
-        payload.method = makePostMethod;
-
-        const maxFeeResult = await getMaxFee(rpcClient, {
-            from: postersAddress,
-            to: contractAddress,
-            type: transactionType.CallContractTx,
-            amount: txAmount,
-            payload: payload,
-        });
-
-        const { maxFeeDecimal, maxFeeDna } = calculateMaxFee(maxFeeResult, inputPost.length);
-
-        if (inputUseRpc) {
-            await rpcClient('contract_call', [
-                {
-                    from: postersAddress,
-                    contract: contractAddress,
-                    method: makePostMethod,
-                    amount: txAmount,
-                    args,
-                    maxFee: maxFeeDecimal,
-                }
-            ]);
+        if (inputText) {
+            postTextareaElement.value = '';
         } else {
-            const { result: getBalanceResult } = await rpcClient('dna_getBalance', [postersAddress]);
-            const { result: epochResult } = await rpcClient('dna_epoch', []);
-
-            const tx = new Transaction();
-            tx.type = transactionType.CallContractTx;
-            tx.to = hexToUint8Array(contractAddress);
-            tx.amount = txAmount * 1e18;
-            tx.nonce = getBalanceResult.nonce + 1;
-            tx.epoch = epochResult.epoch;
-            tx.maxFee = maxFeeDna;
-            tx.payload = payload.toBytes();
-            const txHex = tx.toHex();
-
-            const dnaLink = `https://app.idena.io/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${makePostMethod}`;
-            window.open(dnaLink, '_blank');
+            return;
         }
+
+        const replyToPostId = postId !== 'main' ? postId : null;
+
+        if (replyToPostId) {
+            postTextareaElement.rows = 1;
+        }
+
+        setSubmittingPost(postId);
+        await submitPost(postersAddress, contractAddress, makePostMethod, inputText, replyToPostId, inputUseRpc, rpcClient, callbackUrl);;
     };
 
-    const handleUseRpcToggle = (event: any) => {
+    const handleUseRpcToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
         const useRpc = (event.target.value === 'true');
         setInputUseRpc(useRpc);
 
@@ -389,7 +347,7 @@ function App() {
         }
     };
 
-    const handleUseFindPastBlocksWithTxsApiToggle = (event: any) => {
+    const handleUseFindPastBlocksWithTxsApiToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
         const useFindPastBlocksWithTxsApi = event.target.checked;
         setUseFindPastBlocksWithTxsApi(useFindPastBlocksWithTxsApi);
 
@@ -407,7 +365,7 @@ function App() {
         }
     };
 
-    const postScannerFactory = (recurseForward: boolean, recurse: any, blockCapturedRef: any, setBlockCaptured: any) => {
+    const postScannerFactory = (recurseForward: boolean, recurse: RecurseForward | RecurseBackward, blockCapturedRef: React.RefObject<number>, setBlockCaptured: React.Dispatch<React.SetStateAction<number>>) => {
         return async function postFinder() {
             try {
                 let pendingBlock;
@@ -415,42 +373,21 @@ function App() {
                 if (recurseForward) {
                     pendingBlock = blockCapturedRef.current ? blockCapturedRef.current + 1 : initialBlock;
                 } else {
-                    const nextPastBlock = blockCapturedRef.current ? blockCapturedRef.current - 1 : undefined;
-
-                    if (!nextPastBlock) {
-                        pendingBlock = initialBlock - 1;
-                    } else if (useFindPastBlocksWithTxsApiRef.current && !findPastBlocksUrlInvalidRef.current) {
-                        const noPastBlocksWithTxsGathered = !pastBlocksWithTxsRef.current.length;
-                        const pastBlocksAlreadyProcessed = (pastBlocksWithTxsRef.current[0] > nextPastBlock) && (pastBlocksWithTxsRef.current[pastBlocksWithTxsRef.current.length - 1] > nextPastBlock);
-                        const pastBlocksInRangeForNextBlock = (pastBlocksWithTxsRef.current[0] > nextPastBlock) && (pastBlocksWithTxsRef.current[pastBlocksWithTxsRef.current.length - 1] < nextPastBlock);
-
-                        if (noPastBlocksWithTxsGathered || pastBlocksAlreadyProcessed) {
-                            const { initialblockNumber, blocksWithTxs = [] } = await getPastBlocksWithTxs(findPastBlocksUrlRef.current, nextPastBlock);
-                            setPastBlocksWithTxs(blocksWithTxs);
-
-                            if (!blocksWithTxs[0]) {
-                                throw 'no more blocks';
-                            }
-
-                            if (nextPastBlock > initialblockNumber) {
-                                pendingBlock = nextPastBlock;
-                            } else {
-                                pendingBlock = blocksWithTxs[0];
-                            }
-                        
-                        } else if (pastBlocksInRangeForNextBlock) {
-                            const insertionIndex = pastBlocksWithTxsRef.current.findIndex(currentItem => currentItem <= nextPastBlock);
-                            const finalIndex = insertionIndex === -1 ? pastBlocksWithTxsRef.current.length : insertionIndex;
-                            pendingBlock = pastBlocksWithTxsRef.current[finalIndex];
-                        } else {
-                            pendingBlock = nextPastBlock;
-                        }
-                    } else {
-                        pendingBlock = nextPastBlock;
-                    }
-
-                    if (pendingBlock <= firstBlock) {
-                        throw 'no more blocks';
+                    let pastBlocksWithTxsGathered;
+                    try {
+                        ({ pendingBlock, pastBlocksWithTxsGathered } = await getRecurseBackwardPendingBlock(
+                            initialBlock,
+                            firstBlock,
+                            blockCapturedRef,
+                            useFindPastBlocksWithTxsApiRef,
+                            findPastBlocksUrlInvalidRef,
+                            pastBlocksWithTxsRef,
+                            findPastBlocksUrlRef,
+                        ));
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        pastBlocksWithTxsGathered && setPastBlocksWithTxs(pastBlocksWithTxsGathered);
                     }
                 }
 
@@ -465,71 +402,78 @@ function App() {
                     throw 'no transactions';
                 }
 
-                const newPosts: Post[] = [];
-
-                for (let index = 0; index < getBlockByHeightResult.transactions.length; index++) {
-                    const transaction = getBlockByHeightResult.transactions[index];
-
-                    const { result: getTxReceiptResult } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
-
-                    if (!getTxReceiptResult) {
-                        continue;
-                    }
-
-                    if (getTxReceiptResult.contract !== contractAddress.toLowerCase()) {
-                        continue;
-                    }
-
-                    if (getTxReceiptResult.method !== makePostMethod) {
-                        continue;
-                    }
-
-                    if (getTxReceiptResult.success !== true) {
-                        continue;
-                    }
-
-                    const poster = getTxReceiptResult.events[0].args[0];
-                    const postId = getTxReceiptResult.events[0].args[1];
-                    const channelId = hex2str(getTxReceiptResult.events[0].args[2]);
-                    const message = sanitizeStr(hex2str(getTxReceiptResult.events[0].args[3]));
-
-                    if (channelId !== thisChannelId) {
-                        continue;
-                    }
-
-                    if (!message) {
-                        continue;
-                    }
-
-                    if (!postersRef.current.some((item) => item.address === poster)) {
-                        const { result: getDnaIdentityResult } = await rpcClientRef.current('dna_identity', [poster]);
-                        const { address, stake, age, pubkey, state, online } = getDnaIdentityResult;
-                        setPosters((currentPosters) => [...currentPosters, { address, stake, age, pubkey, state, online }]);
-                    }
-
-                    newPosts.unshift({ blockHeight: getBlockByHeightResult.height, timestamp: getBlockByHeightResult.timestamp, postId, poster, message, transaction });
-                }
+                const { newPosters, newOrderedPostIds, newPosts, newReplyPosts, newOrphanedReplyPosts } = await getNewPostersAndPosts(
+                    contractAddress,
+                    makePostMethod,
+                    thisChannelId,
+                    rpcClientRef,
+                    getBlockByHeightResult,
+                    postsRef,
+                    replyPostsTreeRef,
+                    orphanedReplyPostsTreeRef,
+                );
 
                 setBlockCaptured(pendingBlock);
-                setPosts((currentPosts) => recurseForward ? [...newPosts, ...currentPosts] : [...currentPosts, ...newPosts]);
+                setPosters((currentPosters) => ({ ...currentPosters, ...newPosters }));
+                setPosts((currentPosts) => ({ ...currentPosts, ...newPosts }));
+                setReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newReplyPosts }));
+                setOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newOrphanedReplyPosts }));
+                setOrderedPostIds((currentOrderedPostIds) => recurseForward ? [...newOrderedPostIds, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds]);
+                setNewPostsAdded(newOrderedPostIds);
 
-                recurse(!recurseForward && Math.floor(Date.now() / 1000));
+                if (recurseForward) {
+                    (recurse as RecurseForward)();
+                } else {
+                    (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
+                }
             } catch(error) {
                 console.error(error);
                 if (!recurseForward && error === 'no more blocks') {
                     setNoMorePastBlocks(true);
                     setScanningPastBlocks(false);
                 } else {
-                    recurse(!recurseForward && Math.floor(Date.now() / 1000));
+                    if (recurseForward) {
+                        (recurse as RecurseForward)();
+                    } else {
+                        (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
+                    }
                 }
             }
         };
     };
 
-    const viewMoreHandler = (postId: string) => {
-        const viewMorePostsItem = viewMorePosts[postId];
-        viewMorePostsItem[1] = false;
-        setViewMorePosts({ ...viewMorePosts, postId: viewMorePostsItem });
+    const toggleViewMoreHandler = (post: Post) => {
+        post.postDomSettings.textOverflowHidden = !post.postDomSettings.textOverflowHidden;
+        setPosts(currentPosts => ({ ...currentPosts, [post.postId]: post }));
+
+        if (post.postDomSettings.textOverflowHidden) {
+            const messageDiv = document.getElementById(`post-text-${post.postId}`);
+            const isReply = !!post.replyToPostId;
+            const rawTextHeight = isReply ? replyPostTextHeight : postTextHeight;
+            const textHeightNumber = parseInt(rawTextHeight.split('max-h-[')[1].split('px]')[0]);
+            const adjustheight = messageDiv!.scrollHeight - textHeightNumber;
+            window.scrollBy({ top: -adjustheight });
+        }
+    };
+
+    const toggleShowRepliesHandler = (post: Post) => {
+        post.postDomSettings.repliesHidden = !post.postDomSettings.repliesHidden;
+        setPosts(currentPosts => ({ ...currentPosts, [post.postId]: post }));
+
+        if (!post.postDomSettings.repliesHidden) {
+            const repliesToThisPost = getChildPostIds(post.postId, replyPostsTree);
+            setTimeout(() => {
+                setNewPostsAdded(repliesToThisPost);
+            }, 0);
+        }
+    };
+
+    const replyInputOnFocusHandler: FocusEventHandler<HTMLTextAreaElement> = (event) => {
+        event.target.rows = 4;
+    };
+
+    const replyInputOnBlurHandler: FocusEventHandler<HTMLTextAreaElement> = (event) => {
+        if (event.target.value === '') event.target.rows = 1;
     };
 
     return (
@@ -604,30 +548,33 @@ function App() {
             <div className="flex-none min-w-[400px] max-w-[400px]">
                 <div>
                     <textarea
+                        id='post-input-main'
                         rows={4}
                         className="w-full rounded-md py-1 px-2 mt-5 outline-1 placeholder:text-gray-500"
                         placeholder="Write your post here..."
                         disabled={inputPostDisabled}
-                        value={inputPost}
-                        onChange={e => setInputPost(e.target.value)}
                     />
                     <div className="flex flex-row gap-2">
-                        <button className={`h-9 w-27 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${!inputPost || inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={!inputPost || inputPostDisabled} onClick={submitPost}>{submittingPost ? 'Posting...' : 'Post!'}</button>
-                        {postDelayMessage && <p className="mt-1.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>}
+                        <button className="h-9 w-27 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
+                        <p className="mt-1.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
                     </div>
                 </div>
                 <div className="text-center my-3">
                     <p className="text-center">Current Block: #{currentBlockCaptured ? currentBlockCaptured : 'Loading...'}</p>
                 </div>
                 <ul>
-                    {posts.map((post) => {
-                        const poster: Poster = posters.find((item) => item.address === post.poster)! ?? {};
+                    {orderedPostIds.map((postId) => {
+                        const post = posts[postId];
+                        const poster = posters[post.poster];
                         const displayAddress = getDisplayAddress(poster.address);
                         const { displayDate, displayTime } = getDisplayDateTime(post.timestamp);
                         const messageLines = getMessageLines(post.message);
-                        const viewMorePostsItem = viewMorePosts[post.postId];
-                        const displayViewMore = viewMorePostsItem?.[0] && viewMorePostsItem?.[1];
-                        const showOverflowPostText = viewMorePostsItem?.[0] === true && viewMorePostsItem?.[1] === false;
+                        const postDomSettingsItem = post.postDomSettings;
+                        const textOverflows = postDomSettingsItem.textOverflows;
+                        const displayViewMore = postDomSettingsItem.textOverflowHidden;
+                        const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
+                        const repliesToThisPost = getChildPostIds(post.postId, replyPostsTree);
+                        const showReplies = !post.postDomSettings.repliesHidden;
 
                         return (
                             <li key={post.postId}>
@@ -647,13 +594,83 @@ function App() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div id={post.postId} className={`${showOverflowPostText ? 'max-h-[9999px]' : 'max-h-[288px]'} flex-1 px-4 py-2 text-[16px] text-wrap leading-5 messageDiv ${displayViewMore ? `overflow-hidden` : ''}`}>
+                                    <div id={`post-text-${post.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : postTextHeight} flex-1 px-4 py-2 text-[17px] text-wrap leading-5 overflow-hidden`}>
                                         <p>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                     </div>
-                                    {displayViewMore && <div className="px-4 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => viewMoreHandler(post.postId)}>view more</a></div>}
+                                    {textOverflows && <div className="px-4 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(post)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
                                     <div className="py-1 px-2">
                                         <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.transaction}`} target="_blank">{`${displayDate}, ${displayTime} (Block #${post.blockHeight})`}</a></p>
                                     </div>
+                                    <div className="flex flex-row gap-2 px-2 items-end">
+                                        <div className="flex-1">
+                                            <textarea
+                                                id={`post-input-${post.postId}`}
+                                                rows={1}
+                                                className="w-full rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500"
+                                                placeholder="Write your reply here..."
+                                                disabled={inputPostDisabled}
+                                                onFocus={replyInputOnFocusHandler}
+                                                onBlur={replyInputOnBlurHandler}
+                                            />
+                                        </div>
+                                        <div>
+                                            <button className="h-9 w-17 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler(post.postId)}>{submittingPost === post.postId ? '...' : 'Post!'}</button>
+                                        </div>
+                                    </div>
+                                    <div className="px-4 mb-1.5 text-[12px]">
+                                        {repliesToThisPost.length ?
+                                            <a className="-mt-2 text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowRepliesHandler(post)}>{showReplies ? 'hide replies' : `show replies (${repliesToThisPost.length})`}</a>
+                                        :
+                                            <span className="-mt-2 text-gray-500">no replies</span>
+                                        }
+                                    </div>
+                                    {showReplies && <div className="mt-1">
+                                        <ul>
+                                            {repliesToThisPost.map((replyPostId, index) => {
+                                                const replyPost = posts[replyPostId];
+                                                const poster = posters[replyPost.poster];
+                                                const displayAddress = getDisplayAddress(poster.address);
+                                                const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
+                                                const messageLines = getMessageLines(replyPost.message);
+                                                const postDomSettingsItem = replyPost.postDomSettings;
+                                                const textOverflows = postDomSettingsItem.textOverflows;
+                                                const displayViewMore = postDomSettingsItem.textOverflowHidden;
+                                                const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
+
+                                                return (
+                                                    <li key={replyPost.postId}>
+                                                        {index !== 0 && <hr className="mx-2 text-gray-700" />}
+                                                        <div className="mt-1.5 flex flex-col">
+                                                            <div className="h-5 flex flex-row">
+                                                                <div className="w-11 flex-none flex flex-col">
+                                                                    <div className="h-13 flex-none">
+                                                                        <img src={`https://robohash.org/${poster.address}?set=set1`} />
+                                                                    </div>
+                                                                    <div className="flex-1"></div>
+                                                                </div>
+                                                                <div className="ml-1 mr-3 flex-1 flex flex-col overflow-hidden">
+                                                                    <div className="flex-none flex flex-col gap-x-3">
+                                                                        <div className="flex flex-row items-center">
+                                                                            <a className="text-[16px] font-[600]" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noreferrer">{displayAddress}</a>
+                                                                            <span className="ml-2 text-[11px]">{`(${poster.age}, ${poster.state}, ${parseInt(poster.stake)})`}</span>
+                                                                        </div>
+                                                                        <div className="flex-1"></div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div id={`post-text-${replyPost.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : replyPostTextHeight} flex-1 pl-12 pr-4 py-2 text-[14px] text-wrap leading-5 overflow-hidden`}>
+                                                                <p>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                                            </div>
+                                                            {textOverflows && <div className="px-12 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(replyPost)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
+                                                            <div className="py-1 px-2">
+                                                                <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.transaction}`} target="_blank">{`${displayDate}, ${displayTime} (Block #${replyPost.blockHeight})`}</a></p>
+                                                            </div>
+                                                        </div>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    </div>}
                                 </div>
                             </li>
                         );

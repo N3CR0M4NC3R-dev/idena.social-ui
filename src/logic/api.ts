@@ -57,6 +57,7 @@ export const getMaxFee = async (rpcClient: RpcClient, data: GetMaxFeeData) => {
     }
 };
 
+
 export const getPastBlocksWithTxs = async (findPastsBlocksUrl: string, blockNumber: number) => {
     try {
         const params = new URLSearchParams({
