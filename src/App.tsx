@@ -26,8 +26,8 @@ const POLLING_INTERVAL = 5000;
 const SCANNING_INTERVAL = 10;
 const SUBMITTING_POST_INTERVAL = 2000;
 const ADS_INTERVAL = 10000;
-const SCAN_POSTS_TTL = 1 * 60;
-const INDEXER_ITEMS_LIMIT = 100;
+const SCAN_POSTS_TTL = 0.1 * 60;
+const INDEXER_ITEMS_LIMIT = 10;
 
 const DEBUG = false;
 
@@ -455,7 +455,7 @@ function App() {
                         setBlockCaptured(lastBlockHeight);
                     }
 
-                    if (lastBlockHeight <= firstBlock) {
+                    if (!recurseForward && lastBlockHeight <= firstBlock) {
                         throw 'no more transactions';
                     }
                 }
