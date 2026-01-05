@@ -57,21 +57,24 @@ export const getMaxFee = async (rpcClient: RpcClient, data: GetMaxFeeData) => {
     }
 };
 
-
-export const getPastBlocksWithTxs = async (findPastsBlocksUrl: string, blockNumber: number) => {
+export const getPastTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: string, contractAddress: string, limit: number, continuationToken?: string) => {
     try {
         const params = new URLSearchParams({
-            blockNumber: blockNumber.toString(),
+            limit: limit.toString(),
+            ...(continuationToken && { continuationToken }),
         });
 
-        const response = await fetch(`${findPastsBlocksUrl}?${params}`);
+        const path = `api/Address/${contractAddress}/Contract/${contractAddress}/BalanceUpdates`;
+
+        const response = await fetch(`${inputIdenaIndexerApiUrl}/${path}?${params}`);
 
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`);
         }
 
-        const result = await response.json();
-        return result;
+        const responseBody = await response.json();
+
+        return responseBody;
     } catch (error: unknown) {
         console.error(error);
         return {};
