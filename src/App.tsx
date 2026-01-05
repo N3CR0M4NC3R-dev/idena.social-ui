@@ -388,7 +388,15 @@ function App() {
                 const getTransactionsIncrementally = recurseForward || recurseBackwardWithoutIndexer;
 
                 if (getTransactionsIncrementally) {
-                    pendingBlock = recurseForward ? (blockCapturedRef.current ? blockCapturedRef.current + 1 : initialBlock) : (blockCapturedRef.current ? (partialPastBlockCapturedRef.current ? partialPastBlockCapturedRef.current : blockCapturedRef.current - 1) : initialBlock - 1);
+                    pendingBlock = recurseForward ? 
+                        (blockCapturedRef.current ? blockCapturedRef.current + 1 : initialBlock)
+                        :
+                        (blockCapturedRef.current ?
+                            (partialPastBlockCapturedRef.current ?
+                                partialPastBlockCapturedRef.current : blockCapturedRef.current - 1)
+                            : 
+                            initialBlock - 1
+                        );
 
                     const { result: getBlockByHeightResult } = await rpcClientRef.current('bcn_blockAt', [pendingBlock]);
 
@@ -416,6 +424,8 @@ function App() {
                 }
 
                 for (let index = 0; index < transactions.length; index++) {
+                    const lastIteration = index === transactions.length - 1;
+
                     const { newPosters, newOrderedPostIds, newPosts, newReplyPosts, newOrphanedReplyPosts, lastBlockHash, continued } = await getNewPostersAndPosts(
                         transactions[index],
                         contractAddress,
@@ -429,6 +439,9 @@ function App() {
                     );
 
                     if (continued) {
+                        if (recurseForward && lastIteration) {
+                            setBlockCaptured(pendingBlock!);
+                        }
                         continue;
                     }
 
@@ -447,7 +460,6 @@ function App() {
                         setBlockCaptured(lastBlockHeight);
                     }
                     
-                    const lastIteration = index === transactions.length - 1;
                     if (!getTransactionsIncrementally && lastIteration) {
                         const { result: getBlockByHashResult } = await rpcClientRef.current('bcn_block', [lastBlockHash]);
                         lastBlockHeight = getBlockByHashResult.height;
