@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, type FocusEventHandler } from 'react';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getNewPostersAndPosts, getRecurseBackwardPendingBlock, getChildPostIds, submitPost, type Post, type Poster, type PastBlocksWithTxsGathered, breakingChanges } from './logic/asyncUtils';
-import { getPastBlocksWithTxs, getRpcClient, type RpcClient } from './logic/api';
-import { decimalToHex, getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
+import { getNewPostersAndPosts, getChildPostIds, submitPost, type Post, type Poster } from './logic/asyncUtils';
+import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
+import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
 const idenaNodeUrl = 'https://restricted.idena.io';
 const idenaNodeApiKey = 'idena-restricted-node-key';
-const findPastBlocksUrlInit = 'https://api.idena.social/find-blocks-with-txs';
+const initIdenaIndexerApiUrl = 'https://api.idena.io';
 const contractAddress = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
-const firstBlock = 10135621;
+const firstBlock = 10135627;
 const makePostMethod = 'makePost';
 const thisChannelId = '';
 const zeroAddress = '0x0000000000000000000000000000000000000000';
@@ -27,6 +27,7 @@ const SCANNING_INTERVAL = 10;
 const SUBMITTING_POST_INTERVAL = 2000;
 const ADS_INTERVAL = 10000;
 const SCAN_POSTS_TTL = 1 * 60;
+const INDEXER_ITEMS_LIMIT = 100;
 
 const DEBUG = false;
 
@@ -54,31 +55,35 @@ function App() {
     const [posts, setPosts] = useState<Record<string, Post>>({});
     const postsRef = useRef(posts);
     const [posters, setPosters] = useState<Record<string, Poster>>({});
+    const postersRef = useRef(posters);
     const [newPostsAdded, setNewPostsAdded] = useState<string[]>([]);
     const [initialBlock, setInitialBlock] = useState<number>(0);
     const [pastBlockCaptured, setPastBlockCaptured] = useState<number>(0);
     const pastBlockCapturedRef = useRef(pastBlockCaptured);
+    const [partialPastBlockCaptured, setPartialPastBlockCaptured] = useState<number>(0);
+    const partialPastBlockCapturedRef = useRef(partialPastBlockCaptured);
     const [currentBlockCaptured, setCurrentBlockCaptured] = useState<number>(0);
     const currentBlockCapturedRef = useRef(currentBlockCaptured);
-    const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(false);
+    const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(true);
     const [ads, setAds] = useState<ApprovedAd[]>([]);
     const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
     const currentAdRef = useRef(currentAd);
     const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(true);
     const useFindPastBlocksWithTxsApiRef = useRef(useFindPastBlocksWithTxsApi);
-    const [pastBlocksWithTxs, setPastBlocksWithTxs] = useState<PastBlocksWithTxsGathered>({ initialblockNumber: 0, blocksWithTxs: [] });
-    const pastBlocksWithTxsRef = useRef(pastBlocksWithTxs);
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
-    const [findPastBlocksUrl, setFindPastBlocksUrl] = useState<string>(findPastBlocksUrlInit);
-    const findPastBlocksUrlRef = useRef(findPastBlocksUrl);
-    const [findPastBlocksUrlInvalid, setFindPastBlocksUrlInvalid] = useState<boolean>(false);
-    const findPastBlocksUrlInvalidRef = useRef(findPastBlocksUrlInvalid);
-    const [inputFindPastBlocksUrl, setInputFindPastBlocksUrl] = useState<string>(findPastBlocksUrlInit);
-    const [inputFindPastBlocksUrlApplied, setInputFindPastBlocksUrlApplied] = useState<boolean>(true);
+    const [idenaIndexerApiUrl, setIdenaIndexerApiUrl] = useState<string>(initIdenaIndexerApiUrl);
+    const idenaIndexerApiUrlRef = useRef(idenaIndexerApiUrl);
+    const [idenaIndexerApiUrlInvalid, setIdenaIndexerApiUrlInvalid] = useState<boolean>(false);
+    const idenaIndexerApiUrlInvalidRef = useRef(idenaIndexerApiUrlInvalid);
+    const [inputIdenaIndexerApiUrl, setInputIdenaIndexerApiUrl] = useState<string>(initIdenaIndexerApiUrl);
+    const [inputIdenaIndexerApiUrlApplied, setInputIdenaIndexerApiUrlApplied] = useState<boolean>(true);
     const [replyPostsTree, setReplyPostsTree] = useState<Record<string, string>>({});
     const replyPostsTreeRef = useRef(replyPostsTree);
     const [orphanedReplyPostsTree, setOrphanedReplyPostsTree] = useState<Record<string, string>>({});
     const orphanedReplyPostsTreeRef = useRef(orphanedReplyPostsTree);
+    const [continuationToken, setContinuationToken] = useState<string | undefined>();
+    const continuationTokenRef = useRef(continuationToken);
+
 
     useEffect(() => {
         (async function() {
@@ -155,20 +160,20 @@ function App() {
     }, [inputPostersAddressApplied]);
 
     useEffect(() => {
-        if (inputFindPastBlocksUrlApplied && useFindPastBlocksWithTxsApi) {
-            setFindPastBlocksUrl(inputFindPastBlocksUrl);
+        if (inputIdenaIndexerApiUrlApplied && useFindPastBlocksWithTxsApi) {
+            setIdenaIndexerApiUrl(inputIdenaIndexerApiUrl);
 
             (async function() {
-                const { blocksWithTxs: pastBlocksWithTxsResult = [] } = await getPastBlocksWithTxs(inputFindPastBlocksUrl, 10135627);
+                const { result } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddress, 1);
 
-                if (pastBlocksWithTxsResult.length === 1 && pastBlocksWithTxsResult[0] === 10135627) {
-                    setFindPastBlocksUrlInvalid(false);
+                if (result.length === 1 && result[0].address === contractAddress) {
+                    setIdenaIndexerApiUrlInvalid(false);
                 } else {
-                    setFindPastBlocksUrlInvalid(true);
+                    setIdenaIndexerApiUrlInvalid(true);
                 }
             })();
         }
-    }, [inputFindPastBlocksUrlApplied]);
+    }, [inputIdenaIndexerApiUrlApplied]);
 
     useEffect(() => {
         setCurrentAd(ads[0]);
@@ -208,8 +213,16 @@ function App() {
     }, [pastBlockCaptured]);
 
     useEffect(() => {
+        partialPastBlockCapturedRef.current = partialPastBlockCaptured;
+    }, [partialPastBlockCaptured]);
+
+    useEffect(() => {
         postsRef.current = posts;
     }, [posts]);
+
+    useEffect(() => {
+        postersRef.current = posters;
+    }, [posters]);
 
     useEffect(() => {
         currentAdRef.current = currentAd;
@@ -220,16 +233,12 @@ function App() {
     }, [useFindPastBlocksWithTxsApi]);
 
     useEffect(() => {
-        pastBlocksWithTxsRef.current = pastBlocksWithTxs;
-    }, [pastBlocksWithTxs]);
+        idenaIndexerApiUrlRef.current = idenaIndexerApiUrl;
+    }, [idenaIndexerApiUrl]);
 
     useEffect(() => {
-        findPastBlocksUrlRef.current = findPastBlocksUrl;
-    }, [findPastBlocksUrl]);
-
-    useEffect(() => {
-        findPastBlocksUrlInvalidRef.current = findPastBlocksUrlInvalid;
-    }, [findPastBlocksUrlInvalid]);
+        idenaIndexerApiUrlInvalidRef.current = idenaIndexerApiUrlInvalid;
+    }, [idenaIndexerApiUrlInvalid]);
 
     useEffect(() => {
         replyPostsTreeRef.current = replyPostsTree;
@@ -238,6 +247,10 @@ function App() {
     useEffect(() => {
         orphanedReplyPostsTreeRef.current = orphanedReplyPostsTree;
     }, [orphanedReplyPostsTree]);
+
+    useEffect(() => {
+        continuationTokenRef.current = continuationToken;
+    }, [continuationToken]);
 
     type RecurseForward = () => Promise<void>;
     useEffect(() => {
@@ -264,7 +277,7 @@ function App() {
 
             (async function recurseBackward(time: number) {
                 if (time < ttl) {
-                    recurseBackwardIntervalId = setTimeout(postScannerFactory(false, recurseBackward, pastBlockCapturedRef, setPastBlockCaptured), SCANNING_INTERVAL);
+                    recurseBackwardIntervalId = setTimeout(postScannerFactory(false, recurseBackward, pastBlockCapturedRef, setPastBlockCaptured, continuationTokenRef), SCANNING_INTERVAL);
                 } else {
                     setScanningPastBlocks(false);
                 }
@@ -321,10 +334,6 @@ function App() {
 
         if (replyToPostId) {
             postTextareaElement.rows = 1;
-
-            if (currentBlockCaptured < breakingChanges.replyToPostIdFormat) {
-                replyToPostId = decimalToHex(postId, 16);
-            }
         }
 
         setSubmittingPost(postId);
@@ -356,74 +365,100 @@ function App() {
         setUseFindPastBlocksWithTxsApi(useFindPastBlocksWithTxsApi);
 
         if (!useFindPastBlocksWithTxsApi) {
-            setFindPastBlocksUrl('');
-            setFindPastBlocksUrlInvalid(false);
+            setIdenaIndexerApiUrl('');
+            setIdenaIndexerApiUrlInvalid(false);
         } else {
-            if (findPastBlocksUrl) {
-                setFindPastBlocksUrl(findPastBlocksUrl);
+            if (idenaIndexerApiUrl) {
+                setIdenaIndexerApiUrl(idenaIndexerApiUrl);
                 setPostersAddressInvalid(false);
             } else {
-                setInputFindPastBlocksUrl(findPastBlocksUrlInit);
-                setFindPastBlocksUrl(findPastBlocksUrlInit);
+                setInputIdenaIndexerApiUrl(initIdenaIndexerApiUrl);
+                setIdenaIndexerApiUrl(initIdenaIndexerApiUrl);
             }
         }
     };
 
-    const postScannerFactory = (recurseForward: boolean, recurse: RecurseForward | RecurseBackward, blockCapturedRef: React.RefObject<number>, setBlockCaptured: React.Dispatch<React.SetStateAction<number>>) => {
+    const postScannerFactory = (recurseForward: boolean, recurse: RecurseForward | RecurseBackward, blockCapturedRef: React.RefObject<number>, setBlockCaptured: React.Dispatch<React.SetStateAction<number>>, continuationTokenRef?: React.RefObject<string | undefined>) => {
         return async function postFinder() {
             try {
-                let pendingBlock;
+                let pendingBlock: number;
+                let transactions: string[] = [];
 
-                if (recurseForward) {
-                    pendingBlock = blockCapturedRef.current ? blockCapturedRef.current + 1 : initialBlock;
+                const recurseBackwardWithoutIndexer = !recurseForward && !useFindPastBlocksWithTxsApiRef.current;
+                const getTransactionsIncrementally = recurseForward || recurseBackwardWithoutIndexer;
+
+                if (getTransactionsIncrementally) {
+                    pendingBlock = recurseForward ? (blockCapturedRef.current ? blockCapturedRef.current + 1 : initialBlock) : (blockCapturedRef.current ? (partialPastBlockCapturedRef.current ? partialPastBlockCapturedRef.current : blockCapturedRef.current - 1) : initialBlock - 1);
+
+                    const { result: getBlockByHeightResult } = await rpcClientRef.current('bcn_blockAt', [pendingBlock]);
+
+                    if (getBlockByHeightResult === null) {
+                        throw 'no block';
+                    }
+                    
+                    if (getBlockByHeightResult.transactions === null) {
+                        setBlockCaptured(pendingBlock);
+                        throw 'no transactions';
+                    }
+
+                    transactions = [ ...getBlockByHeightResult.transactions ];
                 } else {
-                    let pastBlocksWithTxsGathered;
-                    try {
-                        ({ pendingBlock, pastBlocksWithTxsGathered } = await getRecurseBackwardPendingBlock(
-                            initialBlock,
-                            firstBlock,
-                            blockCapturedRef,
-                            useFindPastBlocksWithTxsApiRef,
-                            findPastBlocksUrlInvalidRef,
-                            pastBlocksWithTxsRef,
-                            findPastBlocksUrlRef,
-                        ));
-                    } catch (error) {
-                        throw error;
-                    } finally {
-                        pastBlocksWithTxsGathered && setPastBlocksWithTxs(pastBlocksWithTxsGathered);
+                    if (continuationTokenRef!.current === 'finished processing') {
+                        throw 'no more transactions';
+                    }
+                    const responseBody = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddress, INDEXER_ITEMS_LIMIT, continuationTokenRef!.current);
+                    setContinuationToken(responseBody.continuationToken ?? 'finished processing');
+
+                    transactions = responseBody.result
+                        ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && balanceUpdate.txReceipt.method === 'makePost' && balanceUpdate.txReceipt.success === true)
+                        .map((balanceUpdate: any) => balanceUpdate.hash)
+                    ?? [];
+                }
+
+                for (let index = 0; index < transactions.length; index++) {
+                    const { newPosters, newOrderedPostIds, newPosts, newReplyPosts, newOrphanedReplyPosts, lastBlockHash, continued } = await getNewPostersAndPosts(
+                        transactions[index],
+                        contractAddress,
+                        makePostMethod,
+                        thisChannelId,
+                        rpcClientRef,
+                        postsRef,
+                        postersRef,
+                        replyPostsTreeRef,
+                        orphanedReplyPostsTreeRef,
+                    );
+
+                    if (continued) {
+                        continue;
+                    }
+
+                    setPosters((currentPosters) => ({ ...currentPosters, ...newPosters }));
+                    setPosts((currentPosts) => ({ ...currentPosts, ...newPosts }));
+                    setReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newReplyPosts }));
+                    setOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newOrphanedReplyPosts }));
+                    setOrderedPostIds((currentOrderedPostIds) => recurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
+                    setNewPostsAdded(newOrderedPostIds!);
+                    
+                    let lastBlockHeight;
+
+                    if (getTransactionsIncrementally) {
+                        lastBlockHeight = pendingBlock!;
+                        setPartialPastBlockCaptured(0);
+                        setBlockCaptured(lastBlockHeight);
+                    }
+                    
+                    const lastIteration = index === transactions.length - 1;
+                    if (!getTransactionsIncrementally && lastIteration) {
+                        const { result: getBlockByHashResult } = await rpcClientRef.current('bcn_block', [lastBlockHash]);
+                        lastBlockHeight = getBlockByHashResult.height;
+                        setPartialPastBlockCaptured(lastBlockHeight);
+                        setBlockCaptured(lastBlockHeight);
+                    }
+
+                    if (lastBlockHeight <= firstBlock) {
+                        throw 'no more transactions';
                     }
                 }
-
-                const { result: getBlockByHeightResult } = await rpcClientRef.current('bcn_blockAt', [pendingBlock]);
-
-                if (getBlockByHeightResult === null) {
-                    throw 'no block';
-                }
-                
-                if (getBlockByHeightResult.transactions === null) {
-                    setBlockCaptured(pendingBlock);
-                    throw 'no transactions';
-                }
-
-                const { newPosters, newOrderedPostIds, newPosts, newReplyPosts, newOrphanedReplyPosts } = await getNewPostersAndPosts(
-                    contractAddress,
-                    makePostMethod,
-                    thisChannelId,
-                    rpcClientRef,
-                    getBlockByHeightResult,
-                    postsRef,
-                    replyPostsTreeRef,
-                    orphanedReplyPostsTreeRef,
-                );
-
-                setBlockCaptured(pendingBlock);
-                setPosters((currentPosters) => ({ ...currentPosters, ...newPosters }));
-                setPosts((currentPosts) => ({ ...currentPosts, ...newPosts }));
-                setReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newReplyPosts }));
-                setOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newOrphanedReplyPosts }));
-                setOrderedPostIds((currentOrderedPostIds) => recurseForward ? [...newOrderedPostIds, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds]);
-                setNewPostsAdded(newOrderedPostIds);
 
                 if (recurseForward) {
                     (recurse as RecurseForward)();
@@ -432,7 +467,7 @@ function App() {
                 }
             } catch(error) {
                 console.error(error);
-                if (!recurseForward && error === 'no more blocks') {
+                if (!recurseForward && error === 'no more transactions') {
                     setNoMorePastBlocks(true);
                     setScanningPastBlocks(false);
                 } else {
@@ -528,17 +563,20 @@ function App() {
                             <label className="inline-flex items-center cursor-pointer">
                                 <input type="checkbox" value="" className="sr-only peer" checked={useFindPastBlocksWithTxsApi} onChange={handleUseFindPastBlocksWithTxsApiToggle} />
                                 <div className={`relative w-9 h-5 bg-neutral-quaternary peer-focus:outline-none peer-focus:ring-brand-soft dark:peer-focus:ring-brand-soft rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-buffer after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand ${useFindPastBlocksWithTxsApi ? 'bg-blue-500' : 'bg-gray-700'}`}></div>
-                                <span className="select-none ms-3 text-sm font-medium text-heading">Scan blocks with helper Api</span>
+                                <span className="select-none ms-3 text-sm font-medium text-heading">Scan past txs with indexer api</span>
                             </label>
                         </div>
                         {useFindPastBlocksWithTxsApi && (
                             <div className="flex flex-col ml-5 text-[14px]">
-                                <p className="mb-1">Api Url:</p>
-                                <input className="flex-1 mb-1 h-6.6 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputFindPastBlocksUrlApplied} value={inputFindPastBlocksUrl} onChange={e => setInputFindPastBlocksUrl(e.target.value)} />
-                                {findPastBlocksUrlInvalid && <p className="text-[11px] text-red-400">Invalid Api Url.</p>}
+
+                                <div className="flex flex-row gap-1">
+                                    <p className="mb-1 w-13 flex-none text-right leading-7">Api Url:</p>
+                                    <input className="flex-1 mb-1 h-6.6 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
+                                </div>
+                                {idenaIndexerApiUrlInvalid && <p className="ml-14 text-[11px] text-red-400">Invalid Api Url.</p>}
                                 <div className="flex flex-row">
-                                    <button className={`w-16 h-7 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputFindPastBlocksUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputFindPastBlocksUrlApplied(!inputFindPastBlocksUrlApplied)}>{inputFindPastBlocksUrlApplied ? 'Change' : 'Apply'}</button>
-                                    {!inputFindPastBlocksUrlApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
+                                    <button className={`w-16 h-7 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputIdenaIndexerApiUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
+                                    {!inputIdenaIndexerApiUrlApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
                                 </div>
                             </div>
                         )}
@@ -603,7 +641,7 @@ function App() {
                                     </div>
                                     {textOverflows && <div className="px-4 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(post)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
                                     <div className="py-1 px-2">
-                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.transaction}`} target="_blank">{`${displayDate}, ${displayTime} (Block #${post.blockHeight})`}</a></p>
+                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
                                     <div className="flex flex-row gap-2 px-2 items-end">
                                         <div className="flex-1">
@@ -667,7 +705,7 @@ function App() {
                                                             </div>
                                                             {textOverflows && <div className="px-12 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(replyPost)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
                                                             <div className="py-1 px-2">
-                                                                <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.transaction}`} target="_blank">{`${displayDate}, ${displayTime} (Block #${replyPost.blockHeight})`}</a></p>
+                                                                <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                                             </div>
                                                         </div>
                                                     </li>
@@ -682,9 +720,9 @@ function App() {
                 </ul>
                 <div className="flex flex-col gap-2 mb-15">
                     <button className={`h-9 mt-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${scanningPastBlocks || noMorePastBlocks ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={scanningPastBlocks || noMorePastBlocks} onClick={() => setScanningPastBlocks(true)}>
-                        {scanningPastBlocks ? "Scanning blockchain...." : noMorePastBlocks ? "No more past posts" : "Scan blocks for more posts"}
+                        {scanningPastBlocks ? "Scanning blockchain...." : noMorePastBlocks ? "No more past posts" : "Scan for more posts"}
                     </button>
-                    <p className="pr-12 text-gray-400 text-[12px] text-center">Blocks scanned for posts down to Block # <span className="absolute">{pastBlockCaptured}</span></p>
+                    {!scanningPastBlocks && <p className="pr-12 text-gray-400 text-[12px] text-center">Posts found down to Block # <span className="absolute">{pastBlockCaptured}</span></p>}
                 </div>
             </div>
             <div className="flex-1 justify-items-start">

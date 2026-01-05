@@ -1,13 +1,12 @@
 import type { RefObject } from "react";
-import { getMaxFee, getPastBlocksWithTxs, type RpcClient } from "./api";
+import { getMaxFee, type RpcClient } from "./api";
 import { calculateMaxFee, hex2str, hexToDecimal, sanitizeStr } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, Transaction, transactionType } from "idena-sdk-js-lite";
 
-export const breakingChanges = { replyToPostIdFormat: 10200492 };
+export const breakingChanges = { timestamp: 1767578641 };
 
 export type PostDomSettings = { textOverflows: boolean, textOverflowHidden: boolean, repliesHidden: boolean }
 export type Post = {
-    blockHeight: number,
     timestamp: number,
     postId: string,
     poster: string,
@@ -18,60 +17,6 @@ export type Post = {
     postDomSettings: PostDomSettings
 };
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, online: boolean };
-export type PastBlocksWithTxsGathered = { initialblockNumber: number, blocksWithTxs: number[] };
-
-export const getRecurseBackwardPendingBlock = async (
-    initialBlock: number,
-    firstBlock: number,
-    blockCapturedRef: React.RefObject<number>,
-    useFindPastBlocksWithTxsApiRef: React.RefObject<boolean>,
-    findPastBlocksUrlInvalidRef: React.RefObject<boolean>,
-    pastBlocksWithTxsRef: React.RefObject<PastBlocksWithTxsGathered>,
-    findPastBlocksUrlRef: React.RefObject<string>,
-) => {
-    let pendingBlock;
-    let pastBlocksWithTxsGathered: PastBlocksWithTxsGathered | undefined;
-
-    const nextPastBlock = blockCapturedRef.current ? blockCapturedRef.current - 1 : undefined;
-
-    if (!nextPastBlock) {
-        pendingBlock = initialBlock - 1;
-    } else if (useFindPastBlocksWithTxsApiRef.current && !findPastBlocksUrlInvalidRef.current) {
-        const noPastBlocksWithTxsGathered = !pastBlocksWithTxsRef.current.blocksWithTxs.length;
-        const pastBlocksAlreadyProcessed = (pastBlocksWithTxsRef.current.initialblockNumber > nextPastBlock) && (pastBlocksWithTxsRef.current.blocksWithTxs[pastBlocksWithTxsRef.current.blocksWithTxs.length - 1] > nextPastBlock);
-        const pastBlocksInRangeForNextBlock = (pastBlocksWithTxsRef.current.initialblockNumber > nextPastBlock) && (pastBlocksWithTxsRef.current.blocksWithTxs[pastBlocksWithTxsRef.current.blocksWithTxs.length - 1] < nextPastBlock);
-
-        if (noPastBlocksWithTxsGathered || pastBlocksAlreadyProcessed) {
-            const { initialblockNumber, blocksWithTxs = [] } = await getPastBlocksWithTxs(findPastBlocksUrlRef.current, nextPastBlock);
-            pastBlocksWithTxsGathered = { initialblockNumber, blocksWithTxs };
-
-            if (!pastBlocksWithTxsGathered.blocksWithTxs![0]) {
-                throw 'no more blocks';
-            }
-
-            if (nextPastBlock > initialblockNumber) {
-                pendingBlock = nextPastBlock;
-            } else {
-                pendingBlock = pastBlocksWithTxsGathered.blocksWithTxs![0];
-            }
-        
-        } else if (pastBlocksInRangeForNextBlock) {
-            const insertionIndex = pastBlocksWithTxsRef.current.blocksWithTxs.findIndex(currentItem => currentItem <= nextPastBlock);
-            const finalIndex = insertionIndex === -1 ? pastBlocksWithTxsRef.current.blocksWithTxs.length : insertionIndex;
-            pendingBlock = pastBlocksWithTxsRef.current.blocksWithTxs[finalIndex];
-        } else {
-            pendingBlock = nextPastBlock;
-        }
-    } else {
-        pendingBlock = nextPastBlock;
-    }
-
-    if (pendingBlock <= firstBlock) {
-        throw 'no more blocks';
-    }
-
-    return { pendingBlock, pastBlocksWithTxsGathered };
-};
 
 export const getChildPostIds = (parentId: string, replyPostsTreeRef: Record<string, string>) => {
     const childPostIds = [];
@@ -103,104 +48,113 @@ const deOrphanReplyPosts = (parentId: string, replyPostTreeRef: Record<string, s
     }
 }
 
+export type Block = { hash: string, height: number, timestamp: number };
+
 export const getNewPostersAndPosts = async (
+    transaction: string,
     contractAddress: string,
     makePostMethod: string,
     thisChannelId: string,
     rpcClientRef: RefObject<RpcClient>,
-    getBlockByHeightResult: any,
     postsRef: React.RefObject<Record<string, Post>>,
+    postersRef: React.RefObject<Record<string, Poster>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     orphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
 ) => {
-    const newPosters: Record<string, Poster> = {};
-    const newOrderedPostIds: string[] = [];
     const newPosts: Record<string, Post> = {};
+    const newPosters: Record<string, Poster> = {};
     const newReplyPosts: Record<string, string> = {};
     const newOrphanedReplyPosts: Record<string, string> = {};
 
-    for (let index = 0; index < getBlockByHeightResult.transactions.length; index++) {
-        const transaction = getBlockByHeightResult.transactions[index];
+    const { result: getTxReceiptResult } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
 
-        const { result: getTxReceiptResult } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
-
-        if (!getTxReceiptResult) {
-            continue;
-        }
-
-        if (getTxReceiptResult.contract !== contractAddress.toLowerCase()) {
-            continue;
-        }
-
-        if (getTxReceiptResult.method !== makePostMethod) {
-            continue;
-        }
-
-        if (getTxReceiptResult.success !== true) {
-            continue;
-        }
-
-        const poster = getTxReceiptResult.events[0].args[0];
-        const postId = hexToDecimal(getTxReceiptResult.events[0].args[1]);
-        const channelId = hex2str(getTxReceiptResult.events[0].args[2]);
-        const message = sanitizeStr(hex2str(getTxReceiptResult.events[0].args[3]));
-        const replyToPostId = getBlockByHeightResult.height < breakingChanges.replyToPostIdFormat ?
-            hexToDecimal(hex2str(getTxReceiptResult.events[0].args[4])) : hex2str(getTxReceiptResult.events[0].args[4]);
-
-        if (channelId !== thisChannelId) {
-            continue;
-        }
-
-        if (!message) {
-            continue;
-        }
-
-        const { result: getDnaIdentityResult } = await rpcClientRef.current('dna_identity', [poster]);
-        const { address, stake, age, pubkey, state, online } = getDnaIdentityResult;
-        newPosters[address] = ({ address, stake, age, pubkey, state, online });
-
-        const newPost = {
-            blockHeight: getBlockByHeightResult.height,
-            timestamp: getBlockByHeightResult.timestamp,
-            postId,
-            poster,
-            message,
-            transaction,
-            replyToPostId,
-            orphaned: false,
-            postDomSettings: {
-                textOverflows: false,
-                textOverflowHidden: true,
-                repliesHidden: true,
-            },
-        };
-
-        if (!replyToPostId) {
-            newOrderedPostIds.unshift(newPost.postId);
-        } else {
-            const replyToPost = postsRef.current[replyToPostId];
-            const newReplyRespectsTime = replyToPost?.blockHeight ? newPost.blockHeight > replyToPost.blockHeight : null;
-
-            if (newReplyRespectsTime === false) {
-                continue;
-            }
-
-            const childPostIds = getChildPostIds(replyToPostId, replyToPost?.orphaned ? replyPostsTreeRef.current : orphanedReplyPostsTreeRef.current);
-
-            if (!replyToPost || replyToPost.orphaned) {
-                newOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
-                newPost.orphaned = true;
-            } else {
-                newReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
-            }
-        }
-
-        deOrphanReplyPosts(newPost.postId, orphanedReplyPostsTreeRef.current, postsRef.current, newOrphanedReplyPosts, newReplyPosts, newPosts);
-
-        newPosts[postId] = newPost;
+    if (!getTxReceiptResult) {
+        return { continued: true };
     }
 
-    return { newPosters, newOrderedPostIds, newPosts, newReplyPosts, newOrphanedReplyPosts };
+    if (getTxReceiptResult.contract !== contractAddress.toLowerCase()) {
+        return { continued: true };
+    }
+
+    if (getTxReceiptResult.method !== makePostMethod) {
+        return { continued: true };
+    }
+
+    if (getTxReceiptResult.success !== true) {
+        return { continued: true };
+    }
+
+    const postId = hexToDecimal(getTxReceiptResult.events[0].args[1]);
+
+    if (postsRef.current[postId]) {
+        return { continued: true };
+    }
+
+    const poster = getTxReceiptResult.events[0].args[0];
+    const channelId = hex2str(getTxReceiptResult.events[0].args[2]);
+    const message = sanitizeStr(hex2str(getTxReceiptResult.events[0].args[3]));
+
+    if (channelId !== thisChannelId) {
+        return { continued: true };
+    }
+
+    if (!message) {
+        return { continued: true };
+    }
+
+    const { result: getTransactionResult } = await rpcClientRef.current('bcn_transaction', [transaction]);
+    const timestamp = getTransactionResult.timestamp;
+    const lastBlockHash = getTransactionResult.blockHash;
+
+    const replyToPostId = timestamp < breakingChanges.timestamp ?
+        hexToDecimal(hex2str(getTxReceiptResult.events[0].args[4])) : hex2str(getTxReceiptResult.events[0].args[4]);
+
+    if (!postersRef.current[poster]) {
+        const { result: getDnaIdentityResult } = await rpcClientRef.current('dna_identity', [poster]);
+        const { address, stake, age, pubkey, state, online } = getDnaIdentityResult;
+        newPosters[poster] = { address, stake, age, pubkey, state, online };
+    }
+
+    const newPost = {
+        timestamp,
+        postId,
+        poster,
+        message,
+        transaction,
+        replyToPostId,
+        orphaned: false,
+        postDomSettings: {
+            textOverflows: false,
+            textOverflowHidden: true,
+            repliesHidden: true,
+        },
+    };
+
+    const newOrderedPostIds = !replyToPostId ? [newPost.postId] : [];
+
+    if (replyToPostId) {
+        const replyToPost = postsRef.current[replyToPostId];
+        const newReplyRespectsTime = replyToPost?.timestamp ? newPost.timestamp > replyToPost.timestamp : null;
+
+        if (newReplyRespectsTime === false) {
+            return { continued: true };
+        }
+
+        const childPostIds = getChildPostIds(replyToPostId, replyToPost?.orphaned ? replyPostsTreeRef.current : orphanedReplyPostsTreeRef.current);
+
+        if (!replyToPost || replyToPost.orphaned) {
+            newOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
+            newPost.orphaned = true;
+        } else {
+            newReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
+        }
+    }
+
+    deOrphanReplyPosts(newPost.postId, orphanedReplyPostsTreeRef.current, postsRef.current, newOrphanedReplyPosts, newReplyPosts, newPosts);
+
+    newPosts[postId] = newPost;
+
+    return { newPosters, newOrderedPostIds, newPosts, newReplyPosts, newOrphanedReplyPosts, lastBlockHash };
 };
 
 export const submitPost = async (
