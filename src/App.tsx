@@ -79,8 +79,11 @@ function App() {
     const [inputIdenaIndexerApiUrlApplied, setInputIdenaIndexerApiUrlApplied] = useState<boolean>(true);
     const [replyPostsTree, setReplyPostsTree] = useState<Record<string, string>>({});
     const replyPostsTreeRef = useRef(replyPostsTree);
-    const [orphanedReplyPostsTree, setOrphanedReplyPostsTree] = useState<Record<string, string>>({});
-    const orphanedReplyPostsTreeRef = useRef(orphanedReplyPostsTree);
+    const [deOrphanedReplyPostsTree, setDeOrphanedReplyPostsTree] = useState<Record<string, string>>({});
+    const [forwardOrphanedReplyPostsTree, setForwardOrphanedReplyPostsTree] = useState<Record<string, string>>({});
+    const forwardOrphanedReplyPostsTreeRef = useRef(forwardOrphanedReplyPostsTree);
+    const [backwardOrphanedReplyPostsTree, setBackwardOrphanedReplyPostsTree] = useState<Record<string, string>>({});
+    const backwardOrphanedReplyPostsTreeRef = useRef(backwardOrphanedReplyPostsTree);
     const [continuationToken, setContinuationToken] = useState<string | undefined>();
     const continuationTokenRef = useRef(continuationToken);
 
@@ -245,8 +248,12 @@ function App() {
     }, [replyPostsTree]);
 
     useEffect(() => {
-        orphanedReplyPostsTreeRef.current = orphanedReplyPostsTree;
-    }, [orphanedReplyPostsTree]);
+        forwardOrphanedReplyPostsTreeRef.current = forwardOrphanedReplyPostsTree;
+    }, [forwardOrphanedReplyPostsTree]);
+
+    useEffect(() => {
+        backwardOrphanedReplyPostsTreeRef.current = backwardOrphanedReplyPostsTree;
+    }, [backwardOrphanedReplyPostsTree]);
 
     useEffect(() => {
         continuationTokenRef.current = continuationToken;
@@ -426,7 +433,18 @@ function App() {
                 for (let index = 0; index < transactions.length; index++) {
                     const lastIteration = index === transactions.length - 1;
 
-                    const { newPosters, newOrderedPostIds, newPosts, newReplyPosts, newOrphanedReplyPosts, lastBlockHash, continued } = await getNewPostersAndPosts(
+                    const {
+                        newPosters,
+                        newOrderedPostIds,
+                        newPosts,
+                        newReplyPosts,
+                        newForwardOrphanedReplyPosts,
+                        newBackwardOrphanedReplyPosts,
+                        newDeOrphanedReplyPosts,
+                        lastBlockHash,
+                        continued,
+                    } = await getNewPostersAndPosts(
+                        recurseForward,
                         transactions[index],
                         contractAddress,
                         makePostMethod,
@@ -435,7 +453,8 @@ function App() {
                         postsRef,
                         postersRef,
                         replyPostsTreeRef,
-                        orphanedReplyPostsTreeRef,
+                        forwardOrphanedReplyPostsTreeRef,
+                        backwardOrphanedReplyPostsTreeRef,
                     );
 
                     if (continued) {
@@ -448,10 +467,23 @@ function App() {
                     setPosters((currentPosters) => ({ ...currentPosters, ...newPosters }));
                     setPosts((currentPosts) => ({ ...currentPosts, ...newPosts }));
                     setReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newReplyPosts }));
-                    setOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newOrphanedReplyPosts }));
+                    setDeOrphanedReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newDeOrphanedReplyPosts }));
+                    setForwardOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newForwardOrphanedReplyPosts }));
+                    setBackwardOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newBackwardOrphanedReplyPosts }));
                     setOrderedPostIds((currentOrderedPostIds) => recurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
                     setNewPostsAdded(newOrderedPostIds!);
-                    
+
+                    const newReplyToPostIds = [ ...new Set([ ...Object.keys(newReplyPosts!) ].map(item => item.split('-')[0])) ];
+
+                    newReplyToPostIds.forEach((replyToId) => {
+                        if (!postsRef.current[replyToId]?.postDomSettings?.repliesHidden) {
+                            const repliesToThisPost = getChildPostIds(replyToId, newReplyPosts!);
+                            setTimeout(() => {
+                                setNewPostsAdded(repliesToThisPost);
+                            }, 0);
+                        }
+                    });
+
                     let lastBlockHeight;
 
                     if (getTransactionsIncrementally) {
@@ -507,12 +539,11 @@ function App() {
         }
     };
 
-    const toggleShowRepliesHandler = (post: Post) => {
+    const toggleShowRepliesHandler = (post: Post, repliesToThisPost: string[]) => {
         post.postDomSettings.repliesHidden = !post.postDomSettings.repliesHidden;
         setPosts(currentPosts => ({ ...currentPosts, [post.postId]: post }));
 
         if (!post.postDomSettings.repliesHidden) {
-            const repliesToThisPost = getChildPostIds(post.postId, replyPostsTree);
             setTimeout(() => {
                 setNewPostsAdded(repliesToThisPost);
             }, 0);
@@ -627,7 +658,7 @@ function App() {
                         const textOverflows = postDomSettingsItem.textOverflows;
                         const displayViewMore = postDomSettingsItem.textOverflowHidden;
                         const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
-                        const repliesToThisPost = getChildPostIds(post.postId, replyPostsTree);
+                        const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTree).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTree) ];
                         const showReplies = !post.postDomSettings.repliesHidden;
 
                         return (
@@ -648,11 +679,11 @@ function App() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div id={`post-text-${post.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : postTextHeight} flex-1 px-4 py-2 text-[17px] text-wrap leading-5 overflow-hidden`}>
+                                    <div id={`post-text-${post.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : postTextHeight} flex-1 px-4 pt-2 pb-1 text-[17px] text-wrap leading-5 overflow-hidden`}>
                                         <p>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                     </div>
                                     {textOverflows && <div className="px-4 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(post)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
-                                    <div className="py-1 px-2">
+                                    <div className="px-2">
                                         <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
                                     <div className="flex flex-row gap-2 px-2 items-end">
@@ -673,7 +704,7 @@ function App() {
                                     </div>
                                     <div className="px-4 mb-1.5 text-[12px]">
                                         {repliesToThisPost.length ?
-                                            <a className="-mt-2 text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowRepliesHandler(post)}>{showReplies ? 'hide replies' : `show replies (${repliesToThisPost.length})`}</a>
+                                            <a className="-mt-2 text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowRepliesHandler(post, repliesToThisPost)}>{showReplies ? 'hide replies' : `show replies (${repliesToThisPost.length})`}</a>
                                         :
                                             <span className="-mt-2 text-gray-500">no replies</span>
                                         }
@@ -712,11 +743,11 @@ function App() {
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <div id={`post-text-${replyPost.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : replyPostTextHeight} flex-1 pl-12 pr-4 py-2 text-[14px] text-wrap leading-5 overflow-hidden`}>
+                                                            <div id={`post-text-${replyPost.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : replyPostTextHeight} flex-1 pl-12 pr-4 pt-2 pb-1 text-[14px] text-wrap leading-5 overflow-hidden`}>
                                                                 <p>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                             </div>
                                                             {textOverflows && <div className="px-12 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(replyPost)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
-                                                            <div className="py-1 px-2">
+                                                            <div className="px-2">
                                                                 <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                                             </div>
                                                         </div>
