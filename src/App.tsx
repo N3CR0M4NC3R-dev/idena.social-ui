@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FocusEventHandler } from 'react';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getNewPostersAndPosts, getChildPostIds, submitPost, type Post, type Poster } from './logic/asyncUtils';
+import { getNewPostersAndPosts, getChildPostIds, submitPost, type Post, type Poster, breakingChanges } from './logic/asyncUtils';
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
 import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
@@ -8,19 +8,24 @@ import WhatIsIdenaPng from './assets/whatisidena.png';
 const idenaNodeUrl = 'https://restricted.idena.io';
 const idenaNodeApiKey = 'idena-restricted-node-key';
 const initIdenaIndexerApiUrl = 'https://api.idena.io';
-const contractAddress = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
+const contractAddressV2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9';
+const contractAddressV1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
 const firstBlock = 10135627;
 const makePostMethod = 'makePost';
 const thisChannelId = '';
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
-const defaultAdUrl = 'https://idena.io';
-const defaultAdImage = WhatIsIdenaPng;
-const defaultAdTitle = 'IDENA: Proof-of-Person blockchain';
-const defaultAdDesc = 'Coordination of individuals';
 const postTextHeight = 'max-h-[288px]';
 const replyPostTextHeight = 'max-h-[146px]';
+const defaultAd = {
+    title: 'IDENA: Proof-of-Person blockchain',
+    desc: 'Coordination of individuals',
+    url: 'https://idena.io',
+    thumb: '',
+    media: WhatIsIdenaPng,
+};
+
 
 const POLLING_INTERVAL = 5000;
 const SCANNING_INTERVAL = 10;
@@ -86,6 +91,8 @@ function App() {
     const backwardOrphanedReplyPostsTreeRef = useRef(backwardOrphanedReplyPostsTree);
     const [continuationToken, setContinuationToken] = useState<string | undefined>();
     const continuationTokenRef = useRef(continuationToken);
+    const [pastContractAddress, setPastContractAddress] = useState<string>(contractAddressV2);
+    const pastContractAddressRef = useRef(pastContractAddress);
 
 
     useEffect(() => {
@@ -130,10 +137,10 @@ function App() {
 
             try {
                 const ads = await adsClient.getApprovedAds();
-                setAds(ads);
+                setAds([defaultAd as ApprovedAd, ...ads]);
             } catch (error) {
                 console.error(error);
-                setAds([]);
+                setAds([defaultAd as ApprovedAd]);
             }
 
         })();
@@ -167,9 +174,9 @@ function App() {
             setIdenaIndexerApiUrl(inputIdenaIndexerApiUrl);
 
             (async function() {
-                const { result } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddress, 1);
+                const { result } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddressV2, 1);
 
-                if (result.length === 1 && result[0].address === contractAddress) {
+                if (result.length === 1 && result[0].address === contractAddressV2) {
                     setIdenaIndexerApiUrlInvalid(false);
                 } else {
                     setIdenaIndexerApiUrlInvalid(true);
@@ -259,6 +266,10 @@ function App() {
         continuationTokenRef.current = continuationToken;
     }, [continuationToken]);
 
+    useEffect(() => {
+        pastContractAddressRef.current = pastContractAddress;
+    }, [pastContractAddress]);
+
     type RecurseForward = () => Promise<void>;
     useEffect(() => {
         if (initialBlock) {
@@ -284,7 +295,7 @@ function App() {
 
             (async function recurseBackward(time: number) {
                 if (time < ttl) {
-                    recurseBackwardIntervalId = setTimeout(postScannerFactory(false, recurseBackward, pastBlockCapturedRef, setPastBlockCaptured, continuationTokenRef), SCANNING_INTERVAL);
+                    recurseBackwardIntervalId = setTimeout(postScannerFactory(false, recurseBackward, pastBlockCapturedRef, setPastBlockCaptured, continuationTokenRef, pastContractAddressRef), SCANNING_INTERVAL);
                 } else {
                     setScanningPastBlocks(false);
                 }
@@ -344,7 +355,7 @@ function App() {
         }
 
         setSubmittingPost(postId);
-        await submitPost(postersAddress, contractAddress, makePostMethod, inputText, replyToPostId, inputUseRpc, rpcClient, callbackUrl);
+        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId, inputUseRpc, rpcClient, callbackUrl);
     };
 
     const handleUseRpcToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -385,7 +396,14 @@ function App() {
         }
     };
 
-    const postScannerFactory = (recurseForward: boolean, recurse: RecurseForward | RecurseBackward, blockCapturedRef: React.RefObject<number>, setBlockCaptured: React.Dispatch<React.SetStateAction<number>>, continuationTokenRef?: React.RefObject<string | undefined>) => {
+    const postScannerFactory = (
+        recurseForward: boolean,
+        recurse: RecurseForward | RecurseBackward,
+        blockCapturedRef: React.RefObject<number>,
+        setBlockCaptured: React.Dispatch<React.SetStateAction<number>>,
+        continuationTokenRef?: React.RefObject<string | undefined>,
+        pastContractAddressRef?: React.RefObject<string>,
+    ) => {
         return async function postFinder() {
             try {
                 let pendingBlock: number;
@@ -413,6 +431,11 @@ function App() {
                     
                     if (getBlockByHeightResult.transactions === null) {
                         setBlockCaptured(pendingBlock);
+
+                        if (getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
+                            setPastContractAddress(contractAddressV1);
+                        }
+
                         throw 'no transactions';
                     }
 
@@ -421,8 +444,17 @@ function App() {
                     if (continuationTokenRef!.current === 'finished processing') {
                         throw 'no more transactions';
                     }
-                    const responseBody = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddress, INDEXER_ITEMS_LIMIT, continuationTokenRef!.current);
-                    setContinuationToken(responseBody.continuationToken ?? 'finished processing');
+                    const responseBody = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pastContractAddressRef!.current, INDEXER_ITEMS_LIMIT, continuationTokenRef!.current);
+                    if (responseBody.continuationToken) {
+                        setContinuationToken(responseBody.continuationToken);
+                    } else {
+                        if (pastContractAddressRef!.current === contractAddressV2) {
+                            setPastContractAddress(contractAddressV1);
+                            setContinuationToken(undefined);
+                        } else {
+                            setContinuationToken('finished processing');
+                        }
+                    }
 
                     transactions = responseBody.result
                         ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && balanceUpdate.txReceipt.method === 'makePost' && balanceUpdate.txReceipt.success === true)
@@ -446,7 +478,7 @@ function App() {
                     } = await getNewPostersAndPosts(
                         recurseForward,
                         transactions[index],
-                        contractAddress,
+                        pastContractAddressRef!.current,
                         makePostMethod,
                         thisChannelId,
                         rpcClientRef,
@@ -562,7 +594,7 @@ function App() {
         <main className="w-full flex flex-row p-2">
             <div className="flex-1 justify-items-end">
                 <div className="w-[288px] min-w-[288px] ml-2 mr-8 flex flex-col">
-                    <div className="text-[28px] mb-3"><a href={`https://scan.idena.io/contract/${contractAddress}`} target="_blank">idena.social</a></div>
+                    <div className="text-[28px] mb-3"><a href={`https://scan.idena.io/contract/${contractAddressV2}`} target="_blank">idena.social</a></div>
                     <div className="mb-4 text-[14px]">
                         <div className="flex flex-col gap-2">
                             <div className="flex flex-row gap-1">
@@ -660,6 +692,7 @@ function App() {
                         const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
                         const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTree).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTree) ];
                         const showReplies = !post.postDomSettings.repliesHidden;
+                        const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v5.timestamp;
 
                         return (
                             <li key={post.postId}>
@@ -693,7 +726,7 @@ function App() {
                                                 rows={1}
                                                 className="w-full rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500"
                                                 placeholder="Write your reply here..."
-                                                disabled={inputPostDisabled}
+                                                disabled={inputPostDisabled || isBreakingChangeDisabled}
                                                 onFocus={replyInputOnFocusHandler}
                                                 onBlur={replyInputOnBlurHandler}
                                             />
@@ -771,11 +804,11 @@ function App() {
             <div className="flex-1 justify-items-start">
                 <div className="w-[288px] min-w-[288px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
                     <div className="flex flex-col h-[90px] justify-center">
-                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAdTitle}</p></div>
-                        <div className="px-1"><p>{currentAd?.desc ?? defaultAdDesc}</p></div>
-                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAdUrl} target="_blank">{currentAd?.url ?? defaultAdUrl}</a></div>
+                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
+                        <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
+                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank">{currentAd?.url ?? defaultAd.url}</a></div>
                     </div>
-                    <div className="my-3 h-[320px] w-[320px]"><a href={currentAd?.url ?? defaultAdUrl} target="_blank"><img className="rounded-md" src={currentAd?.media ?? defaultAdImage} /></a></div>
+                    <div className="my-3 h-[320px] w-[320px]"><a href={currentAd?.url ?? defaultAd.url} target="_blank"><img className="rounded-md" src={currentAd?.media ?? defaultAd.media} /></a></div>
                     <div className="flex flex-row px-1">
                         <div className="w-16 flex-auto">
                             <div className="font-[600] text-gray-400"><p>Sponsored by</p></div>
