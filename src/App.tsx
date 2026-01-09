@@ -721,14 +721,14 @@ function App() {
                                     <div className="px-2">
                                         <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
-                                    <div className="flex flex-row gap-2 px-2 items-end">
+                                    {!isBreakingChangeDisabled && <div className="flex flex-row gap-2 px-2 items-end">
                                         <div className="flex-1">
                                             <textarea
                                                 id={`post-input-${post.postId}`}
                                                 rows={1}
                                                 className="w-full rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500"
                                                 placeholder="Write your reply here..."
-                                                disabled={inputPostDisabled || isBreakingChangeDisabled}
+                                                disabled={inputPostDisabled}
                                                 onFocus={replyInputOnFocusHandler}
                                                 onBlur={replyInputOnBlurHandler}
                                             />
@@ -736,7 +736,7 @@ function App() {
                                         <div>
                                             <button className="h-9 w-17 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler(post.postId)}>{submittingPost === post.postId ? '...' : 'Post!'}</button>
                                         </div>
-                                    </div>
+                                    </div>}
                                     <div className="px-4 mb-1.5 text-[12px]">
                                         {repliesToThisPost.length ?
                                             <a className="-mt-2 text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowRepliesHandler(post, repliesToThisPost)}>{showReplies ? 'hide replies' : `show replies (${repliesToThisPost.length})`}</a>
