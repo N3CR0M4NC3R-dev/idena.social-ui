@@ -594,7 +594,7 @@ function App() {
 
     return (
         <main className="w-full flex flex-row p-2">
-            <div className="flex-1 justify-items-end">
+            <div className="flex-1 flex justify-end">
                 <div className="w-[288px] min-w-[288px] ml-2 mr-8 flex flex-col">
                     <div className="text-[28px] mb-3"><a href={`https://scan.idena.io/contract/${contractAddressV2}`} target="_blank">idena.social</a></div>
                     <div className="mb-4 text-[14px]">
@@ -803,7 +803,7 @@ function App() {
                     {!scanningPastBlocks && <p className="pr-12 text-gray-400 text-[12px] text-center">Posts found down to Block # <span className="absolute">{pastBlockCaptured}</span></p>}
                 </div>
             </div>
-            <div className="flex-1 justify-items-start">
+            <div className="flex-1 flex justify-start">
                 <div className="w-[288px] min-w-[288px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
                     <div className="flex flex-col h-[90px] justify-center">
                         <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
