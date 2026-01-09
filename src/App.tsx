@@ -432,7 +432,7 @@ function App() {
                     if (getBlockByHeightResult.transactions === null) {
                         setBlockCaptured(pendingBlock);
 
-                        if (getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
+                        if (!recurseForward && getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
                             setPastContractAddress(contractAddressV1);
                         }
 
@@ -462,6 +462,8 @@ function App() {
                     ?? [];
                 }
 
+                const contractAddress = recurseForward ? contractAddressV2 : pastContractAddressRef!.current;
+
                 for (let index = 0; index < transactions.length; index++) {
                     const lastIteration = index === transactions.length - 1;
 
@@ -478,7 +480,7 @@ function App() {
                     } = await getNewPostersAndPosts(
                         recurseForward,
                         transactions[index],
-                        pastContractAddressRef!.current,
+                        contractAddress,
                         makePostMethod,
                         thisChannelId,
                         rpcClientRef,
