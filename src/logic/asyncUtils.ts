@@ -98,7 +98,11 @@ export const getNewPostersAndPosts = async (
     const newBackwardOrphanedReplyPosts: Record<string, string> = {};
     const newDeOrphanedReplyPosts: Record<string, string> = {};
 
-    const { result: getTxReceiptResult } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
+    const { result: getTxReceiptResult, error: getTxReceiptError } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
+
+    if (getTxReceiptError) {
+        throw 'rpc unavailable';
+    }
 
     if (!getTxReceiptResult) {
         return { continued: true };
@@ -134,7 +138,12 @@ export const getNewPostersAndPosts = async (
         return { continued: true };
     }
 
-    const { result: getTransactionResult } = await rpcClientRef.current('bcn_transaction', [transaction]);
+    const { result: getTransactionResult, error: getTransactionError } = await rpcClientRef.current('bcn_transaction', [transaction]);
+
+    if (getTransactionError) {
+        throw 'rpc unavailable';
+    }
+
     const timestamp = getTransactionResult.timestamp;
     const lastBlockHash = getTransactionResult.blockHash;
 
@@ -147,7 +156,12 @@ export const getNewPostersAndPosts = async (
     const replyToPostId = !replyToPostIdRaw ? '' : (preV5 ? breakingChanges.v5.prefixPreV5 + replyToPostIdRaw : replyToPostIdRaw);
 
     if (!postersRef.current[poster]) {
-        const { result: getDnaIdentityResult } = await rpcClientRef.current('dna_identity', [poster]);
+        const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClientRef.current('dna_identity', [poster]);
+
+        if (getDnaIdentityError) {
+            throw 'rpc unavailable';
+        }
+
         const { address, stake, age, pubkey, state, online } = getDnaIdentityResult;
         newPosters[poster] = { address, stake, age, pubkey, state, online };
     }

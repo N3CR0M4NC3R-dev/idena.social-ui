@@ -5,8 +5,8 @@ import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './l
 import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
-const idenaNodeUrl = 'https://restricted.idena.io';
-const idenaNodeApiKey = 'idena-restricted-node-key';
+const defaultIdenaNodeUrl = 'https://restricted.idena.io';
+const defaultIdenaNodeApiKey = 'idena-restricted-node-key';
 const initIdenaIndexerApiUrl = 'https://api.idena.io';
 const contractAddressV2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9';
 const contractAddressV1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
@@ -43,15 +43,17 @@ if (!DEBUG) {
 }
 
 function App() {
-    const [rpcClient, setRpcClient] = useState<RpcClient>(() => getRpcClient({ idenaNodeUrl, idenaNodeApiKey }));
+    const [nodeAvailable, setNodeAvailable] = useState<boolean>(false);
+    const nodeAvailableRef = useRef(nodeAvailable);
+    const [rpcClient, setRpcClient] = useState<RpcClient>(undefined as unknown as RpcClient);
     const rpcClientRef = useRef(rpcClient);
     const [viewOnlyNode, setViewOnlyNode] = useState<boolean>(false);
     const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
     const [inputPostersAddress, setInputPostersAddress] = useState<string>(zeroAddress);
     const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState<boolean>(true);
-    const [inputNodeUrl, setInputNodeUrl] = useState<string>(idenaNodeUrl);
-    const [inputNodeKey, setInputNodeKey] = useState<string>(idenaNodeApiKey);
+    const [inputNodeUrl, setInputNodeUrl] = useState<string>(defaultIdenaNodeUrl);
+    const [inputNodeKey, setInputNodeKey] = useState<string>(defaultIdenaNodeApiKey);
     const [postersAddress, setPostersAddress] = useState<string>(zeroAddress);
     const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
     const [inputUseRpc, setInputUseRpc] = useState<boolean>(false);
@@ -69,7 +71,8 @@ function App() {
     const partialPastBlockCapturedRef = useRef(partialPastBlockCaptured);
     const [currentBlockCaptured, setCurrentBlockCaptured] = useState<number>(0);
     const currentBlockCapturedRef = useRef(currentBlockCaptured);
-    const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(true);
+    const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(false);
+    const scanningPastBlocksRef = useRef(scanningPastBlocks);
     const [ads, setAds] = useState<ApprovedAd[]>([]);
     const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
     const currentAdRef = useRef(currentAd);
@@ -96,54 +99,55 @@ function App() {
 
 
     useEffect(() => {
-        (async function() {
-            try {
-                const { result: getLastBlockResult } = await rpcClient('bcn_lastBlock', []);
-                setInitialBlock(getLastBlockResult.height);
-            } catch (error) {
-                console.error(error);
-            }
-        })();
-    }, []);
-
-    useEffect(() => {
         if (inputNodeApplied) {
-            setRpcClient(() => getRpcClient({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey }));
+            setRpcClient(() => getRpcClient({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey }, setNodeAvailable));
         }
     }, [inputNodeApplied]);
 
     useEffect(() => {
-        (async function() {
-            const { result: syncingResult } = await rpcClient('bcn_syncing', []);
+        if (rpcClient) {
+            (async function() {
+                const { result: syncingResult } = await rpcClient('bcn_syncing', []);
 
-            if (!syncingResult) {
-                alert('Your node has an issue! Please check if you typed in the correct details.');
-            }
-            if (syncingResult.syncing) {
-                alert('Your node is still syncing! Please try again after syncing has completed.');
-            }
+                if (!syncingResult) {
+                    alert('Your node has an issue! Please check if you typed in the correct details.');
+                    return;
+                }
+                if (syncingResult.syncing) {
+                    alert('Your node is still syncing! Please try again after syncing has completed.');
+                    return;
+                }
 
-            const { result: getCoinbaseAddrResult } = await rpcClient('dna_getCoinbaseAddr', []);
+                setNodeAvailable(true);
 
-            if (getCoinbaseAddrResult) {
-                setPostersAddress(getCoinbaseAddrResult);
-                setViewOnlyNode(false);
-            } else {
-                setPostersAddress('');
-                setViewOnlyNode(true);
-            }
+                if (!initialBlock) {
+                    const { result: getLastBlockResult } = await rpcClient('bcn_lastBlock', []);
+                    setInitialBlock(getLastBlockResult?.height ?? 0);
+                    setScanningPastBlocks(true);
+                }
 
-            const adsClient = new IdenaApprovedAds({ idenaNodeUrl, idenaNodeApiKey });
+                const { result: getCoinbaseAddrResult } = await rpcClient('dna_getCoinbaseAddr', []);
 
-            try {
-                const ads = await adsClient.getApprovedAds();
-                setAds([defaultAd as ApprovedAd, ...ads]);
-            } catch (error) {
-                console.error(error);
-                setAds([defaultAd as ApprovedAd]);
-            }
+                if (getCoinbaseAddrResult) {
+                    setPostersAddress(getCoinbaseAddrResult);
+                    setViewOnlyNode(false);
+                } else {
+                    setPostersAddress('');
+                    setViewOnlyNode(true);
+                }
 
-        })();
+                const adsClient = new IdenaApprovedAds({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey });
+
+                try {
+                    const ads = await adsClient.getApprovedAds();
+                    setAds([defaultAd as ApprovedAd, ...ads]);
+                } catch (error) {
+                    console.error(error);
+                    setAds([defaultAd as ApprovedAd]);
+                }
+
+            })();
+        }
     }, [rpcClient]);
 
     useEffect(() => {
@@ -174,9 +178,9 @@ function App() {
             setIdenaIndexerApiUrl(inputIdenaIndexerApiUrl);
 
             (async function() {
-                const { result } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddressV2, 1);
+                const { result, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddressV2, 1);
 
-                if (result.length === 1 && result[0].address === contractAddressV2) {
+                if (!error && result?.length === 1 && result?.[0]?.address === contractAddressV2) {
                     setIdenaIndexerApiUrlInvalid(false);
                 } else {
                     setIdenaIndexerApiUrlInvalid(true);
@@ -207,6 +211,10 @@ function App() {
     }, [ads]);
 
     useEffect(() => {
+        nodeAvailableRef.current = nodeAvailable;
+    }, [nodeAvailable]);
+
+    useEffect(() => {
         setOrderedPostIds(current => [...current]);
     }, [replyPostsTree]);
 
@@ -217,6 +225,10 @@ function App() {
     useEffect(() => {
         currentBlockCapturedRef.current = currentBlockCaptured;
     }, [currentBlockCaptured]);
+
+    useEffect(() => {
+        scanningPastBlocksRef.current = scanningPastBlocks;
+    }, [scanningPastBlocks]);
 
     useEffect(() => {
         pastBlockCapturedRef.current = pastBlockCaptured;
@@ -272,29 +284,29 @@ function App() {
 
     type RecurseForward = () => Promise<void>;
     useEffect(() => {
-        if (initialBlock) {
-            setScanningPastBlocks(true);
-
+        if (initialBlock && nodeAvailable) {
             let recurseForwardIntervalId: NodeJS.Timeout;
 
             (async function recurseForward() {
-                recurseForwardIntervalId = setTimeout(postScannerFactory(true, recurseForward, currentBlockCapturedRef, setCurrentBlockCaptured), POLLING_INTERVAL);
+                if (nodeAvailableRef.current) {
+                    recurseForwardIntervalId = setTimeout(postScannerFactory(true, recurseForward, currentBlockCapturedRef, setCurrentBlockCaptured), POLLING_INTERVAL);
+                }
             } as RecurseForward)();
 
             return () => clearInterval(recurseForwardIntervalId);
         }
-    }, [initialBlock]);
+    }, [initialBlock, nodeAvailable]);
 
     type RecurseBackward = (time: number) => Promise<void>;
     useEffect(() => {
-        if (scanningPastBlocks) {
+        if (scanningPastBlocks && initialBlock && nodeAvailable) {
             let recurseBackwardIntervalId: NodeJS.Timeout;
 
             const timeNow = Math.floor(Date.now() / 1000);
             const ttl = timeNow + SCAN_POSTS_TTL;
 
             (async function recurseBackward(time: number) {
-                if (time < ttl) {
+                if (scanningPastBlocksRef.current && nodeAvailableRef.current && time < ttl) {
                     recurseBackwardIntervalId = setTimeout(postScannerFactory(false, recurseBackward, pastBlockCapturedRef, setPastBlockCaptured, continuationTokenRef, pastContractAddressRef), SCANNING_INTERVAL);
                 } else {
                     setScanningPastBlocks(false);
@@ -303,7 +315,7 @@ function App() {
 
             return () => clearInterval(recurseBackwardIntervalId);
         }
-    }, [scanningPastBlocks]);
+    }, [scanningPastBlocks, initialBlock, nodeAvailable]);
 
     useEffect(() => {
         const updatedPosts: Record<string, Post> = {};
@@ -339,6 +351,11 @@ function App() {
     }, [submittingPost, inputUseRpc, viewOnlyNode, postersAddressInvalid]);
 
     const submitPostHandler = async (postId: string) => {
+        if (!nodeAvailable) {
+            alert('Node unavailable, cannot post!');
+            return;
+        }
+
         const postTextareaElement = document.getElementById(`post-input-${postId}`) as HTMLTextAreaElement;
         const inputText = postTextareaElement.value;
 
@@ -365,7 +382,7 @@ function App() {
         if (useRpc) {
             setInputPostersAddress('');
             setPostersAddressInvalid(false);
-            setRpcClient(() => getRpcClient({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey }));
+            setRpcClient(() => getRpcClient({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey }, setNodeAvailable));
         } else {
             if (postersAddress) {
                 setInputPostersAddress(postersAddress);
@@ -423,7 +440,11 @@ function App() {
                             initialBlock - 1
                         );
 
-                    const { result: getBlockByHeightResult } = await rpcClientRef.current('bcn_blockAt', [pendingBlock]);
+                    const { result: getBlockByHeightResult, error } = await rpcClientRef.current('bcn_blockAt', [pendingBlock]);
+
+                    if (error) {
+                        throw 'rpc unavailable';
+                    }
 
                     if (getBlockByHeightResult === null) {
                         throw 'no block';
@@ -444,9 +465,14 @@ function App() {
                     if (continuationTokenRef!.current === 'finished processing') {
                         throw 'no more transactions';
                     }
-                    const responseBody = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pastContractAddressRef!.current, INDEXER_ITEMS_LIMIT, continuationTokenRef!.current);
-                    if (responseBody.continuationToken) {
-                        setContinuationToken(responseBody.continuationToken);
+                    const { result, continuationToken, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pastContractAddressRef!.current, INDEXER_ITEMS_LIMIT, continuationTokenRef!.current);
+                    
+                    if (error) {
+                        throw 'indexer api unavailable';
+                    }
+                    
+                    if (continuationToken) {
+                        setContinuationToken(continuationToken);
                     } else {
                         if (pastContractAddressRef!.current === contractAddressV2) {
                             setPastContractAddress(contractAddressV1);
@@ -456,7 +482,7 @@ function App() {
                         }
                     }
 
-                    transactions = responseBody.result
+                    transactions = result
                         ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && balanceUpdate.txReceipt.method === 'makePost' && balanceUpdate.txReceipt.success === true)
                         .map((balanceUpdate: any) => balanceUpdate.hash)
                     ?? [];
@@ -527,7 +553,12 @@ function App() {
                     }
                     
                     if (!getTransactionsIncrementally && lastIteration) {
-                        const { result: getBlockByHashResult } = await rpcClientRef.current('bcn_block', [lastBlockHash]);
+                        const { result: getBlockByHashResult, error } = await rpcClientRef.current('bcn_block', [lastBlockHash]);
+
+                        if (error) {
+                            throw 'rpc unavailable';
+                        }
+
                         lastBlockHeight = getBlockByHashResult.height;
                         setPartialPastBlockCaptured(lastBlockHeight);
                         setBlockCaptured(lastBlockHeight);
@@ -548,6 +579,10 @@ function App() {
                 if (!recurseForward && error === 'no more transactions') {
                     setNoMorePastBlocks(true);
                     setScanningPastBlocks(false);
+                } else if (error === 'rpc unavailable') {
+                    setScanningPastBlocks(false);
+                } else if (error === 'indexer api unavailable') {
+                    setIdenaIndexerApiUrlInvalid(true);
                 } else {
                     if (recurseForward) {
                         (recurse as RecurseForward)();
@@ -598,18 +633,19 @@ function App() {
                 <div className="w-[288px] min-w-[288px] ml-2 mr-8 flex flex-col">
                     <div className="text-[28px] mb-3"><a href={`https://scan.idena.io/contract/${contractAddressV2}`} target="_blank">idena.social</a></div>
                     <div className="mb-4 text-[14px]">
-                        <div className="flex flex-col gap-2">
-                            <div className="flex flex-row gap-1">
+                        <div className="flex flex-col">
+                            <div className="flex flex-row mb-2 gap-1">
                                 <p className="w-13 flex-none text-right leading-7">Rpc url:</p>
                                 <input className="h-6.5 flex-1 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeUrl} onChange={e => setInputNodeUrl(e.target.value)} />
                             </div>
-                            <div className="flex flex-row gap-1">
+                            <div className="flex flex-row mb-1 gap-1">
                                 <p className="w-13 flex-none text-right leading-7">Api key:</p>
                                 <input className="h-6.5 flex-1 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeKey} onChange={e => setInputNodeKey(e.target.value)} />
                             </div>
+                            {!nodeAvailable && <p className="ml-14 text-[11px] text-red-400">Node Unavailable. Please try again.</p>}
                         </div>
                         <div className="flex flex-row">
-                            <button className={`h-7 w-16 ml-14 mt-1.5 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeApplied(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
+                            <button className={`h-7 w-16 ml-14 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeApplied(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
                             {!inputNodeApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[11px]">Apply changes to take effect</p>}
                         </div>
                     </div>
@@ -679,7 +715,8 @@ function App() {
                     </div>
                 </div>
                 <div className="text-center my-3">
-                    <p className="text-center">Current Block: #{currentBlockCaptured ? currentBlockCaptured : 'Loading...'}</p>
+                    <p>Current Block: #{currentBlockCaptured ? currentBlockCaptured : (nodeAvailable ? 'Loading...' : '')}</p>
+                    {!nodeAvailable && <p className="text-[11px] text-red-400">Blocks are not being captured. Please update your node.</p>}
                 </div>
                 <ul>
                     {orderedPostIds.map((postId) => {
@@ -797,10 +834,10 @@ function App() {
                     })}
                 </ul>
                 <div className="flex flex-col gap-2 mb-15">
-                    <button className={`h-9 mt-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${scanningPastBlocks || noMorePastBlocks ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={scanningPastBlocks || noMorePastBlocks} onClick={() => setScanningPastBlocks(true)}>
-                        {scanningPastBlocks ? "Scanning blockchain...." : noMorePastBlocks ? "No more past posts" : "Scan for more posts"}
+                    <button className={`h-9 mt-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${scanningPastBlocks || noMorePastBlocks ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={scanningPastBlocks || noMorePastBlocks || !nodeAvailable} onClick={() => setScanningPastBlocks(true)}>
+                        {scanningPastBlocks ? "Scanning blockchain...." : (noMorePastBlocks ? "No more past posts" : "Scan for more posts")}
                     </button>
-                    {!scanningPastBlocks && <p className="pr-12 text-gray-400 text-[12px] text-center">Posts found down to Block # <span className="absolute">{pastBlockCaptured}</span></p>}
+                    {!scanningPastBlocks && <p className="pr-12 text-gray-400 text-[12px] text-center">Posts found down to Block # <span className="absolute">{pastBlockCaptured || 'unavailable'}</span></p>}
                 </div>
             </div>
             <div className="flex-1 flex justify-start">
