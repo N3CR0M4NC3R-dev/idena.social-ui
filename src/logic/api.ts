@@ -23,8 +23,12 @@ export const getRpcClient = (nodeDetails: NodeDetails, setNodeAvailable: React.D
             throw new Error(`Response status: ${response.status}`);
         }
 
-        const result = await response.json();
-        return result;
+        try {
+            return await response.json();
+        } catch (error) {
+            console.error(error);
+            return {};
+        }
     } catch (error: unknown) {
         setNodeAvailable(false);
         console.error(error);
