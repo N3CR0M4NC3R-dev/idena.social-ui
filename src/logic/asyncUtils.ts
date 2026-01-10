@@ -122,7 +122,7 @@ export const getNewPostersAndPosts = async (
 
     const postIdRaw = hexToDecimal(getTxReceiptResult.events[0].args[1]);
 
-    if (postsRef.current[postIdRaw] || postsRef.current[breakingChanges.v5.prefixPreV5 + postIdRaw]) {
+    if (postsRef.current[postIdRaw]) {
         return { continued: true };
     }
 
@@ -149,6 +149,10 @@ export const getNewPostersAndPosts = async (
 
     const preV3 = timestamp < breakingChanges.v3.timestamp;
     const preV5 = timestamp < breakingChanges.v5.timestamp;
+
+    if (preV5 && postsRef.current[breakingChanges.v5.prefixPreV5 + postIdRaw]) {
+        return { continued: true };
+    }
 
     const postId = preV5 ? breakingChanges.v5.prefixPreV5 + postIdRaw : postIdRaw;
 
