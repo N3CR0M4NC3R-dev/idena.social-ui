@@ -19,7 +19,7 @@ export type Post = {
     orphaned: boolean,
     postDomSettings: PostDomSettings
 };
-export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, online: boolean };
+export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
 
 export const getChildPostIds = (parentId: string, replyPostsTreeRef: Record<string, string>) => {
     const childPostIds = [];
@@ -166,8 +166,8 @@ export const getNewPostersAndPosts = async (
             throw 'rpc unavailable';
         }
 
-        const { address, stake, age, pubkey, state, online } = getDnaIdentityResult;
-        newPosters[poster] = { address, stake, age, pubkey, state, online };
+        const { address, stake, age, pubkey, state } = getDnaIdentityResult;
+        newPosters[poster] = { address, stake, age, pubkey, state };
     }
 
     const newPost = {

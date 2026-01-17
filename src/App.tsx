@@ -835,7 +835,9 @@ function App() {
                     <button className={`h-9 mt-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${scanningPastBlocks || noMorePastBlocks ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={scanningPastBlocks || noMorePastBlocks || !nodeAvailable} onClick={() => setScanningPastBlocks(true)}>
                         {scanningPastBlocks ? "Scanning blockchain...." : (noMorePastBlocks ? "No more past posts" : "Scan for more posts")}
                     </button>
-                    {!scanningPastBlocks && <p className="pr-12 text-gray-400 text-[12px] text-center">Posts found down to Block # <span className="absolute">{pastBlockCaptured || 'unavailable'}</span></p>}
+                    <p className="pr-12 text-gray-400 text-[12px] text-center">
+                        {!scanningPastBlocks ? <>Posts found down to Block # <span className="absolute">{pastBlockCaptured || 'unavailable'}</span></> : <>&nbsp;</>}
+                    </p>
                 </div>
             </div>
             <div className="flex-1 flex justify-start">
