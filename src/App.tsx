@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FocusEventHandler } from 'react';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getNewPostersAndPosts, getChildPostIds, submitPost, type Post, type Poster, breakingChanges } from './logic/asyncUtils';
+import { getChildPostIds, submitPost, type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts } from './logic/asyncUtils';
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
 import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
@@ -34,7 +34,7 @@ const ADS_INTERVAL = 10000;
 const SCAN_POSTS_TTL = 1 * 60;
 const INDEXER_ITEMS_LIMIT = 100;
 
-const DEBUG = false;
+const DEBUG = true;
 
 if (!DEBUG) {
     console.log = () => {};
@@ -492,17 +492,11 @@ function App() {
                     const lastIteration = index === transactions.length - 1;
 
                     const {
-                        newPosters,
-                        newOrderedPostIds,
-                        newPosts,
-                        newReplyPosts,
-                        newForwardOrphanedReplyPosts,
-                        newBackwardOrphanedReplyPosts,
-                        newDeOrphanedReplyPosts,
+                        newPost,
+                        newPoster,
                         lastBlockHash,
                         continued,
-                    } = await getNewPostersAndPosts(
-                        recurseForward,
+                    } = await getNewPosterAndPost(
                         transactions[index],
                         contractAddress,
                         makePostMethod,
@@ -510,9 +504,6 @@ function App() {
                         rpcClientRef,
                         postsRef,
                         postersRef,
-                        replyPostsTreeRef,
-                        forwardOrphanedReplyPostsTreeRef,
-                        backwardOrphanedReplyPostsTreeRef,
                     );
 
                     if (continued) {
@@ -522,8 +513,39 @@ function App() {
                         continue;
                     }
 
+                    const newOrderedPostIds = !newPost!.replyToPostId ? [newPost!.postId] : [];
+                    const newPosts = { [newPost!.postId]: newPost } as Record<string, Post>;
+                    const newPosters = newPoster ? { [newPoster.address]: newPoster } : {};
+
+                    const {
+                        newReplyPosts,
+                        newForwardOrphanedReplyPosts,
+                        newBackwardOrphanedReplyPosts,
+                    } = await getReplyPosts(
+                        newPost!,
+                        recurseForward,
+                        postsRef,
+                        replyPostsTreeRef,
+                        forwardOrphanedReplyPostsTreeRef,
+                        backwardOrphanedReplyPostsTreeRef,
+                    );
+
+                    const newDeOrphanedReplyPosts: Record<string, string> = {};
+                    const updatedPosts: Record<string, Post> = {};
+
+                    deOrphanReplyPosts(
+                        newPost!.postId,
+                        forwardOrphanedReplyPostsTreeRef.current,
+                        backwardOrphanedReplyPostsTreeRef.current,
+                        postsRef.current,
+                        newForwardOrphanedReplyPosts,
+                        newBackwardOrphanedReplyPosts,
+                        newDeOrphanedReplyPosts,
+                        updatedPosts,
+                    );
+
                     setPosters((currentPosters) => ({ ...currentPosters, ...newPosters }));
-                    setPosts((currentPosts) => ({ ...currentPosts, ...newPosts }));
+                    setPosts((currentPosts) => ({ ...currentPosts, ...updatedPosts, ...newPosts }));
                     setReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newReplyPosts }));
                     setDeOrphanedReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newDeOrphanedReplyPosts }));
                     setForwardOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newForwardOrphanedReplyPosts }));

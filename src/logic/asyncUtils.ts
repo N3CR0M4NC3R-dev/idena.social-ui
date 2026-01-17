@@ -35,51 +35,9 @@ export const getChildPostIds = (parentId: string, replyPostsTreeRef: Record<stri
     return childPostIds;
 };
 
-const deOrphanReplyPosts = (
-    parentId: string,
-    forwardOrphanedReplyPostsTreeRef: Record<string, string>,
-    backwardOrphanedReplyPostsTreeRef: Record<string, string>,
-    postsRef: Record<string, Post>,
-    newForwardOrphanedReplyPosts: Record<string, string>,
-    newBackwardOrphanedReplyPosts: Record<string, string>,
-    newDeOrphanedReplyPosts: Record<string, string>,
-    newPosts: Record<string, Post>
-) => {
-    const newForwardDeOrphanedIds = getChildPostIds(parentId, forwardOrphanedReplyPostsTreeRef).map((deOrphanedId, index) => ({ recurseForward: true, oldKey: `${parentId}-${index}`, deOrphanedId }));
-    const newBackwardDeOrphanedIds = getChildPostIds(parentId, backwardOrphanedReplyPostsTreeRef).map((deOrphanedId, index) => ({ recurseForward: false, oldKey: `${parentId}-${index}`, deOrphanedId }));
-
-    const childDetailsOrdered = [ ...newForwardDeOrphanedIds.reverse(), ...newBackwardDeOrphanedIds ];
-
-    for (let index = 0; index < childDetailsOrdered.length; index++) {
-        const newKey = `${parentId}-${index}`;
-        const childDetails = childDetailsOrdered[index];
-
-        if (childDetails.recurseForward) {
-            newForwardOrphanedReplyPosts[childDetails.oldKey] = '';
-        } else {
-            newBackwardOrphanedReplyPosts[childDetails.oldKey] = '';
-        }
-
-        newDeOrphanedReplyPosts[newKey] = childDetails.deOrphanedId;
-        newPosts[childDetails.deOrphanedId] = { ...postsRef[childDetails.deOrphanedId], orphaned: false };
-
-        deOrphanReplyPosts(
-            childDetails.deOrphanedId,
-            forwardOrphanedReplyPostsTreeRef,
-            backwardOrphanedReplyPostsTreeRef,
-            postsRef,
-            newForwardOrphanedReplyPosts,
-            newBackwardOrphanedReplyPosts,
-            newDeOrphanedReplyPosts,
-            newPosts,
-        );
-    }
-}
-
 export type Block = { hash: string, height: number, timestamp: number };
 
-export const getNewPostersAndPosts = async (
-    recurseForward: boolean,
+export const getNewPosterAndPost = async (
     transaction: string,
     contractAddress: string,
     makePostMethod: string,
@@ -87,17 +45,7 @@ export const getNewPostersAndPosts = async (
     rpcClientRef: RefObject<RpcClient>,
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
-    replyPostsTreeRef: React.RefObject<Record<string, string>>,
-    forwardOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
-    backwardOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
 ) => {
-    const newPosts: Record<string, Post> = {};
-    const newPosters: Record<string, Poster> = {};
-    const newReplyPosts: Record<string, string> = {};
-    const newForwardOrphanedReplyPosts: Record<string, string> = {};
-    const newBackwardOrphanedReplyPosts: Record<string, string> = {};
-    const newDeOrphanedReplyPosts: Record<string, string> = {};
-
     const { result: getTxReceiptResult, error: getTxReceiptError } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
 
     if (getTxReceiptError) {
@@ -159,15 +107,13 @@ export const getNewPostersAndPosts = async (
     const replyToPostIdRaw = preV3 ? hexToDecimal(hex2str(getTxReceiptResult.events[0].args[4])) : hex2str(getTxReceiptResult.events[0].args[4]);
     const replyToPostId = !replyToPostIdRaw ? '' : (preV5 ? breakingChanges.v5.prefixPreV5 + replyToPostIdRaw : replyToPostIdRaw);
 
-    if (!postersRef.current[poster]) {
-        const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClientRef.current('dna_identity', [poster]);
+    if (replyToPostId) {
+        const replyToPost = postsRef.current[replyToPostId];
+        const newReplyRespectsTime = replyToPost?.timestamp ? timestamp > replyToPost.timestamp : null;
 
-        if (getDnaIdentityError) {
-            throw 'rpc unavailable';
+        if (newReplyRespectsTime === false) {
+            return { continued: true };
         }
-
-        const { address, stake, age, pubkey, state } = getDnaIdentityResult;
-        newPosters[poster] = { address, stake, age, pubkey, state };
     }
 
     const newPost = {
@@ -183,17 +129,40 @@ export const getNewPostersAndPosts = async (
             textOverflowHidden: true,
             repliesHidden: true,
         },
-    };
+    } as Post;
 
-    const newOrderedPostIds = !replyToPostId ? [newPost.postId] : [];
+    let newPoster: Poster | undefined;
+
+    if (!postersRef.current[poster]) {
+        const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClientRef.current('dna_identity', [poster]);
+
+        if (getDnaIdentityError) {
+            throw 'rpc unavailable';
+        }
+
+        const { address, stake, age, pubkey, state } = getDnaIdentityResult;
+        newPoster = { address, stake, age, pubkey, state };
+    }
+
+    return { newPost, newPoster, lastBlockHash };
+}
+
+export const getReplyPosts = async (
+    newPost: Post,
+    recurseForward: boolean,
+    postsRef: React.RefObject<Record<string, Post>>,
+    replyPostsTreeRef: React.RefObject<Record<string, string>>,
+    forwardOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
+    backwardOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
+) => {
+    const newReplyPosts: Record<string, string> = {};
+    const newForwardOrphanedReplyPosts: Record<string, string> = {};
+    const newBackwardOrphanedReplyPosts: Record<string, string> = {};
+
+    const replyToPostId = newPost.replyToPostId;
 
     if (replyToPostId) {
         const replyToPost = postsRef.current[replyToPostId];
-        const newReplyRespectsTime = replyToPost?.timestamp ? newPost.timestamp > replyToPost.timestamp : null;
-
-        if (newReplyRespectsTime === false) {
-            return { continued: true };
-        }
 
         if (!replyToPost || replyToPost.orphaned) {
             if (recurseForward) {
@@ -210,21 +179,49 @@ export const getNewPostersAndPosts = async (
         }
     }
 
-    deOrphanReplyPosts(
-        newPost.postId,
-        forwardOrphanedReplyPostsTreeRef.current,
-        backwardOrphanedReplyPostsTreeRef.current,
-        postsRef.current,
-        newForwardOrphanedReplyPosts,
-        newBackwardOrphanedReplyPosts,
-        newDeOrphanedReplyPosts,
-        newPosts,
-    );
-
-    newPosts[postId] = newPost;
-
-    return { newPosters, newOrderedPostIds, newPosts, newReplyPosts, newForwardOrphanedReplyPosts, newBackwardOrphanedReplyPosts, newDeOrphanedReplyPosts, lastBlockHash };
+    return { newReplyPosts, newForwardOrphanedReplyPosts, newBackwardOrphanedReplyPosts };
 };
+
+export const deOrphanReplyPosts = (
+    parentId: string,
+    forwardOrphanedReplyPostsTreeRef: Record<string, string>,
+    backwardOrphanedReplyPostsTreeRef: Record<string, string>,
+    postsRef: Record<string, Post>,
+    newForwardOrphanedReplyPosts: Record<string, string>,
+    newBackwardOrphanedReplyPosts: Record<string, string>,
+    newDeOrphanedReplyPosts: Record<string, string>,
+    newPosts: Record<string, Post>
+) => {
+    const newForwardDeOrphanedIds = getChildPostIds(parentId, forwardOrphanedReplyPostsTreeRef).map((deOrphanedId, index) => ({ recurseForward: true, oldKey: `${parentId}-${index}`, deOrphanedId }));
+    const newBackwardDeOrphanedIds = getChildPostIds(parentId, backwardOrphanedReplyPostsTreeRef).map((deOrphanedId, index) => ({ recurseForward: false, oldKey: `${parentId}-${index}`, deOrphanedId }));
+
+    const childDetailsOrdered = [ ...newForwardDeOrphanedIds.reverse(), ...newBackwardDeOrphanedIds ];
+
+    for (let index = 0; index < childDetailsOrdered.length; index++) {
+        const newKey = `${parentId}-${index}`;
+        const childDetails = childDetailsOrdered[index];
+
+        if (childDetails.recurseForward) {
+            newForwardOrphanedReplyPosts[childDetails.oldKey] = '';
+        } else {
+            newBackwardOrphanedReplyPosts[childDetails.oldKey] = '';
+        }
+
+        newDeOrphanedReplyPosts[newKey] = childDetails.deOrphanedId;
+        newPosts[childDetails.deOrphanedId] = { ...postsRef[childDetails.deOrphanedId], orphaned: false };
+
+        deOrphanReplyPosts(
+            childDetails.deOrphanedId,
+            forwardOrphanedReplyPostsTreeRef,
+            backwardOrphanedReplyPostsTreeRef,
+            postsRef,
+            newForwardOrphanedReplyPosts,
+            newBackwardOrphanedReplyPosts,
+            newDeOrphanedReplyPosts,
+            newPosts,
+        );
+    }
+}
 
 export const submitPost = async (
     postersAddress: string,
