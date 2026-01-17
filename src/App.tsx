@@ -43,7 +43,7 @@ if (!DEBUG) {
 }
 
 function App() {
-    const [nodeAvailable, setNodeAvailable] = useState<boolean>(false);
+    const [nodeAvailable, setNodeAvailable] = useState<boolean>(true);
     const nodeAvailableRef = useRef(nodeAvailable);
     const [rpcClient, setRpcClient] = useState<RpcClient>(undefined as unknown as RpcClient);
     const rpcClientRef = useRef(rpcClient);
@@ -118,15 +118,13 @@ function App() {
                     return;
                 }
 
-                setNodeAvailable(true);
-
                 if (!initialBlock) {
                     const { result: getLastBlockResult } = await rpcClient('bcn_lastBlock', []);
                     setInitialBlock(getLastBlockResult?.height ?? 0);
                     setScanningPastBlocks(true);
                 }
 
-                const { result: getCoinbaseAddrResult } = await rpcClient('dna_getCoinbaseAddr', []);
+                const { result: getCoinbaseAddrResult } = await rpcClient('dna_getCoinbaseAddr', [], true);
 
                 if (getCoinbaseAddrResult) {
                     setPostersAddress(getCoinbaseAddrResult);
