@@ -3,7 +3,10 @@ import { getMaxFee, type RpcClient } from "./api";
 import { calculateMaxFee, hex2str, hexToDecimal, sanitizeStr } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, Transaction, transactionType } from "idena-sdk-js-lite";
 
-export const breakingChanges = { timestamp: 1767578641 };
+export const breakingChanges = {
+    v3: { timestamp: 1767578641 },
+    v5: { timestamp: 1767946325, firstTxId: '0x8524a0147c9f32ae5b5bbf456b85a062819d971f475607639e59b0fb85be9847', prefixPreV5: 'preV5:' },
+};
 
 export type PostDomSettings = { textOverflows: boolean, textOverflowHidden: boolean, repliesHidden: boolean }
 export type Post = {
@@ -95,7 +98,11 @@ export const getNewPostersAndPosts = async (
     const newBackwardOrphanedReplyPosts: Record<string, string> = {};
     const newDeOrphanedReplyPosts: Record<string, string> = {};
 
-    const { result: getTxReceiptResult } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
+    const { result: getTxReceiptResult, error: getTxReceiptError } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
+
+    if (getTxReceiptError) {
+        throw 'rpc unavailable';
+    }
 
     if (!getTxReceiptResult) {
         return { continued: true };
@@ -113,9 +120,9 @@ export const getNewPostersAndPosts = async (
         return { continued: true };
     }
 
-    const postId = hexToDecimal(getTxReceiptResult.events[0].args[1]);
+    const postIdRaw = hexToDecimal(getTxReceiptResult.events[0].args[1]);
 
-    if (postsRef.current[postId]) {
+    if (postsRef.current[postIdRaw]) {
         return { continued: true };
     }
 
@@ -131,15 +138,34 @@ export const getNewPostersAndPosts = async (
         return { continued: true };
     }
 
-    const { result: getTransactionResult } = await rpcClientRef.current('bcn_transaction', [transaction]);
+    const { result: getTransactionResult, error: getTransactionError } = await rpcClientRef.current('bcn_transaction', [transaction]);
+
+    if (getTransactionError) {
+        throw 'rpc unavailable';
+    }
+
     const timestamp = getTransactionResult.timestamp;
     const lastBlockHash = getTransactionResult.blockHash;
 
-    const replyToPostId = timestamp < breakingChanges.timestamp ?
-        hexToDecimal(hex2str(getTxReceiptResult.events[0].args[4])) : hex2str(getTxReceiptResult.events[0].args[4]);
+    const preV3 = timestamp < breakingChanges.v3.timestamp;
+    const preV5 = timestamp < breakingChanges.v5.timestamp;
+
+    if (preV5 && postsRef.current[breakingChanges.v5.prefixPreV5 + postIdRaw]) {
+        return { continued: true };
+    }
+
+    const postId = preV5 ? breakingChanges.v5.prefixPreV5 + postIdRaw : postIdRaw;
+
+    const replyToPostIdRaw = preV3 ? hexToDecimal(hex2str(getTxReceiptResult.events[0].args[4])) : hex2str(getTxReceiptResult.events[0].args[4]);
+    const replyToPostId = !replyToPostIdRaw ? '' : (preV5 ? breakingChanges.v5.prefixPreV5 + replyToPostIdRaw : replyToPostIdRaw);
 
     if (!postersRef.current[poster]) {
-        const { result: getDnaIdentityResult } = await rpcClientRef.current('dna_identity', [poster]);
+        const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClientRef.current('dna_identity', [poster]);
+
+        if (getDnaIdentityError) {
+            throw 'rpc unavailable';
+        }
+
         const { address, stake, age, pubkey, state, online } = getDnaIdentityResult;
         newPosters[poster] = { address, stake, age, pubkey, state, online };
     }
