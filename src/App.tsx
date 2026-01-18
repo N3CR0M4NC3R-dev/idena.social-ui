@@ -31,7 +31,7 @@ const POLLING_INTERVAL = 5000;
 const SCANNING_INTERVAL = 10;
 const SUBMITTING_POST_INTERVAL = 2000;
 const ADS_INTERVAL = 10000;
-const SCAN_POSTS_TTL = 1 * 60;
+const SCAN_POSTS_TTL = 0.5 * 60;
 const INDEXER_ITEMS_LIMIT = 100;
 
 const DEBUG = true;
@@ -76,7 +76,7 @@ function App() {
     const [ads, setAds] = useState<ApprovedAd[]>([]);
     const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
     const currentAdRef = useRef(currentAd);
-    const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(true);
+    const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(false);
     const useFindPastBlocksWithTxsApiRef = useRef(useFindPastBlocksWithTxsApi);
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
     const [idenaIndexerApiUrl, setIdenaIndexerApiUrl] = useState<string>(initIdenaIndexerApiUrl);
@@ -521,7 +521,7 @@ function App() {
                         newReplyPosts,
                         newForwardOrphanedReplyPosts,
                         newBackwardOrphanedReplyPosts,
-                    } = await getReplyPosts(
+                    } = getReplyPosts(
                         newPost!,
                         recurseForward,
                         postsRef,

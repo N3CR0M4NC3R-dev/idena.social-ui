@@ -5,7 +5,7 @@ import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, Transa
 
 export const breakingChanges = {
     v3: { timestamp: 1767578641 },
-    v5: { timestamp: 1767946325, firstTxId: '0x8524a0147c9f32ae5b5bbf456b85a062819d971f475607639e59b0fb85be9847', prefixPreV5: 'preV5:' },
+    v5: { timestamp: 1767946325, block: 10219188, firstTxId: '0x8524a0147c9f32ae5b5bbf456b85a062819d971f475607639e59b0fb85be9847', prefixPreV5: 'preV5:' },
 };
 
 export type PostDomSettings = { textOverflows: boolean, textOverflowHidden: boolean, repliesHidden: boolean }
@@ -147,7 +147,7 @@ export const getNewPosterAndPost = async (
     return { newPost, newPoster, lastBlockHash };
 }
 
-export const getReplyPosts = async (
+export const getReplyPosts = (
     newPost: Post,
     recurseForward: boolean,
     postsRef: React.RefObject<Record<string, Post>>,
