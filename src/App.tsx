@@ -31,7 +31,7 @@ const POLLING_INTERVAL = 5000;
 const SCANNING_INTERVAL = 10;
 const SUBMITTING_POST_INTERVAL = 2000;
 const ADS_INTERVAL = 10000;
-const SCAN_POSTS_TTL = 0.5 * 60;
+const SCAN_POSTS_TTL = 1 * 60;
 const INDEXER_ITEMS_LIMIT = 100;
 
 const DEBUG = true;
@@ -76,7 +76,7 @@ function App() {
     const [ads, setAds] = useState<ApprovedAd[]>([]);
     const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
     const currentAdRef = useRef(currentAd);
-    const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(false);
+    const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(true);
     const useFindPastBlocksWithTxsApiRef = useRef(useFindPastBlocksWithTxsApi);
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
     const [idenaIndexerApiUrl, setIdenaIndexerApiUrl] = useState<string>(initIdenaIndexerApiUrl);
@@ -488,8 +488,16 @@ function App() {
 
                 const contractAddress = recurseForward ? contractAddressV2 : pastContractAddressRef!.current;
 
-                for (let index = 0; index < transactions.length; index++) {
-                    const lastIteration = index === transactions.length - 1;
+                const transactionReceipts = await Promise.all(transactions.map((txHash: string) => rpcClientRef.current('bcn_txReceipt', [txHash])));
+
+                for (let index = 0; index < transactionReceipts.length; index++) {
+                    const lastIteration = index === transactionReceipts.length - 1;
+                    const transactionReceipt = transactionReceipts[index];
+                    const { result: getTxReceiptResult, error: getTxReceiptError } = transactionReceipt;
+
+                    if (getTxReceiptError) {
+                        throw 'rpc unavailable';
+                    }
 
                     const {
                         newPost,
@@ -497,7 +505,7 @@ function App() {
                         lastBlockHash,
                         continued,
                     } = await getNewPosterAndPost(
-                        transactions[index],
+                        getTxReceiptResult,
                         contractAddress,
                         makePostMethod,
                         thisChannelId,
@@ -776,7 +784,7 @@ function App() {
                                     </div>
                                     {textOverflows && <div className="px-4 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(post)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
                                     <div className="px-2">
-                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
                                     {!isBreakingChangeDisabled && <div className="flex flex-row gap-2 px-2 items-end">
                                         <div className="flex-1">
@@ -840,7 +848,7 @@ function App() {
                                                             </div>
                                                             {textOverflows && <div className="px-12 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(replyPost)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
                                                             <div className="px-2">
-                                                                <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                                                <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                                             </div>
                                                         </div>
                                                     </li>

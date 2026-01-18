@@ -14,7 +14,7 @@ export type Post = {
     postId: string,
     poster: string,
     message: string,
-    transaction: string,
+    txHash: string,
     replyToPostId: string,
     orphaned: boolean,
     postDomSettings: PostDomSettings
@@ -38,7 +38,7 @@ export const getChildPostIds = (parentId: string, replyPostsTreeRef: Record<stri
 export type Block = { hash: string, height: number, timestamp: number };
 
 export const getNewPosterAndPost = async (
-    transaction: string,
+    getTxReceiptResult: { contract: string, method: string, success: boolean, events: { args: string[] }[], txHash: string },
     contractAddress: string,
     makePostMethod: string,
     thisChannelId: string,
@@ -46,12 +46,6 @@ export const getNewPosterAndPost = async (
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
 ) => {
-    const { result: getTxReceiptResult, error: getTxReceiptError } = await rpcClientRef.current('bcn_txReceipt', [transaction]);
-
-    if (getTxReceiptError) {
-        throw 'rpc unavailable';
-    }
-
     if (!getTxReceiptResult) {
         return { continued: true };
     }
@@ -86,7 +80,9 @@ export const getNewPosterAndPost = async (
         return { continued: true };
     }
 
-    const { result: getTransactionResult, error: getTransactionError } = await rpcClientRef.current('bcn_transaction', [transaction]);
+    const txHash = getTxReceiptResult.txHash;
+
+    const { result: getTransactionResult, error: getTransactionError } = await rpcClientRef.current('bcn_transaction', [txHash]);
 
     if (getTransactionError) {
         throw 'rpc unavailable';
@@ -121,7 +117,7 @@ export const getNewPosterAndPost = async (
         postId,
         poster,
         message,
-        transaction,
+        txHash,
         replyToPostId,
         orphaned: false,
         postDomSettings: {
