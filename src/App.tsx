@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FocusEventHandler } from 'react';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getNewPostersAndPosts, getChildPostIds, submitPost, type Post, type Poster, breakingChanges } from './logic/asyncUtils';
+import { getChildPostIds, submitPost, type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts } from './logic/asyncUtils';
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
 import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
@@ -34,7 +34,7 @@ const ADS_INTERVAL = 10000;
 const SCAN_POSTS_TTL = 1 * 60;
 const INDEXER_ITEMS_LIMIT = 100;
 
-const DEBUG = false;
+const DEBUG = true;
 
 if (!DEBUG) {
     console.log = () => {};
@@ -488,31 +488,30 @@ function App() {
 
                 const contractAddress = recurseForward ? contractAddressV2 : pastContractAddressRef!.current;
 
-                for (let index = 0; index < transactions.length; index++) {
-                    const lastIteration = index === transactions.length - 1;
+                const transactionReceipts = await Promise.all(transactions.map((txHash: string) => rpcClientRef.current('bcn_txReceipt', [txHash])));
+
+                for (let index = 0; index < transactionReceipts.length; index++) {
+                    const lastIteration = index === transactionReceipts.length - 1;
+                    const transactionReceipt = transactionReceipts[index];
+                    const { result: getTxReceiptResult, error: getTxReceiptError } = transactionReceipt;
+
+                    if (getTxReceiptError) {
+                        throw 'rpc unavailable';
+                    }
 
                     const {
-                        newPosters,
-                        newOrderedPostIds,
-                        newPosts,
-                        newReplyPosts,
-                        newForwardOrphanedReplyPosts,
-                        newBackwardOrphanedReplyPosts,
-                        newDeOrphanedReplyPosts,
+                        newPost,
+                        newPoster,
                         lastBlockHash,
                         continued,
-                    } = await getNewPostersAndPosts(
-                        recurseForward,
-                        transactions[index],
+                    } = await getNewPosterAndPost(
+                        getTxReceiptResult,
                         contractAddress,
                         makePostMethod,
                         thisChannelId,
                         rpcClientRef,
                         postsRef,
                         postersRef,
-                        replyPostsTreeRef,
-                        forwardOrphanedReplyPostsTreeRef,
-                        backwardOrphanedReplyPostsTreeRef,
                     );
 
                     if (continued) {
@@ -522,8 +521,39 @@ function App() {
                         continue;
                     }
 
+                    const newOrderedPostIds = !newPost!.replyToPostId ? [newPost!.postId] : [];
+                    const newPosts = { [newPost!.postId]: newPost } as Record<string, Post>;
+                    const newPosters = newPoster ? { [newPoster.address]: newPoster } : {};
+
+                    const {
+                        newReplyPosts,
+                        newForwardOrphanedReplyPosts,
+                        newBackwardOrphanedReplyPosts,
+                    } = getReplyPosts(
+                        newPost!,
+                        recurseForward,
+                        postsRef,
+                        replyPostsTreeRef,
+                        forwardOrphanedReplyPostsTreeRef,
+                        backwardOrphanedReplyPostsTreeRef,
+                    );
+
+                    const newDeOrphanedReplyPosts: Record<string, string> = {};
+                    const updatedPosts: Record<string, Post> = {};
+
+                    deOrphanReplyPosts(
+                        newPost!.postId,
+                        forwardOrphanedReplyPostsTreeRef.current,
+                        backwardOrphanedReplyPostsTreeRef.current,
+                        postsRef.current,
+                        newForwardOrphanedReplyPosts,
+                        newBackwardOrphanedReplyPosts,
+                        newDeOrphanedReplyPosts,
+                        updatedPosts,
+                    );
+
                     setPosters((currentPosters) => ({ ...currentPosters, ...newPosters }));
-                    setPosts((currentPosts) => ({ ...currentPosts, ...newPosts }));
+                    setPosts((currentPosts) => ({ ...currentPosts, ...updatedPosts, ...newPosts }));
                     setReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newReplyPosts }));
                     setDeOrphanedReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newDeOrphanedReplyPosts }));
                     setForwardOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newForwardOrphanedReplyPosts }));
@@ -754,7 +784,7 @@ function App() {
                                     </div>
                                     {textOverflows && <div className="px-4 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(post)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
                                     <div className="px-2">
-                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
                                     {!isBreakingChangeDisabled && <div className="flex flex-row gap-2 px-2 items-end">
                                         <div className="flex-1">
@@ -818,7 +848,7 @@ function App() {
                                                             </div>
                                                             {textOverflows && <div className="px-12 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(replyPost)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
                                                             <div className="px-2">
-                                                                <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.transaction}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                                                <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                                             </div>
                                                         </div>
                                                     </li>
@@ -835,7 +865,9 @@ function App() {
                     <button className={`h-9 mt-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${scanningPastBlocks || noMorePastBlocks ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={scanningPastBlocks || noMorePastBlocks || !nodeAvailable} onClick={() => setScanningPastBlocks(true)}>
                         {scanningPastBlocks ? "Scanning blockchain...." : (noMorePastBlocks ? "No more past posts" : "Scan for more posts")}
                     </button>
-                    {!scanningPastBlocks && <p className="pr-12 text-gray-400 text-[12px] text-center">Posts found down to Block # <span className="absolute">{pastBlockCaptured || 'unavailable'}</span></p>}
+                    <p className="pr-12 text-gray-400 text-[12px] text-center">
+                        {!scanningPastBlocks ? <>Posts found down to Block # <span className="absolute">{pastBlockCaptured || 'unavailable'}</span></> : <>&nbsp;</>}
+                    </p>
                 </div>
             </div>
             <div className="flex-1 flex justify-start">
