@@ -515,9 +515,6 @@ function App() {
                     );
 
                     if (continued) {
-                        if (recurseForward && lastIteration) {
-                            setBlockCaptured(pendingBlock!);
-                        }
                         continue;
                     }
 
@@ -595,6 +592,11 @@ function App() {
                     if (!recurseForward && lastBlockHeight <= firstBlock) {
                         throw 'no more transactions';
                     }
+                }
+
+                if (getTransactionsIncrementally) {
+                    setPartialPastBlockCaptured(0);
+                    setBlockCaptured(pendingBlock!);
                 }
 
                 if (recurseForward) {
