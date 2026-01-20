@@ -73,7 +73,7 @@ export function hexToDecimal(hex: string) {
     let testHex;
 
     do {
-        if (index > 20) return 'unrecognized';
+        if (index > uint8ArrayLength) return 'unrecognized';
         if (index !== 0) rmZerosHex += '0';
 
         decimalVal = Number(rmZerosHex);

@@ -62,12 +62,6 @@ export const getNewPosterAndPost = async (
         return { continued: true };
     }
 
-    const postIdRaw = hexToDecimal(getTxReceiptResult.events[0].args[1]);
-
-    if (postsRef.current[postIdRaw]) {
-        return { continued: true };
-    }
-
     const poster = getTxReceiptResult.events[0].args[0];
     const channelId = hex2str(getTxReceiptResult.events[0].args[2]);
     const message = sanitizeStr(hex2str(getTxReceiptResult.events[0].args[3]));
@@ -94,11 +88,12 @@ export const getNewPosterAndPost = async (
     const preV3 = timestamp < breakingChanges.v3.timestamp;
     const preV5 = timestamp < breakingChanges.v5.timestamp;
 
-    if (preV5 && postsRef.current[breakingChanges.v5.prefixPreV5 + postIdRaw]) {
+    const postIdRaw = hexToDecimal(getTxReceiptResult.events[0].args[1]);
+    const postId = preV5 ? breakingChanges.v5.prefixPreV5 + postIdRaw : postIdRaw;
+
+    if (postsRef.current[postId]) {
         return { continued: true };
     }
-
-    const postId = preV5 ? breakingChanges.v5.prefixPreV5 + postIdRaw : postIdRaw;
 
     const replyToPostIdRaw = preV3 ? hexToDecimal(hex2str(getTxReceiptResult.events[0].args[4])) : hex2str(getTxReceiptResult.events[0].args[4]);
     const replyToPostId = !replyToPostIdRaw ? '' : (preV5 ? breakingChanges.v5.prefixPreV5 + replyToPostIdRaw : replyToPostIdRaw);
