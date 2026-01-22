@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FocusEventHandler } from 'react';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getChildPostIds, submitPost, type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts } from './logic/asyncUtils';
+import { getChildPostIds, submitPost, type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash } from './logic/asyncUtils';
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
 import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
@@ -26,15 +26,15 @@ const defaultAd = {
     media: WhatIsIdenaPng,
 };
 
-
 const POLLING_INTERVAL = 5000;
 const SCANNING_INTERVAL = 10;
 const SUBMITTING_POST_INTERVAL = 2000;
 const ADS_INTERVAL = 10000;
 const SCAN_POSTS_TTL = 1 * 60;
-const INDEXER_ITEMS_LIMIT = 100;
+const INDEXER_ITEMS_LIMIT = 10;
+const SET_NEW_POSTS_ADDED_DELAY = 20;
 
-const DEBUG = true;
+const DEBUG = false;
 
 if (!DEBUG) {
     console.log = () => {};
@@ -45,8 +45,7 @@ if (!DEBUG) {
 function App() {
     const [nodeAvailable, setNodeAvailable] = useState<boolean>(true);
     const nodeAvailableRef = useRef(nodeAvailable);
-    const [rpcClient, setRpcClient] = useState<RpcClient>(undefined as unknown as RpcClient);
-    const rpcClientRef = useRef(rpcClient);
+    const rpcClientRef = useRef(undefined as undefined | RpcClient);
     const [viewOnlyNode, setViewOnlyNode] = useState<boolean>(false);
     const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
@@ -59,16 +58,12 @@ function App() {
     const [inputUseRpc, setInputUseRpc] = useState<boolean>(false);
     const [submittingPost, setSubmittingPost] = useState<string>('');
     const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
-    const [posts, setPosts] = useState<Record<string, Post>>({});
-    const postsRef = useRef(posts);
-    const [posters, setPosters] = useState<Record<string, Poster>>({});
-    const postersRef = useRef(posters);
-    const [newPostsAdded, setNewPostsAdded] = useState<string[]>([]);
+    const postsRef = useRef({} as Record<string, Post>);
+    const postersRef = useRef({} as Record<string, Poster>);
     const [initialBlock, setInitialBlock] = useState<number>(0);
     const [pastBlockCaptured, setPastBlockCaptured] = useState<number>(0);
     const pastBlockCapturedRef = useRef(pastBlockCaptured);
-    const [partialPastBlockCaptured, setPartialPastBlockCaptured] = useState<number>(0);
-    const partialPastBlockCapturedRef = useRef(partialPastBlockCaptured);
+    const partialPastBlockCapturedRef = useRef(0);
     const [currentBlockCaptured, setCurrentBlockCaptured] = useState<number>(0);
     const currentBlockCapturedRef = useRef(currentBlockCaptured);
     const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(false);
@@ -85,68 +80,62 @@ function App() {
     const idenaIndexerApiUrlInvalidRef = useRef(idenaIndexerApiUrlInvalid);
     const [inputIdenaIndexerApiUrl, setInputIdenaIndexerApiUrl] = useState<string>(initIdenaIndexerApiUrl);
     const [inputIdenaIndexerApiUrlApplied, setInputIdenaIndexerApiUrlApplied] = useState<boolean>(true);
-    const [replyPostsTree, setReplyPostsTree] = useState<Record<string, string>>({});
-    const replyPostsTreeRef = useRef(replyPostsTree);
-    const [deOrphanedReplyPostsTree, setDeOrphanedReplyPostsTree] = useState<Record<string, string>>({});
-    const [forwardOrphanedReplyPostsTree, setForwardOrphanedReplyPostsTree] = useState<Record<string, string>>({});
-    const forwardOrphanedReplyPostsTreeRef = useRef(forwardOrphanedReplyPostsTree);
-    const [backwardOrphanedReplyPostsTree, setBackwardOrphanedReplyPostsTree] = useState<Record<string, string>>({});
-    const backwardOrphanedReplyPostsTreeRef = useRef(backwardOrphanedReplyPostsTree);
-    const [continuationToken, setContinuationToken] = useState<string | undefined>();
-    const continuationTokenRef = useRef(continuationToken);
-    const [pastContractAddress, setPastContractAddress] = useState<string>(contractAddressV2);
-    const pastContractAddressRef = useRef(pastContractAddress);
+    const replyPostsTreeRef = useRef({} as Record<string, string>);
+    const deOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
+    const forwardOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
+    const backwardOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
+    const continuationTokenRef = useRef(undefined as undefined | string);
+    const pastContractAddressRef = useRef(contractAddressV2);
 
+    const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
+        rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
+
+        (async function() {
+            const { result: syncingResult } = await rpcClientRef.current!('bcn_syncing', []);
+
+            if (!syncingResult) {
+                alert('Your node has an issue! Please check if you typed in the correct details.');
+                return;
+            }
+            if (syncingResult.syncing) {
+                alert('Your node is still syncing! Please try again after syncing has completed.');
+                return;
+            }
+
+            if (!initialBlock) {
+                const { result: getLastBlockResult } = await rpcClientRef.current!('bcn_lastBlock', []);
+                setInitialBlock(getLastBlockResult?.height ?? 0);
+                setScanningPastBlocks(true);
+            }
+
+            const { result: getCoinbaseAddrResult } = await rpcClientRef.current!('dna_getCoinbaseAddr', [], true);
+
+            if (getCoinbaseAddrResult) {
+                setPostersAddress(getCoinbaseAddrResult);
+                setViewOnlyNode(false);
+            } else {
+                setPostersAddress('');
+                setViewOnlyNode(true);
+            }
+
+            const adsClient = new IdenaApprovedAds({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey });
+
+            try {
+                const ads = await adsClient.getApprovedAds();
+                setAds([defaultAd as ApprovedAd, ...ads]);
+            } catch (error) {
+                console.error(error);
+                setAds([defaultAd as ApprovedAd]);
+            }
+
+        })();
+    };
 
     useEffect(() => {
         if (inputNodeApplied) {
-            setRpcClient(() => getRpcClient({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey }, setNodeAvailable));
+            setRpcClient(inputNodeUrl, inputNodeKey, setNodeAvailable);
         }
     }, [inputNodeApplied]);
-
-    useEffect(() => {
-        if (rpcClient) {
-            (async function() {
-                const { result: syncingResult } = await rpcClient('bcn_syncing', []);
-
-                if (!syncingResult) {
-                    alert('Your node has an issue! Please check if you typed in the correct details.');
-                    return;
-                }
-                if (syncingResult.syncing) {
-                    alert('Your node is still syncing! Please try again after syncing has completed.');
-                    return;
-                }
-
-                if (!initialBlock) {
-                    const { result: getLastBlockResult } = await rpcClient('bcn_lastBlock', []);
-                    setInitialBlock(getLastBlockResult?.height ?? 0);
-                    setScanningPastBlocks(true);
-                }
-
-                const { result: getCoinbaseAddrResult } = await rpcClient('dna_getCoinbaseAddr', [], true);
-
-                if (getCoinbaseAddrResult) {
-                    setPostersAddress(getCoinbaseAddrResult);
-                    setViewOnlyNode(false);
-                } else {
-                    setPostersAddress('');
-                    setViewOnlyNode(true);
-                }
-
-                const adsClient = new IdenaApprovedAds({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey });
-
-                try {
-                    const ads = await adsClient.getApprovedAds();
-                    setAds([defaultAd as ApprovedAd, ...ads]);
-                } catch (error) {
-                    console.error(error);
-                    setAds([defaultAd as ApprovedAd]);
-                }
-
-            })();
-        }
-    }, [rpcClient]);
 
     useEffect(() => {
         if (inputPostersAddressApplied && !inputUseRpc) {
@@ -156,7 +145,7 @@ function App() {
                 setPostersAddressInvalid(true);
             } else {
                 (async function() {
-                    const { result: getBalanceResult } = await rpcClient('dna_getBalance', [inputPostersAddress]);
+                    const { result: getBalanceResult } = await rpcClientRef.current!('dna_getBalance', [inputPostersAddress]);
 
                     if (!getBalanceResult) {
                         setPostersAddressInvalid(true);
@@ -213,14 +202,6 @@ function App() {
     }, [nodeAvailable]);
 
     useEffect(() => {
-        setOrderedPostIds(current => [...current]);
-    }, [replyPostsTree]);
-
-    useEffect(() => {
-        rpcClientRef.current = rpcClient;
-    }, [rpcClient]);
-
-    useEffect(() => {
         currentBlockCapturedRef.current = currentBlockCaptured;
     }, [currentBlockCaptured]);
 
@@ -231,18 +212,6 @@ function App() {
     useEffect(() => {
         pastBlockCapturedRef.current = pastBlockCaptured;
     }, [pastBlockCaptured]);
-
-    useEffect(() => {
-        partialPastBlockCapturedRef.current = partialPastBlockCaptured;
-    }, [partialPastBlockCaptured]);
-
-    useEffect(() => {
-        postsRef.current = posts;
-    }, [posts]);
-
-    useEffect(() => {
-        postersRef.current = posters;
-    }, [posters]);
 
     useEffect(() => {
         currentAdRef.current = currentAd;
@@ -259,26 +228,6 @@ function App() {
     useEffect(() => {
         idenaIndexerApiUrlInvalidRef.current = idenaIndexerApiUrlInvalid;
     }, [idenaIndexerApiUrlInvalid]);
-
-    useEffect(() => {
-        replyPostsTreeRef.current = replyPostsTree;
-    }, [replyPostsTree]);
-
-    useEffect(() => {
-        forwardOrphanedReplyPostsTreeRef.current = forwardOrphanedReplyPostsTree;
-    }, [forwardOrphanedReplyPostsTree]);
-
-    useEffect(() => {
-        backwardOrphanedReplyPostsTreeRef.current = backwardOrphanedReplyPostsTree;
-    }, [backwardOrphanedReplyPostsTree]);
-
-    useEffect(() => {
-        continuationTokenRef.current = continuationToken;
-    }, [continuationToken]);
-
-    useEffect(() => {
-        pastContractAddressRef.current = pastContractAddress;
-    }, [pastContractAddress]);
 
     type RecurseForward = () => Promise<void>;
     useEffect(() => {
@@ -316,23 +265,6 @@ function App() {
     }, [scanningPastBlocks, initialBlock, nodeAvailable]);
 
     useEffect(() => {
-        const updatedPosts: Record<string, Post> = {};
-
-        for (let index = 0; index < newPostsAdded.length; index++) {
-            const key = newPostsAdded[index];
-            const post = posts[key];
-            const messageDiv = document.getElementById(`post-text-${post.postId}`);
-
-            if (messageDiv!.scrollHeight > messageDiv!.clientHeight) {
-                updatedPosts[post.postId] = { ...post, postDomSettings: { ...post.postDomSettings, textOverflows: true } };
-            }
-        }
-
-        setPosts(currentPosts => ({ ...currentPosts, ...updatedPosts }));
-
-    }, [newPostsAdded]);
-
-    useEffect(() => {
         let intervalSubmittingPost: NodeJS.Timeout;
 
         if (submittingPost) {
@@ -347,6 +279,23 @@ function App() {
     useEffect(() => {
         setInputPostDisabled(!!submittingPost || (inputUseRpc && viewOnlyNode) || postersAddressInvalid);
     }, [submittingPost, inputUseRpc, viewOnlyNode, postersAddressInvalid]);
+
+    const setNewPostsAdded = (newPostsAdded: string[]) => {
+        const updatedPosts: Record<string, Post> = {};
+
+        for (let index = 0; index < newPostsAdded.length; index++) {
+            const key = newPostsAdded[index];
+            const post = postsRef.current[key];
+            const messageDiv = document.getElementById(`post-text-${post.postId}`);
+
+            if (messageDiv!.scrollHeight > messageDiv!.clientHeight) {
+                updatedPosts[post.postId] = { ...post, postDomSettings: { ...post.postDomSettings, textOverflows: true } };
+            }
+        }
+
+        postsRef.current = ({ ...postsRef.current, ...updatedPosts });
+        setOrderedPostIds(current => [...current]);
+    }
 
     const submitPostHandler = async (postId: string) => {
         if (!nodeAvailable) {
@@ -370,7 +319,7 @@ function App() {
         }
 
         setSubmittingPost(postId);
-        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId, inputUseRpc, rpcClient, callbackUrl);
+        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId, inputUseRpc, rpcClientRef.current!, callbackUrl);
     };
 
     const handleUseRpcToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -380,7 +329,7 @@ function App() {
         if (useRpc) {
             setInputPostersAddress('');
             setPostersAddressInvalid(false);
-            setRpcClient(() => getRpcClient({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey }, setNodeAvailable));
+            setRpcClient(inputNodeUrl, inputNodeKey, setNodeAvailable);
         } else {
             if (postersAddress) {
                 setInputPostersAddress(postersAddress);
@@ -422,10 +371,12 @@ function App() {
         return async function postFinder() {
             try {
                 let pendingBlock: number;
-                let transactions: string[] = [];
+                let transactions = [];
 
                 const recurseBackwardWithoutIndexer = !recurseForward && !useFindPastBlocksWithTxsApiRef.current;
                 const getTransactionsIncrementally = recurseForward || recurseBackwardWithoutIndexer;
+
+                const contractAddress = recurseForward ? contractAddressV2 : pastContractAddressRef!.current;
 
                 if (getTransactionsIncrementally) {
                     pendingBlock = recurseForward ? 
@@ -438,7 +389,7 @@ function App() {
                             initialBlock - 1
                         );
 
-                    const { result: getBlockByHeightResult, error } = await rpcClientRef.current('bcn_blockAt', [pendingBlock]);
+                    const { result: getBlockByHeightResult, error } = await rpcClientRef.current!('bcn_blockAt', [pendingBlock]);
 
                     if (error) {
                         throw 'rpc unavailable';
@@ -452,13 +403,13 @@ function App() {
                         setBlockCaptured(pendingBlock);
 
                         if (!recurseForward && getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
-                            setPastContractAddress(contractAddressV1);
+                            pastContractAddressRef!.current = contractAddressV1;
                         }
 
                         throw 'no transactions';
                     }
 
-                    transactions = [ ...getBlockByHeightResult.transactions ];
+                    transactions = getBlockByHeightResult.transactions.map((txHash: string) => ({ txHash, timestamp: getBlockByHeightResult.timestamp, blockHeight: getBlockByHeightResult.height }));
                 } else {
                     if (continuationTokenRef!.current === 'finished processing') {
                         throw 'no more transactions';
@@ -468,48 +419,45 @@ function App() {
                     if (error) {
                         throw 'indexer api unavailable';
                     }
-                    
+
                     if (continuationToken) {
-                        setContinuationToken(continuationToken);
+                        continuationTokenRef!.current = continuationToken;
                     } else {
                         if (pastContractAddressRef!.current === contractAddressV2) {
-                            setPastContractAddress(contractAddressV1);
-                            setContinuationToken(undefined);
+                            pastContractAddressRef!.current = contractAddressV1;
+                            continuationTokenRef!.current = undefined;
                         } else {
-                            setContinuationToken('finished processing');
+                            continuationTokenRef!.current = 'finished processing';
                         }
                     }
 
                     transactions = result
-                        ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && balanceUpdate.txReceipt.method === 'makePost' && balanceUpdate.txReceipt.success === true)
-                        .map((balanceUpdate: any) => balanceUpdate.hash)
+                        ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && balanceUpdate.txReceipt.method === makePostMethod && balanceUpdate.txReceipt.success === true)
+                        .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: Math.floor((new Date(balanceUpdate.timestamp)).getTime() / 1000 ) }))
                     ?? [];
                 }
 
-                const contractAddress = recurseForward ? contractAddressV2 : pastContractAddressRef!.current;
+                const transactionsWithDetails = await getTransactionDetails(transactions, contractAddress, makePostMethod, rpcClientRef.current!);
 
-                const transactionReceipts = await Promise.all(transactions.map((txHash: string) => rpcClientRef.current('bcn_txReceipt', [txHash])));
+                let lastValidTransaction;
 
-                for (let index = 0; index < transactionReceipts.length; index++) {
-                    const lastIteration = index === transactionReceipts.length - 1;
-                    const transactionReceipt = transactionReceipts[index];
-                    const { result: getTxReceiptResult, error: getTxReceiptError } = transactionReceipt;
+                const newOrderedPostIds: string[] = [];
 
-                    if (getTxReceiptError) {
-                        throw 'rpc unavailable';
-                    }
+                let newReplyPostsCollection = {};
+                let newForwardOrphanedReplyPostsCollection = {};
+                let newBackwardOrphanedReplyPostsCollection = {};
+
+                for (let index = 0; index < transactionsWithDetails.length; index++) {
+                    const transaction = transactionsWithDetails[index];
 
                     const {
                         newPost,
                         newPoster,
-                        lastBlockHash,
                         continued,
                     } = await getNewPosterAndPost(
-                        getTxReceiptResult,
-                        contractAddress,
-                        makePostMethod,
+                        transaction,
                         thisChannelId,
-                        rpcClientRef,
+                        rpcClientRef.current!,
                         postsRef,
                         postersRef,
                     );
@@ -518,9 +466,15 @@ function App() {
                         continue;
                     }
 
-                    const newOrderedPostIds = !newPost!.replyToPostId ? [newPost!.postId] : [];
-                    const newPosts = { [newPost!.postId]: newPost } as Record<string, Post>;
+                    lastValidTransaction = transaction;
+
+                    !newPost!.replyToPostId && newOrderedPostIds.push(newPost!.postId);
+
+                    const newPosts = { [newPost!.postId]: newPost as Post };
                     const newPosters = newPoster ? { [newPoster.address]: newPoster } : {};
+
+                    const newDeOrphanedReplyPosts: Record<string, string> = {};
+                    const updatedPosts: Record<string, Post> = {};
 
                     const {
                         newReplyPosts,
@@ -535,8 +489,9 @@ function App() {
                         backwardOrphanedReplyPostsTreeRef,
                     );
 
-                    const newDeOrphanedReplyPosts: Record<string, string> = {};
-                    const updatedPosts: Record<string, Post> = {};
+                    newReplyPostsCollection = { ...newReplyPostsCollection, ...newReplyPosts };
+                    newForwardOrphanedReplyPostsCollection = { ...newForwardOrphanedReplyPostsCollection, ...newForwardOrphanedReplyPosts };
+                    newBackwardOrphanedReplyPostsCollection = { ...newBackwardOrphanedReplyPostsCollection, ...newBackwardOrphanedReplyPosts };
 
                     deOrphanReplyPosts(
                         newPost!.postId,
@@ -549,54 +504,46 @@ function App() {
                         updatedPosts,
                     );
 
-                    setPosters((currentPosters) => ({ ...currentPosters, ...newPosters }));
-                    setPosts((currentPosts) => ({ ...currentPosts, ...updatedPosts, ...newPosts }));
-                    setReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newReplyPosts }));
-                    setDeOrphanedReplyPostsTree((currentReplyPosts) => ({ ...currentReplyPosts, ...newDeOrphanedReplyPosts }));
-                    setForwardOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newForwardOrphanedReplyPosts }));
-                    setBackwardOrphanedReplyPostsTree((currentOrphanedReplyPosts) => ({ ...currentOrphanedReplyPosts, ...newBackwardOrphanedReplyPosts }));
-                    setOrderedPostIds((currentOrderedPostIds) => recurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
-                    setNewPostsAdded(newOrderedPostIds!);
-
-                    const newReplyToPostIds = [ ...new Set([ ...Object.keys(newReplyPosts!) ].map(item => item.split('-')[0])) ];
-
-                    newReplyToPostIds.forEach((replyToId) => {
-                        if (!postsRef.current[replyToId]?.postDomSettings?.repliesHidden) {
-                            const repliesToThisPost = getChildPostIds(replyToId, newReplyPosts!);
-                            setTimeout(() => {
-                                setNewPostsAdded(repliesToThisPost);
-                            }, 0);
-                        }
-                    });
-
-                    let lastBlockHeight;
-
-                    if (getTransactionsIncrementally) {
-                        lastBlockHeight = pendingBlock!;
-                        setPartialPastBlockCaptured(0);
-                        setBlockCaptured(lastBlockHeight);
-                    }
-                    
-                    if (!getTransactionsIncrementally && lastIteration) {
-                        const { result: getBlockByHashResult, error } = await rpcClientRef.current('bcn_block', [lastBlockHash]);
-
-                        if (error) {
-                            throw 'rpc unavailable';
-                        }
-
-                        lastBlockHeight = getBlockByHashResult.height;
-                        setPartialPastBlockCaptured(lastBlockHeight);
-                        setBlockCaptured(lastBlockHeight);
-                    }
-
-                    if (!recurseForward && lastBlockHeight <= firstBlock) {
-                        throw 'no more transactions';
-                    }
+                    postersRef.current = { ...postersRef.current, ...newPosters };
+                    postsRef.current = { ...postsRef.current, ...updatedPosts, ...newPosts };
+                    replyPostsTreeRef.current = { ...replyPostsTreeRef.current, ...newReplyPosts };
+                    deOrphanedReplyPostsTreeRef.current = { ...deOrphanedReplyPostsTreeRef.current, ...newDeOrphanedReplyPosts };
+                    forwardOrphanedReplyPostsTreeRef.current = { ...forwardOrphanedReplyPostsTreeRef.current, ...newForwardOrphanedReplyPosts };
+                    backwardOrphanedReplyPostsTreeRef.current = { ...backwardOrphanedReplyPostsTreeRef.current, ...newBackwardOrphanedReplyPosts };
                 }
+                
+                setOrderedPostIds((currentOrderedPostIds) => recurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
+                setTimeout(() => {
+                    setNewPostsAdded(newOrderedPostIds!);
+                }, SET_NEW_POSTS_ADDED_DELAY);
+
+                const newReplyToPostIds = [ ...new Set([ ...Object.keys(newReplyPostsCollection!) ].map(item => item.split('-')[0])) ];
+
+                newReplyToPostIds.forEach((replyToId) => {
+                    if (!postsRef.current[replyToId]?.postDomSettings?.repliesHidden) {
+                        const repliesToThisPost = getChildPostIds(replyToId, newReplyPostsCollection!);
+                        setTimeout(() => {
+                            setNewPostsAdded(repliesToThisPost);
+                        }, SET_NEW_POSTS_ADDED_DELAY);
+                    }
+                });
+
+                let lastBlockHeight;
 
                 if (getTransactionsIncrementally) {
-                    setPartialPastBlockCaptured(0);
-                    setBlockCaptured(pendingBlock!);
+                    lastBlockHeight = pendingBlock!;
+                    partialPastBlockCapturedRef.current = 0;
+                    setBlockCaptured(lastBlockHeight);
+                }
+
+                if (!getTransactionsIncrementally && lastValidTransaction) {
+                    lastBlockHeight = lastValidTransaction.blockHeight ?? (await getBlockHeightFromTxHash(lastValidTransaction.txHash, rpcClientRef.current!));
+                    partialPastBlockCapturedRef.current = lastBlockHeight;
+                    setBlockCaptured(lastBlockHeight);
+                }
+
+                if (!recurseForward && lastBlockHeight <= firstBlock) {
+                    throw 'no more transactions';
                 }
 
                 if (recurseForward) {
@@ -626,7 +573,7 @@ function App() {
 
     const toggleViewMoreHandler = (post: Post) => {
         post.postDomSettings.textOverflowHidden = !post.postDomSettings.textOverflowHidden;
-        setPosts(currentPosts => ({ ...currentPosts, [post.postId]: post }));
+        postsRef.current = ({ ...postsRef.current, [post.postId]: post });
 
         if (post.postDomSettings.textOverflowHidden) {
             const messageDiv = document.getElementById(`post-text-${post.postId}`);
@@ -636,16 +583,19 @@ function App() {
             const adjustheight = messageDiv!.scrollHeight - textHeightNumber;
             window.scrollBy({ top: -adjustheight });
         }
+        setOrderedPostIds(current => [...current]);
     };
 
     const toggleShowRepliesHandler = (post: Post, repliesToThisPost: string[]) => {
         post.postDomSettings.repliesHidden = !post.postDomSettings.repliesHidden;
-        setPosts(currentPosts => ({ ...currentPosts, [post.postId]: post }));
-
+        postsRef.current = ({ ...postsRef.current, [post.postId]: post });
+        setOrderedPostIds(current => [...current]);
+        
         if (!post.postDomSettings.repliesHidden) {
+            setOrderedPostIds(current => [...current]);
             setTimeout(() => {
                 setNewPostsAdded(repliesToThisPost);
-            }, 0);
+            }, SET_NEW_POSTS_ADDED_DELAY);
         }
     };
 
@@ -750,8 +700,8 @@ function App() {
                 </div>
                 <ul>
                     {orderedPostIds.map((postId) => {
-                        const post = posts[postId];
-                        const poster = posters[post.poster];
+                        const post = postsRef.current[postId];
+                        const poster = postersRef.current[post.poster];
                         const displayAddress = getDisplayAddress(poster.address);
                         const { displayDate, displayTime } = getDisplayDateTime(post.timestamp);
                         const messageLines = getMessageLines(post.message);
@@ -759,7 +709,7 @@ function App() {
                         const textOverflows = postDomSettingsItem.textOverflows;
                         const displayViewMore = postDomSettingsItem.textOverflowHidden;
                         const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
-                        const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTree).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTree) ];
+                        const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
                         const showReplies = !post.postDomSettings.repliesHidden;
                         const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v5.timestamp;
 
@@ -814,8 +764,8 @@ function App() {
                                     {showReplies && <div className="mt-1">
                                         <ul>
                                             {repliesToThisPost.map((replyPostId, index) => {
-                                                const replyPost = posts[replyPostId];
-                                                const poster = posters[replyPost.poster];
+                                                const replyPost = postsRef.current[replyPostId];
+                                                const poster = postersRef.current[replyPost.poster];
                                                 const displayAddress = getDisplayAddress(poster.address);
                                                 const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
                                                 const messageLines = getMessageLines(replyPost.message);

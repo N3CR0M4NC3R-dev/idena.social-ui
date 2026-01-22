@@ -1,4 +1,3 @@
-import type { RefObject } from "react";
 import { getMaxFee, type RpcClient } from "./api";
 import { calculateMaxFee, hex2str, hexToDecimal, sanitizeStr } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, Transaction, transactionType } from "idena-sdk-js-lite";
@@ -35,36 +34,40 @@ export const getChildPostIds = (parentId: string, replyPostsTreeRef: Record<stri
     return childPostIds;
 };
 
-export type Block = { hash: string, height: number, timestamp: number };
-
-export const getNewPosterAndPost = async (
-    getTxReceiptResult: { contract: string, method: string, success: boolean, events: { args: string[] }[], txHash: string },
+type GetTransactionDetailsInput = { txHash: string, timestamp: number, blockHeight?: number };
+export const getTransactionDetails = async (
+    transactions: GetTransactionDetailsInput[],
     contractAddress: string,
     makePostMethod: string,
+    rpcClient: RpcClient,
+) => {
+    const transactionReceipts = await Promise.all(transactions.map((transaction) => rpcClient('bcn_txReceipt', [transaction.txHash])));
+
+    const filteredReceipts = transactionReceipts.filter((receipt) =>
+        (receipt.error && (() => { throw 'rpc unavailable' })()) ||
+        receipt.result &&
+        receipt.result.success === true &&
+        receipt.result.contract === contractAddress.toLowerCase() &&
+        receipt.result.method === makePostMethod
+    );
+    const reducedTxs = transactions.reduce((acc, curr) => ({ ...acc, [curr.txHash]: curr }), {}) as Record<string, GetTransactionDetailsInput>;
+    const transactionDetails = filteredReceipts.map(receipt => ({ eventArgs: receipt.result.events[0].args, ...reducedTxs[receipt.result.txHash] }));
+
+    return transactionDetails;
+}
+
+export const getNewPosterAndPost = async (
+    transaction: { txHash: string, eventArgs: string[], timestamp: number, blockHeight?: number },
     thisChannelId: string,
-    rpcClientRef: RefObject<RpcClient>,
+    rpcClient: RpcClient,
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
 ) => {
-    if (!getTxReceiptResult) {
-        return { continued: true };
-    }
+    const { txHash, eventArgs, timestamp } = transaction;
 
-    if (getTxReceiptResult.contract !== contractAddress.toLowerCase()) {
-        return { continued: true };
-    }
-
-    if (getTxReceiptResult.method !== makePostMethod) {
-        return { continued: true };
-    }
-
-    if (getTxReceiptResult.success !== true) {
-        return { continued: true };
-    }
-
-    const poster = getTxReceiptResult.events[0].args[0];
-    const channelId = hex2str(getTxReceiptResult.events[0].args[2]);
-    const message = sanitizeStr(hex2str(getTxReceiptResult.events[0].args[3]));
+    const poster = eventArgs[0];
+    const channelId = hex2str(eventArgs[2]);
+    const message = sanitizeStr(hex2str(eventArgs[3]));
 
     if (channelId !== thisChannelId) {
         return { continued: true };
@@ -74,28 +77,17 @@ export const getNewPosterAndPost = async (
         return { continued: true };
     }
 
-    const txHash = getTxReceiptResult.txHash;
-
-    const { result: getTransactionResult, error: getTransactionError } = await rpcClientRef.current('bcn_transaction', [txHash]);
-
-    if (getTransactionError) {
-        throw 'rpc unavailable';
-    }
-
-    const timestamp = getTransactionResult.timestamp;
-    const lastBlockHash = getTransactionResult.blockHash;
-
     const preV3 = timestamp < breakingChanges.v3.timestamp;
     const preV5 = timestamp < breakingChanges.v5.timestamp;
 
-    const postIdRaw = hexToDecimal(getTxReceiptResult.events[0].args[1]);
+    const postIdRaw = hexToDecimal(eventArgs[1]);
     const postId = preV5 ? breakingChanges.v5.prefixPreV5 + postIdRaw : postIdRaw;
 
     if (postsRef.current[postId]) {
         return { continued: true };
     }
 
-    const replyToPostIdRaw = preV3 ? hexToDecimal(hex2str(getTxReceiptResult.events[0].args[4])) : hex2str(getTxReceiptResult.events[0].args[4]);
+    const replyToPostIdRaw = preV3 ? hexToDecimal(hex2str(eventArgs[4])) : hex2str(eventArgs[4]);
     const replyToPostId = !replyToPostIdRaw ? '' : (preV5 ? breakingChanges.v5.prefixPreV5 + replyToPostIdRaw : replyToPostIdRaw);
 
     if (replyToPostId) {
@@ -125,7 +117,7 @@ export const getNewPosterAndPost = async (
     let newPoster: Poster | undefined;
 
     if (!postersRef.current[poster]) {
-        const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClientRef.current('dna_identity', [poster]);
+        const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClient('dna_identity', [poster]);
 
         if (getDnaIdentityError) {
             throw 'rpc unavailable';
@@ -135,7 +127,7 @@ export const getNewPosterAndPost = async (
         newPoster = { address, stake, age, pubkey, state };
     }
 
-    return { newPost, newPoster, lastBlockHash };
+    return { newPost, newPoster };
 }
 
 export const getReplyPosts = (
@@ -213,6 +205,22 @@ export const deOrphanReplyPosts = (
         );
     }
 }
+
+export const getBlockHeightFromTxHash = async (txHash: string, rpcClient: RpcClient) => {
+    const { result: getTransactionResult, error: getTransactionError } = await rpcClient('bcn_transaction', [txHash]);
+
+    if (getTransactionError) {
+        throw 'rpc unavailable';
+    }
+
+    const { result: getBlockByHashResult, error: getBlockByHashError } = await rpcClient('bcn_block', [getTransactionResult.blockHash]);
+
+    if (getBlockByHashError) {
+        throw 'rpc unavailable';
+    }
+
+    return getBlockByHashResult.height;
+};
 
 export const submitPost = async (
     postersAddress: string,
