@@ -5,9 +5,9 @@ import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './l
 import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
-const defaultIdenaNodeUrl = 'https://restricted.idena.io';
-const defaultIdenaNodeApiKey = 'idena-restricted-node-key';
-const initIdenaIndexerApiUrl = 'https://api.idena.io';
+const defaultNodeUrl = 'https://restricted.idena.io';
+const defaultNodeApiKey = 'idena-restricted-node-key';
+const initIndexerApiUrl = 'https://api.idena.io';
 const contractAddressV2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9';
 const contractAddressV1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
 const firstBlock = 10135627;
@@ -31,7 +31,7 @@ const SCANNING_INTERVAL = 10;
 const SUBMITTING_POST_INTERVAL = 2000;
 const ADS_INTERVAL = 10000;
 const SCAN_POSTS_TTL = 1 * 60;
-const INDEXER_ITEMS_LIMIT = 10;
+const INDEXER_API_ITEMS_LIMIT = 10;
 const SET_NEW_POSTS_ADDED_DELAY = 20;
 
 const DEBUG = false;
@@ -51,11 +51,11 @@ function App() {
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
     const [inputPostersAddress, setInputPostersAddress] = useState<string>(zeroAddress);
     const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState<boolean>(true);
-    const [inputNodeUrl, setInputNodeUrl] = useState<string>(defaultIdenaNodeUrl);
-    const [inputNodeKey, setInputNodeKey] = useState<string>(defaultIdenaNodeApiKey);
+    const [inputNodeUrl, setInputNodeUrl] = useState<string>(defaultNodeUrl);
+    const [inputNodeKey, setInputNodeKey] = useState<string>(defaultNodeApiKey);
     const [postersAddress, setPostersAddress] = useState<string>(zeroAddress);
     const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
-    const [inputUseRpc, setInputUseRpc] = useState<boolean>(false);
+    const [inputSendingTxs, setInputSendingTxs] = useState<string>('idena-app');
     const [submittingPost, setSubmittingPost] = useState<string>('');
     const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
     const postsRef = useRef({} as Record<string, Post>);
@@ -71,14 +71,14 @@ function App() {
     const [ads, setAds] = useState<ApprovedAd[]>([]);
     const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
     const currentAdRef = useRef(currentAd);
-    const [useFindPastBlocksWithTxsApi, setUseFindPastBlocksWithTxsApi] = useState<boolean>(true);
-    const useFindPastBlocksWithTxsApiRef = useRef(useFindPastBlocksWithTxsApi);
+    const [inputFindingPastPosts, setInputFindingPastPosts] = useState<string>('indexer-api');
+    const inputFindingPastPostsRef = useRef(inputFindingPastPosts);
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
-    const [idenaIndexerApiUrl, setIdenaIndexerApiUrl] = useState<string>(initIdenaIndexerApiUrl);
-    const idenaIndexerApiUrlRef = useRef(idenaIndexerApiUrl);
-    const [idenaIndexerApiUrlInvalid, setIdenaIndexerApiUrlInvalid] = useState<boolean>(false);
-    const idenaIndexerApiUrlInvalidRef = useRef(idenaIndexerApiUrlInvalid);
-    const [inputIdenaIndexerApiUrl, setInputIdenaIndexerApiUrl] = useState<string>(initIdenaIndexerApiUrl);
+    const [indexerApiUrl, setIdenaIndexerApiUrl] = useState<string>(initIndexerApiUrl);
+    const indexerApiUrlRef = useRef(indexerApiUrl);
+    const [indexerApiUrlInvalid, setIdenaIndexerApiUrlInvalid] = useState<boolean>(false);
+    const indexerApiUrlInvalidRef = useRef(indexerApiUrlInvalid);
+    const [inputIdenaIndexerApiUrl, setInputIdenaIndexerApiUrl] = useState<string>(initIndexerApiUrl);
     const [inputIdenaIndexerApiUrlApplied, setInputIdenaIndexerApiUrlApplied] = useState<boolean>(true);
     const replyPostsTreeRef = useRef({} as Record<string, string>);
     const deOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
@@ -138,7 +138,7 @@ function App() {
     }, [inputNodeApplied]);
 
     useEffect(() => {
-        if (inputPostersAddressApplied && !inputUseRpc) {
+        if (inputPostersAddressApplied && inputSendingTxs === 'idena-app') {
             setPostersAddress(inputPostersAddress);
 
             if (inputPostersAddress === zeroAddress) {
@@ -161,7 +161,7 @@ function App() {
     }, [inputPostersAddressApplied]);
 
     useEffect(() => {
-        if (inputIdenaIndexerApiUrlApplied && useFindPastBlocksWithTxsApi) {
+        if (inputIdenaIndexerApiUrlApplied && inputFindingPastPosts === 'indexer-api') {
             setIdenaIndexerApiUrl(inputIdenaIndexerApiUrl);
 
             (async function() {
@@ -218,16 +218,16 @@ function App() {
     }, [currentAd]);
 
     useEffect(() => {
-        useFindPastBlocksWithTxsApiRef.current = useFindPastBlocksWithTxsApi;
-    }, [useFindPastBlocksWithTxsApi]);
+        inputFindingPastPostsRef.current = inputFindingPastPosts;
+    }, [inputFindingPastPosts]);
 
     useEffect(() => {
-        idenaIndexerApiUrlRef.current = idenaIndexerApiUrl;
-    }, [idenaIndexerApiUrl]);
+        indexerApiUrlRef.current = indexerApiUrl;
+    }, [indexerApiUrl]);
 
     useEffect(() => {
-        idenaIndexerApiUrlInvalidRef.current = idenaIndexerApiUrlInvalid;
-    }, [idenaIndexerApiUrlInvalid]);
+        indexerApiUrlInvalidRef.current = indexerApiUrlInvalid;
+    }, [indexerApiUrlInvalid]);
 
     type RecurseForward = () => Promise<void>;
     useEffect(() => {
@@ -236,7 +236,9 @@ function App() {
 
             (async function recurseForward() {
                 if (nodeAvailableRef.current) {
-                    recurseForwardIntervalId = setTimeout(postScannerFactory(true, recurseForward, currentBlockCapturedRef, setCurrentBlockCaptured), POLLING_INTERVAL);
+                    const pendingBlock = currentBlockCapturedRef.current ? currentBlockCapturedRef.current + 1 : initialBlock;
+                    const contractAddress = contractAddressV2;
+                    recurseForwardIntervalId = setTimeout(postScannerFactory('recurseForward', recurseForward, setCurrentBlockCaptured, contractAddress, pendingBlock), POLLING_INTERVAL);
                 }
             } as RecurseForward)();
 
@@ -254,7 +256,11 @@ function App() {
 
             (async function recurseBackward(time: number) {
                 if (scanningPastBlocksRef.current && nodeAvailableRef.current && time < ttl) {
-                    recurseBackwardIntervalId = setTimeout(postScannerFactory(false, recurseBackward, pastBlockCapturedRef, setPastBlockCaptured, continuationTokenRef, pastContractAddressRef), SCANNING_INTERVAL);
+                    const recurseMethod = inputFindingPastPostsRef.current === 'rpc' ? 'recurseBackwardWithRpcOnly' : 'recurseBackwardWithIndexerApi';
+                    const contractAddress = pastContractAddressRef!.current;
+                    // pendingBlock only relevant if recurseBackwardWithRpcOnly
+                    const pendingBlock = pastBlockCapturedRef.current ? (partialPastBlockCapturedRef.current ? partialPastBlockCapturedRef.current : pastBlockCapturedRef.current - 1) : initialBlock - 1;
+                    recurseBackwardIntervalId = setTimeout(postScannerFactory(recurseMethod, recurseBackward, setPastBlockCaptured, contractAddress, pendingBlock), SCANNING_INTERVAL);
                 } else {
                     setScanningPastBlocks(false);
                 }
@@ -277,8 +283,8 @@ function App() {
     }, [submittingPost]);
 
     useEffect(() => {
-        setInputPostDisabled(!!submittingPost || (inputUseRpc && viewOnlyNode) || postersAddressInvalid);
-    }, [submittingPost, inputUseRpc, viewOnlyNode, postersAddressInvalid]);
+        setInputPostDisabled(!!submittingPost || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
+    }, [submittingPost, inputSendingTxs, viewOnlyNode, postersAddressInvalid]);
 
     const setNewPostsAdded = (newPostsAdded: string[]) => {
         const updatedPosts: Record<string, Post> = {};
@@ -319,18 +325,19 @@ function App() {
         }
 
         setSubmittingPost(postId);
-        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId, inputUseRpc, rpcClientRef.current!, callbackUrl);
+        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId, inputSendingTxs, rpcClientRef.current!, callbackUrl);
     };
 
-    const handleUseRpcToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const useRpc = (event.target.value === 'true');
-        setInputUseRpc(useRpc);
+    const handleInputSendingTxsToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setInputSendingTxs(event.target.value);
 
-        if (useRpc) {
+        if (event.target.value === 'rpc') {
             setInputPostersAddress('');
             setPostersAddressInvalid(false);
             setRpcClient(inputNodeUrl, inputNodeKey, setNodeAvailable);
-        } else {
+        }
+        
+        if (event.target.value === 'idena-app') {
             if (postersAddress) {
                 setInputPostersAddress(postersAddress);
                 setPostersAddressInvalid(false);
@@ -342,54 +349,42 @@ function App() {
         }
     };
 
-    const handleUseFindPastBlocksWithTxsApiToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const useFindPastBlocksWithTxsApi = event.target.checked;
-        setUseFindPastBlocksWithTxsApi(useFindPastBlocksWithTxsApi);
+    const handleInputFindingPastPostsToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setInputFindingPastPosts(event.target.value);
 
-        if (!useFindPastBlocksWithTxsApi) {
+        if (event.target.value === 'rpc') {
             setIdenaIndexerApiUrl('');
             setIdenaIndexerApiUrlInvalid(false);
-        } else {
-            if (idenaIndexerApiUrl) {
-                setIdenaIndexerApiUrl(idenaIndexerApiUrl);
+        }
+
+        if (event.target.value === 'indexer-api') {
+            if (indexerApiUrl) {
+                setIdenaIndexerApiUrl(indexerApiUrl);
                 setPostersAddressInvalid(false);
             } else {
-                setInputIdenaIndexerApiUrl(initIdenaIndexerApiUrl);
-                setIdenaIndexerApiUrl(initIdenaIndexerApiUrl);
+                setInputIdenaIndexerApiUrl(initIndexerApiUrl);
+                setIdenaIndexerApiUrl(initIndexerApiUrl);
             }
         }
     };
 
     const postScannerFactory = (
-        recurseForward: boolean,
+        recurseMethod: string,
         recurse: RecurseForward | RecurseBackward,
-        blockCapturedRef: React.RefObject<number>,
         setBlockCaptured: React.Dispatch<React.SetStateAction<number>>,
-        continuationTokenRef?: React.RefObject<string | undefined>,
-        pastContractAddressRef?: React.RefObject<string>,
+        contractAddress: string,
+        pendingBlock?: number,
     ) => {
         return async function postFinder() {
+            const isRecurseForward = recurseMethod === 'recurseForward';
+            const isRecurseBackwardWithRpcOnly = recurseMethod === 'recurseBackwardWithRpcOnly';
+            const isRecurseBackwardWithIndexerApi = recurseMethod === 'recurseBackwardWithIndexerApi';
+
             try {
-                let pendingBlock: number;
                 let transactions = [];
 
-                const recurseBackwardWithoutIndexer = !recurseForward && !useFindPastBlocksWithTxsApiRef.current;
-                const getTransactionsIncrementally = recurseForward || recurseBackwardWithoutIndexer;
-
-                const contractAddress = recurseForward ? contractAddressV2 : pastContractAddressRef!.current;
-
-                if (getTransactionsIncrementally) {
-                    pendingBlock = recurseForward ? 
-                        (blockCapturedRef.current ? blockCapturedRef.current + 1 : initialBlock)
-                        :
-                        (blockCapturedRef.current ?
-                            (partialPastBlockCapturedRef.current ?
-                                partialPastBlockCapturedRef.current : blockCapturedRef.current - 1)
-                            : 
-                            initialBlock - 1
-                        );
-
-                    const { result: getBlockByHeightResult, error } = await rpcClientRef.current!('bcn_blockAt', [pendingBlock]);
+                if (isRecurseForward || isRecurseBackwardWithRpcOnly) {
+                    const { result: getBlockByHeightResult, error } = await rpcClientRef.current!('bcn_blockAt', [pendingBlock!]);
 
                     if (error) {
                         throw 'rpc unavailable';
@@ -400,21 +395,20 @@ function App() {
                     }
                     
                     if (getBlockByHeightResult.transactions === null) {
-                        setBlockCaptured(pendingBlock);
+                        setBlockCaptured(pendingBlock!);
 
-                        if (!recurseForward && getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
+                        if (isRecurseBackwardWithRpcOnly && getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
                             pastContractAddressRef!.current = contractAddressV1;
                         }
-
                         throw 'no transactions';
                     }
 
                     transactions = getBlockByHeightResult.transactions.map((txHash: string) => ({ txHash, timestamp: getBlockByHeightResult.timestamp, blockHeight: getBlockByHeightResult.height }));
-                } else {
+                } else if (isRecurseBackwardWithIndexerApi) {
                     if (continuationTokenRef!.current === 'finished processing') {
                         throw 'no more transactions';
                     }
-                    const { result, continuationToken, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pastContractAddressRef!.current, INDEXER_ITEMS_LIMIT, continuationTokenRef!.current);
+                    const { result, continuationToken, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pastContractAddressRef!.current, INDEXER_API_ITEMS_LIMIT, continuationTokenRef!.current);
                     
                     if (error) {
                         throw 'indexer api unavailable';
@@ -435,6 +429,8 @@ function App() {
                         ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && balanceUpdate.txReceipt.method === makePostMethod && balanceUpdate.txReceipt.success === true)
                         .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: Math.floor((new Date(balanceUpdate.timestamp)).getTime() / 1000 ) }))
                     ?? [];
+                } else {
+                    throw 'invalid recurseMethod';
                 }
 
                 const transactionsWithDetails = await getTransactionDetails(transactions, contractAddress, makePostMethod, rpcClientRef.current!);
@@ -444,8 +440,6 @@ function App() {
                 const newOrderedPostIds: string[] = [];
 
                 let newReplyPostsCollection = {};
-                let newForwardOrphanedReplyPostsCollection = {};
-                let newBackwardOrphanedReplyPostsCollection = {};
 
                 for (let index = 0; index < transactionsWithDetails.length; index++) {
                     const transaction = transactionsWithDetails[index];
@@ -482,16 +476,14 @@ function App() {
                         newBackwardOrphanedReplyPosts,
                     } = getReplyPosts(
                         newPost!,
-                        recurseForward,
-                        postsRef,
-                        replyPostsTreeRef,
-                        forwardOrphanedReplyPostsTreeRef,
-                        backwardOrphanedReplyPostsTreeRef,
+                        isRecurseForward,
+                        postsRef.current,
+                        replyPostsTreeRef.current,
+                        forwardOrphanedReplyPostsTreeRef.current,
+                        backwardOrphanedReplyPostsTreeRef.current,
                     );
 
                     newReplyPostsCollection = { ...newReplyPostsCollection, ...newReplyPosts };
-                    newForwardOrphanedReplyPostsCollection = { ...newForwardOrphanedReplyPostsCollection, ...newForwardOrphanedReplyPosts };
-                    newBackwardOrphanedReplyPostsCollection = { ...newBackwardOrphanedReplyPostsCollection, ...newBackwardOrphanedReplyPosts };
 
                     deOrphanReplyPosts(
                         newPost!.postId,
@@ -511,8 +503,8 @@ function App() {
                     forwardOrphanedReplyPostsTreeRef.current = { ...forwardOrphanedReplyPostsTreeRef.current, ...newForwardOrphanedReplyPosts };
                     backwardOrphanedReplyPostsTreeRef.current = { ...backwardOrphanedReplyPostsTreeRef.current, ...newBackwardOrphanedReplyPosts };
                 }
-                
-                setOrderedPostIds((currentOrderedPostIds) => recurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
+
+                setOrderedPostIds((currentOrderedPostIds) => isRecurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
                 setTimeout(() => {
                     setNewPostsAdded(newOrderedPostIds!);
                 }, SET_NEW_POSTS_ADDED_DELAY);
@@ -530,30 +522,30 @@ function App() {
 
                 let lastBlockHeight;
 
-                if (getTransactionsIncrementally) {
+                if (isRecurseForward || isRecurseBackwardWithRpcOnly) {
                     lastBlockHeight = pendingBlock!;
                     partialPastBlockCapturedRef.current = 0;
                     setBlockCaptured(lastBlockHeight);
                 }
 
-                if (!getTransactionsIncrementally && lastValidTransaction) {
+                if (isRecurseBackwardWithIndexerApi && lastValidTransaction) {
                     lastBlockHeight = lastValidTransaction.blockHeight ?? (await getBlockHeightFromTxHash(lastValidTransaction.txHash, rpcClientRef.current!));
                     partialPastBlockCapturedRef.current = lastBlockHeight;
                     setBlockCaptured(lastBlockHeight);
                 }
 
-                if (!recurseForward && lastBlockHeight <= firstBlock) {
+                if (!isRecurseForward && lastBlockHeight <= firstBlock) {
                     throw 'no more transactions';
                 }
 
-                if (recurseForward) {
+                if (isRecurseForward) {
                     (recurse as RecurseForward)();
                 } else {
                     (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
                 }
             } catch(error) {
                 console.error(error);
-                if (!recurseForward && error === 'no more transactions') {
+                if (!isRecurseForward && error === 'no more transactions') {
                     setNoMorePastBlocks(true);
                     setScanningPastBlocks(false);
                 } else if (error === 'rpc unavailable') {
@@ -561,7 +553,7 @@ function App() {
                 } else if (error === 'indexer api unavailable') {
                     setIdenaIndexerApiUrlInvalid(true);
                 } else {
-                    if (recurseForward) {
+                    if (isRecurseForward) {
                         (recurse as RecurseForward)();
                     } else {
                         (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
@@ -629,17 +621,19 @@ function App() {
                             {!inputNodeApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[11px]">Apply changes to take effect</p>}
                         </div>
                     </div>
+                    <hr className="mb-3 text-gray-500" />
                     <div className="flex flex-col mb-6">
+                        <p>For sending transactions:</p>
                         <div className="flex flex-row gap-2">
-                            <input id="useRpc" type="radio" name="useRpc" value="true" checked={inputUseRpc === true} onChange={handleUseRpcToggle} />
-                            <label htmlFor="useRpc" className="flex-none text-right">Use RPC for transactions</label>
+                            <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={inputSendingTxs === 'rpc'} onChange={handleInputSendingTxsToggle} />
+                            <label htmlFor="useRpc" className="flex-none text-right">Use RPC</label>
                         </div>
-                        {inputUseRpc && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Use Idena App for transactions. (Posting is disabled)</p>}
+                        {inputSendingTxs === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Use Idena App for transactions. (Posting is disabled)</p>}
                         <div className="flex flex-row gap-2">
-                            <input id="notUseRpc" type="radio" name="useRpc" value="false" checked={inputUseRpc === false} onChange={handleUseRpcToggle} />
-                            <label htmlFor="notUseRpc" className="flex-none text-right">Use Idena App for transactions</label>
+                            <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={inputSendingTxs === 'idena-app'} onChange={handleInputSendingTxsToggle} />
+                            <label htmlFor="notUseRpc" className="flex-none text-right">Use Idena App</label>
                         </div>
-                        {!inputUseRpc && (
+                        {inputSendingTxs === 'idena-app' && (
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <p className="mb-1">Your Idena Address:</p>
                                 <input className="flex-1 mb-1 h-6.6 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
@@ -651,22 +645,25 @@ function App() {
                             </div>
                         )}
                     </div>
-                    <div>
-                        <div>
-                            <label className="inline-flex items-center cursor-pointer">
-                                <input type="checkbox" value="" className="sr-only peer" checked={useFindPastBlocksWithTxsApi} onChange={handleUseFindPastBlocksWithTxsApiToggle} />
-                                <div className={`relative w-9 h-5 bg-neutral-quaternary peer-focus:outline-none peer-focus:ring-brand-soft dark:peer-focus:ring-brand-soft rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-buffer after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand ${useFindPastBlocksWithTxsApi ? 'bg-blue-500' : 'bg-gray-700'}`}></div>
-                                <span className="select-none ms-3 text-sm font-medium text-heading">Scan past txs with indexer api</span>
-                            </label>
+                    <hr className="mb-3 text-gray-500" />
+                    <div className="flex flex-col mb-6">
+                        <p>For finding past posts:</p>
+                        <div className="flex flex-row gap-2">
+                            <input id="inputFindingPastPosts" type="radio" name="inputFindingPastPosts" value="rpc" checked={inputFindingPastPosts === 'rpc'} onChange={handleInputFindingPastPostsToggle} />
+                            <label htmlFor="inputFindingPastPosts" className="flex-none text-right">Use RPC</label>
                         </div>
-                        {useFindPastBlocksWithTxsApi && (
+                        <div className="flex flex-row gap-2">
+                            <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="inputFindingPastPosts" value="indexer-api" checked={inputFindingPastPosts === 'indexer-api'} onChange={handleInputFindingPastPostsToggle} />
+                            <label htmlFor="notUseFindPastBlocksWithTxsApi" className="flex-none text-right">Use Indexer Api</label>
+                        </div>
+                        {inputFindingPastPosts === 'indexer-api' && (
                             <div className="flex flex-col ml-5 text-[14px]">
 
                                 <div className="flex flex-row gap-1">
                                     <p className="mb-1 w-13 flex-none text-right leading-7">Api Url:</p>
                                     <input className="flex-1 mb-1 h-6.6 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
                                 </div>
-                                {idenaIndexerApiUrlInvalid && <p className="ml-14 text-[11px] text-red-400">Invalid Api Url.</p>}
+                                {indexerApiUrlInvalid && <p className="ml-14 text-[11px] text-red-400">Invalid Api Url.</p>}
                                 <div className="flex flex-row">
                                     <button className={`w-16 h-7 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputIdenaIndexerApiUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
                                     {!inputIdenaIndexerApiUrlApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
@@ -674,9 +671,9 @@ function App() {
                             </div>
                         )}
                     </div>
-                    <div className="my-7 text-[14px] text-gray-500">
-                        <hr />
-                        <p className="my-1"><a className="hover:underline" href={termsOfServiceUrl} target="_blank">Terms of Service</a></p>
+                    <div className="mb-3">
+                        <hr className="text-gray-500" />
+                        <p className="my-1 text-[14px] text-gray-500"><a className="hover:underline" href={termsOfServiceUrl} target="_blank">Terms of Service</a></p>
                     </div>
                 </div>
             </div>

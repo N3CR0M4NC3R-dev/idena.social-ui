@@ -133,10 +133,10 @@ export const getNewPosterAndPost = async (
 export const getReplyPosts = (
     newPost: Post,
     recurseForward: boolean,
-    postsRef: React.RefObject<Record<string, Post>>,
-    replyPostsTreeRef: React.RefObject<Record<string, string>>,
-    forwardOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
-    backwardOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
+    postsRef: Record<string, Post>,
+    replyPostsTreeRef: Record<string, string>,
+    forwardOrphanedReplyPostsTreeRef: Record<string, string>,
+    backwardOrphanedReplyPostsTreeRef: Record<string, string>,
 ) => {
     const newReplyPosts: Record<string, string> = {};
     const newForwardOrphanedReplyPosts: Record<string, string> = {};
@@ -145,19 +145,19 @@ export const getReplyPosts = (
     const replyToPostId = newPost.replyToPostId;
 
     if (replyToPostId) {
-        const replyToPost = postsRef.current[replyToPostId];
+        const replyToPost = postsRef[replyToPostId];
 
         if (!replyToPost || replyToPost.orphaned) {
             if (recurseForward) {
-                const childPostIds = getChildPostIds(replyToPostId, forwardOrphanedReplyPostsTreeRef.current);
+                const childPostIds = getChildPostIds(replyToPostId, forwardOrphanedReplyPostsTreeRef);
                 newForwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
             } else {
-                const childPostIds = getChildPostIds(replyToPostId, backwardOrphanedReplyPostsTreeRef.current);
+                const childPostIds = getChildPostIds(replyToPostId, backwardOrphanedReplyPostsTreeRef);
                 newBackwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
             }
             newPost.orphaned = true;
         } else {
-            const childPostIds = getChildPostIds(replyToPostId, replyPostsTreeRef.current);
+            const childPostIds = getChildPostIds(replyToPostId, replyPostsTreeRef);
             newReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
         }
     }
@@ -228,7 +228,7 @@ export const submitPost = async (
     makePostMethod: string,
     inputPost: string,
     replyToPostId: string | null,
-    inputUseRpc: boolean,
+    inputSendingTxs: string,
     rpcClient: RpcClient,
     callbackUrl: string,
 ) => {
@@ -258,7 +258,7 @@ export const submitPost = async (
 
     const { maxFeeDecimal, maxFeeDna } = calculateMaxFee(maxFeeResult, inputPost.length);
 
-    if (inputUseRpc) {
+    if (inputSendingTxs === 'rpc') {
         await rpcClient('contract_call', [
             {
                 from: postersAddress,
@@ -269,7 +269,9 @@ export const submitPost = async (
                 maxFee: maxFeeDecimal,
             }
         ]);
-    } else {
+    }
+
+    if (inputSendingTxs === 'idena-app') {
         const { result: getBalanceResult } = await rpcClient('dna_getBalance', [postersAddress]);
         const { result: epochResult } = await rpcClient('dna_epoch', []);
 
