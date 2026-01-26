@@ -5,6 +5,10 @@ export function getDisplayAddress(address: string) {
     return `${address.slice(0, 7)}...${address.slice(-5)}`;
 }
 
+export function getDisplayAddressShort(address: string) {
+    return `${address.slice(0, 5)}...${address.slice(-3)}`;
+}
+
 export function getDisplayDateTime(timestamp: number) {
     const datePost = new Date(timestamp * 1000);
     const dateToday = new Date();
@@ -87,4 +91,10 @@ export function hexToDecimal(hex: string) {
 
 export function decimalToHex(dec: string, uint8ArrayLength: number) {
     return toHexString(numToUint8Array(Number(dec), uint8ArrayLength));
+}
+
+export function isObjectEmpty(obj: object) {
+    // @ts-ignore
+    for (const i in obj) return false;
+    return true;
 }

@@ -7,11 +7,12 @@ export const breakingChanges = {
     v5: { timestamp: 1767946325, block: 10219188, firstTxId: '0x8524a0147c9f32ae5b5bbf456b85a062819d971f475607639e59b0fb85be9847', prefixPreV5: 'preV5:' },
 };
 
-export type PostDomSettings = { textOverflows: boolean, textOverflowHidden: boolean, repliesHidden: boolean }
+export type PostDomSettings = { textOverflows: boolean, textOverflowHidden: boolean, repliesHidden: boolean, discussReplyToPostId?: string }
 export type Post = {
     timestamp: number,
     postId: string,
     poster: string,
+    channelId: string,
     message: string,
     txHash: string,
     replyToPostId: string,
@@ -20,13 +21,13 @@ export type Post = {
 };
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
 
-export const getChildPostIds = (parentId: string, replyPostsTreeRef: Record<string, string>) => {
+export const getChildPostIds = (parentId: string, postsTreeRef: Record<string, string>) => {
     const childPostIds = [];
     let childPostId;
     let index = 0;
 
     do {
-        childPostId = replyPostsTreeRef[`${parentId}-${index}`];
+        childPostId = postsTreeRef[`${parentId}-${index}`];
         childPostId && (childPostIds.push(childPostId));
         index++;
     } while (childPostId);
@@ -59,6 +60,7 @@ export const getTransactionDetails = async (
 export const getNewPosterAndPost = async (
     transaction: { txHash: string, eventArgs: string[], timestamp: number, blockHeight?: number },
     thisChannelId: string,
+    postChannelRegex: RegExp,
     rpcClient: RpcClient,
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
@@ -69,7 +71,7 @@ export const getNewPosterAndPost = async (
     const channelId = hex2str(eventArgs[2]);
     const message = sanitizeStr(hex2str(eventArgs[3]));
 
-    if (channelId !== thisChannelId) {
+    if (channelId !== thisChannelId && !postChannelRegex.test(channelId)) {
         return { continued: true };
     }
 
@@ -103,6 +105,7 @@ export const getNewPosterAndPost = async (
         timestamp,
         postId,
         poster,
+        channelId,
         message,
         txHash,
         replyToPostId,
@@ -131,38 +134,33 @@ export const getNewPosterAndPost = async (
 }
 
 export const getReplyPosts = (
-    newPost: Post,
-    recurseForward: boolean,
+    newPostId: string,
+    replyToPostId: string,
+    isRecurseForward: boolean,
     postsRef: Record<string, Post>,
     replyPostsTreeRef: Record<string, string>,
     forwardOrphanedReplyPostsTreeRef: Record<string, string>,
     backwardOrphanedReplyPostsTreeRef: Record<string, string>,
+    newReplyPosts: Record<string, string>,
+    newForwardOrphanedReplyPosts: Record<string, string>,
+    newBackwardOrphanedReplyPosts: Record<string, string>,
 ) => {
-    const newReplyPosts: Record<string, string> = {};
-    const newForwardOrphanedReplyPosts: Record<string, string> = {};
-    const newBackwardOrphanedReplyPosts: Record<string, string> = {};
-
-    const replyToPostId = newPost.replyToPostId;
-
     if (replyToPostId) {
         const replyToPost = postsRef[replyToPostId];
 
         if (!replyToPost || replyToPost.orphaned) {
-            if (recurseForward) {
+            if (isRecurseForward) {
                 const childPostIds = getChildPostIds(replyToPostId, forwardOrphanedReplyPostsTreeRef);
-                newForwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
+                newForwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPostId;
             } else {
                 const childPostIds = getChildPostIds(replyToPostId, backwardOrphanedReplyPostsTreeRef);
-                newBackwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
+                newBackwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPostId;
             }
-            newPost.orphaned = true;
         } else {
             const childPostIds = getChildPostIds(replyToPostId, replyPostsTreeRef);
-            newReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPost.postId;
+            newReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPostId;
         }
     }
-
-    return { newReplyPosts, newForwardOrphanedReplyPosts, newBackwardOrphanedReplyPosts };
 };
 
 export const deOrphanReplyPosts = (
@@ -192,17 +190,6 @@ export const deOrphanReplyPosts = (
 
         newDeOrphanedReplyPosts[newKey] = childDetails.deOrphanedId;
         newPosts[childDetails.deOrphanedId] = { ...postsRef[childDetails.deOrphanedId], orphaned: false };
-
-        deOrphanReplyPosts(
-            childDetails.deOrphanedId,
-            forwardOrphanedReplyPostsTreeRef,
-            backwardOrphanedReplyPostsTreeRef,
-            postsRef,
-            newForwardOrphanedReplyPosts,
-            newBackwardOrphanedReplyPosts,
-            newDeOrphanedReplyPosts,
-            newPosts,
-        );
     }
 }
 
@@ -228,6 +215,7 @@ export const submitPost = async (
     makePostMethod: string,
     inputPost: string,
     replyToPostId: string | null,
+    channelId: string | null,
     inputSendingTxs: string,
     rpcClient: RpcClient,
     callbackUrl: string,
@@ -240,6 +228,7 @@ export const submitPost = async (
             value: JSON.stringify({
                 message: inputPost,
                 ...(replyToPostId && { replyToPostId }),
+                ...(channelId && { channelId }),
             }),
         }
     ];

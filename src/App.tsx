@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FocusEventHandler } from 'react';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { getChildPostIds, submitPost, type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash } from './logic/asyncUtils';
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
-import { getDisplayAddress, getDisplayDateTime, getMessageLines } from './logic/utils';
+import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getMessageLines, isObjectEmpty } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
@@ -13,6 +13,8 @@ const contractAddressV1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
 const firstBlock = 10135627;
 const makePostMethod = 'makePost';
 const thisChannelId = '';
+const discussPrefix = 'discuss:';
+const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
@@ -303,13 +305,13 @@ function App() {
         setOrderedPostIds(current => [...current]);
     }
 
-    const submitPostHandler = async (postId: string) => {
+    const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot post!');
             return;
         }
 
-        const postTextareaElement = document.getElementById(`post-input-${postId}`) as HTMLTextAreaElement;
+        const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
         const inputText = postTextareaElement.value;
 
         if (inputText) {
@@ -318,14 +320,18 @@ function App() {
             return;
         }
 
-        let replyToPostId = postId !== 'main' ? postId : null;
+        setSubmittingPost(location);
 
-        if (replyToPostId) {
+        if (location !== 'main') {
             postTextareaElement.rows = 1;
         }
 
-        setSubmittingPost(postId);
-        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+        const post = postsRef.current[location];
+        if (post) {
+            setDiscussReplyToPostIdHandler(post);
+        }
+
+        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
     };
 
     const handleInputSendingTxsToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -430,7 +436,7 @@ function App() {
                         .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: Math.floor((new Date(balanceUpdate.timestamp)).getTime() / 1000 ) }))
                     ?? [];
                 } else {
-                    throw 'invalid recurseMethod';
+                    throw 'this should not happen';
                 }
 
                 const transactionsWithDetails = await getTransactionDetails(transactions, contractAddress, makePostMethod, rpcClientRef.current!);
@@ -451,6 +457,7 @@ function App() {
                     } = await getNewPosterAndPost(
                         transaction,
                         thisChannelId,
+                        postChannelRegex,
                         rpcClientRef.current!,
                         postsRef,
                         postersRef,
@@ -462,39 +469,88 @@ function App() {
 
                     lastValidTransaction = transaction;
 
-                    !newPost!.replyToPostId && newOrderedPostIds.push(newPost!.postId);
+                    if (!newPost!.replyToPostId && newPost!.channelId === thisChannelId) {
+                        newOrderedPostIds.push(newPost!.postId);
+                    }
 
                     const newPosts = { [newPost!.postId]: newPost as Post };
                     const newPosters = newPoster ? { [newPoster.address]: newPoster } : {};
 
+                    const newReplyPosts: Record<string, string> = {};
+                    const newForwardOrphanedReplyPosts: Record<string, string> = {};
+                    const newBackwardOrphanedReplyPosts: Record<string, string> = {};
                     const newDeOrphanedReplyPosts: Record<string, string> = {};
+
                     const updatedPosts: Record<string, Post> = {};
 
-                    const {
-                        newReplyPosts,
-                        newForwardOrphanedReplyPosts,
-                        newBackwardOrphanedReplyPosts,
-                    } = getReplyPosts(
-                        newPost!,
-                        isRecurseForward,
-                        postsRef.current,
-                        replyPostsTreeRef.current,
-                        forwardOrphanedReplyPostsTreeRef.current,
-                        backwardOrphanedReplyPostsTreeRef.current,
-                    );
+                    if (postChannelRegex.test(newPost!.channelId)) {
+                        const discussionPostId = newPost!.channelId.split(':')[1];
+                        const discussionPost = postsRef.current[discussionPostId];
+                        const orphaned = !discussionPost || discussionPost.orphaned;
+                        postsRef.current = { ...postsRef.current, [newPost!.channelId]: { orphaned } as Post };
 
-                    newReplyPostsCollection = { ...newReplyPostsCollection, ...newReplyPosts };
+                        getReplyPosts(
+                            newPost!.postId,
+                            newPost!.channelId,
+                            isRecurseForward,
+                            postsRef.current,
+                            replyPostsTreeRef.current,
+                            forwardOrphanedReplyPostsTreeRef.current,
+                            backwardOrphanedReplyPostsTreeRef.current,
+                            newReplyPosts,
+                            newForwardOrphanedReplyPosts,
+                            newBackwardOrphanedReplyPosts,
+                        );
 
-                    deOrphanReplyPosts(
-                        newPost!.postId,
-                        forwardOrphanedReplyPostsTreeRef.current,
-                        backwardOrphanedReplyPostsTreeRef.current,
-                        postsRef.current,
-                        newForwardOrphanedReplyPosts,
-                        newBackwardOrphanedReplyPosts,
-                        newDeOrphanedReplyPosts,
-                        updatedPosts,
-                    );
+                        if (!isObjectEmpty(newForwardOrphanedReplyPosts) || !isObjectEmpty(newBackwardOrphanedReplyPosts)) {
+                            newPost!.orphaned = true;
+                        }
+
+                    } else if (newPost!.channelId === thisChannelId) {
+                        getReplyPosts(
+                            newPost!.postId,
+                            newPost!.replyToPostId,
+                            isRecurseForward,
+                            postsRef.current,
+                            replyPostsTreeRef.current,
+                            forwardOrphanedReplyPostsTreeRef.current,
+                            backwardOrphanedReplyPostsTreeRef.current,
+                            newReplyPosts,
+                            newForwardOrphanedReplyPosts,
+                            newBackwardOrphanedReplyPosts,
+                        );
+
+                        if (!isObjectEmpty(newForwardOrphanedReplyPosts) || !isObjectEmpty(newBackwardOrphanedReplyPosts)) {
+                            newPost!.orphaned = true;
+                        }
+
+                        newReplyPostsCollection = { ...newReplyPostsCollection, ...newReplyPosts };
+
+                        deOrphanReplyPosts(
+                            newPost!.postId,
+                            forwardOrphanedReplyPostsTreeRef.current,
+                            backwardOrphanedReplyPostsTreeRef.current,
+                            postsRef.current,
+                            newForwardOrphanedReplyPosts,
+                            newBackwardOrphanedReplyPosts,
+                            newDeOrphanedReplyPosts,
+                            updatedPosts,
+                        );
+
+                        deOrphanReplyPosts(
+                            discussPrefix + newPost!.postId,
+                            forwardOrphanedReplyPostsTreeRef.current,
+                            backwardOrphanedReplyPostsTreeRef.current,
+                            postsRef.current,
+                            newForwardOrphanedReplyPosts,
+                            newBackwardOrphanedReplyPosts,
+                            newDeOrphanedReplyPosts,
+                            updatedPosts,
+                        );
+
+                    } else {
+                        throw 'this should not happen';
+                    }
 
                     postersRef.current = { ...postersRef.current, ...newPosters };
                     postsRef.current = { ...postsRef.current, ...updatedPosts, ...newPosts };
@@ -510,7 +566,6 @@ function App() {
                 }, SET_NEW_POSTS_ADDED_DELAY);
 
                 const newReplyToPostIds = [ ...new Set([ ...Object.keys(newReplyPostsCollection!) ].map(item => item.split('-')[0])) ];
-
                 newReplyToPostIds.forEach((replyToId) => {
                     if (!postsRef.current[replyToId]?.postDomSettings?.repliesHidden) {
                         const repliesToThisPost = getChildPostIds(replyToId, newReplyPostsCollection!);
@@ -591,12 +646,34 @@ function App() {
         }
     };
 
+    const toggleShowDiscussionHandler = (post: Post, override?: boolean) => {
+        post.postDomSettings.repliesHidden = override ?? !post.postDomSettings.repliesHidden;
+        postsRef.current = ({ ...postsRef.current, [post.postId]: post });
+        setOrderedPostIds(current => [...current]);
+    };
+
+    const toggleReplyDiscussionHandler = (post: Post) => {
+        toggleShowDiscussionHandler(post, false);
+        setDiscussReplyToPostIdHandler(post, post.postId);
+    };
+
     const replyInputOnFocusHandler: FocusEventHandler<HTMLTextAreaElement> = (event) => {
         event.target.rows = 4;
     };
 
     const replyInputOnBlurHandler: FocusEventHandler<HTMLTextAreaElement> = (event) => {
         if (event.target.value === '') event.target.rows = 1;
+    };
+
+    const setDiscussReplyToPostIdHandler = (post: Post, discussReplyToPostId?: string) => {
+        post.postDomSettings.discussReplyToPostId = discussReplyToPostId;
+        postsRef.current = ({ ...postsRef.current, [post.postId]: post });
+        setOrderedPostIds(current => [...current]);
+
+        setTimeout(() => {
+            const postTextareaElement = document.getElementById(`post-input-${post.postId}`) as HTMLTextAreaElement;
+            postTextareaElement.focus();
+        }, SET_NEW_POSTS_ADDED_DELAY);
     };
 
     return (
@@ -682,7 +759,7 @@ function App() {
                     <textarea
                         id='post-input-main'
                         rows={4}
-                        className="w-full rounded-md py-1 px-2 mt-5 outline-1 placeholder:text-gray-500"
+                        className="w-full min-h-[104px] rounded-md py-1 px-2 mt-5 outline-1 placeholder:text-gray-500"
                         placeholder="Write your post here..."
                         disabled={inputPostDisabled}
                     />
@@ -740,7 +817,7 @@ function App() {
                                             <textarea
                                                 id={`post-input-${post.postId}`}
                                                 rows={1}
-                                                className="w-full rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500"
+                                                className="w-full min-h-[32px] rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500"
                                                 placeholder="Write your reply here..."
                                                 disabled={inputPostDisabled}
                                                 onFocus={replyInputOnFocusHandler}
@@ -748,7 +825,7 @@ function App() {
                                             />
                                         </div>
                                         <div>
-                                            <button className="h-9 w-17 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler(post.postId)}>{submittingPost === post.postId ? '...' : 'Post!'}</button>
+                                            <button className="h-9 w-17 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler(post.postId, post.postId)}>{submittingPost === post.postId ? '...' : 'Post!'}</button>
                                         </div>
                                     </div>}
                                     <div className="px-4 mb-1.5 text-[12px]">
@@ -770,11 +847,16 @@ function App() {
                                                 const textOverflows = postDomSettingsItem.textOverflows;
                                                 const displayViewMore = postDomSettingsItem.textOverflowHidden;
                                                 const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
+                                                const showDiscussion = !replyPost.postDomSettings.repliesHidden;
+                                                const discussParentId = discussPrefix + replyPost.postId;
+                                                const discussionPosts = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
+                                                const discussReplyToPostId = replyPost.postDomSettings.discussReplyToPostId;
+                                                const discussReplyToPost = discussReplyToPostId && postsRef.current[discussReplyToPostId!];
 
                                                 return (
                                                     <li key={replyPost.postId}>
                                                         {index !== 0 && <hr className="mx-2 text-gray-700" />}
-                                                        <div className="mt-1.5 flex flex-col">
+                                                        <div className="mt-1.5 mb-2.5 flex flex-col">
                                                             <div className="h-5 flex flex-row">
                                                                 <div className="w-11 flex-none flex flex-col">
                                                                     <div className="h-13 flex-none">
@@ -796,9 +878,98 @@ function App() {
                                                                 <p>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                             </div>
                                                             {textOverflows && <div className="px-12 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(replyPost)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
-                                                            <div className="px-2">
-                                                                <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                                            <div className="w-full px-2 flex flex-row justify-end">
+                                                                {!isBreakingChangeDisabled && <>
+                                                                    <div className="mt-0.5 w-36 text-[12px]">
+                                                                        {discussionPosts.length || showDiscussion ?
+                                                                            <a className="text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowDiscussionHandler(replyPost)}>{showDiscussion ? 'hide discussion' : `show discussion (${discussionPosts.length})`}</a>
+                                                                        :
+                                                                            <span className="text-gray-500">no discussion</span>
+                                                                        }
+                                                                    </div>
+                                                                    <div className="-mt-0.5 flex-1"><button className="text-[11px] h-4 w-14 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => toggleReplyDiscussionHandler(replyPost)}>Reply</button></div>
+                                                                </>}
+                                                                <div><p className="text-[11px]/6 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p></div>
                                                             </div>
+                                                            {showDiscussion && <div className="mt-2.5 mx-2 p-2 bg-stone-900 rounded-md text-[14px]">
+                                                                <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
+                                                                    {discussionPosts.length === 0 && <li className="mb-1"><p className="italic text-center text-[12px] text-gray-500">no comments yet</p></li>}
+                                                                    {discussionPosts.map((discussionPostId) => {
+                                                                        const discussionPost = postsRef.current[discussionPostId];
+                                                                        const poster = postersRef.current[discussionPost.poster];
+                                                                        const displayAddress = getDisplayAddressShort(poster.address);
+                                                                        const { displayDate, displayTime } = getDisplayDateTime(discussionPost.timestamp);
+                                                                        const messageLines = getMessageLines(discussionPost.message);
+                                                                        const replyToPost = postsRef.current[discussionPost.replyToPostId];
+
+                                                                        return (
+                                                                            <li key={discussionPost.postId} className="hover:bg-stone-800">
+                                                                                <div className="my-1.5 flex flex-col">
+                                                                                    {replyToPost && <div className="flex flex-row">
+                                                                                        <div className="w-8 justify-items-end content-end">
+                                                                                            <div className="h-2.5 w-4 border-t-1 border-l-1 border-gray-500"></div>
+                                                                                        </div>
+                                                                                        <div className="flex-1 flex flex-row mr-3">
+                                                                                            <div className="w-5"><img src={`https://robohash.org/${replyToPost.poster}?set=set1`} /></div>
+                                                                                            <div className="flex-1 text-nowrap overflow-hidden">
+                                                                                                <p className="max-w-[120px] text-[12px] text-gray-500">{getMessageLines(replyToPost.message)[0]}</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>}
+                                                                                    <div className="h-5 flex flex-row">
+                                                                                        <div className="w-9 flex-none flex flex-col">
+                                                                                            <div className="h-11 flex-none">
+                                                                                                <img src={`https://robohash.org/${poster.address}?set=set1`} />
+                                                                                            </div>
+                                                                                            <div className="flex-1"></div>
+                                                                                        </div>
+                                                                                        <div className="ml-1 mr-3 flex-1 flex flex-col overflow-hidden">
+                                                                                            <div className="flex-none flex flex-col gap-x-3">
+                                                                                                <div className="flex flex-row items-center">
+                                                                                                    <div className="flex-1">
+                                                                                                        <a className="text-[14px] font-[600]" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noreferrer">{displayAddress}</a>
+                                                                                                        <span className="ml-2 text-[9px] align-[2px]">{`(${poster.age}, ${poster.state}, ${parseInt(poster.stake)})`}</span>
+                                                                                                    </div>
+                                                                                                    <div>
+                                                                                                        <p className="ml-2 text-[10px] text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                <div className="flex-1"></div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex flex-row">
+                                                                                        <div id={`post-text-${discussionPost.postId}`} className="flex-1 max-h-[9999px] flex-1 pl-10 pr-4 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
+                                                                                            <p>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                                                                        </div>
+                                                                                        <div className="w-10 pt-0.5"><button className="text-[12px] h-4 w-8 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)}>↩</button></div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </li>
+                                                                        );
+                                                                    })}
+                                                                </ul>
+                                                                {discussReplyToPost && <div className="w-full mt-1 px-1 flex flex-row bg-stone-800 rounded-sm">
+                                                                    <div className="flex-1 overflow-hidden text-nowrap text-[12px] text-gray-500"><p>Replying to {getDisplayAddressShort(discussReplyToPost!.poster)}: {getMessageLines(discussReplyToPost!.message)[0]}</p></div>
+                                                                    <div className="w-6 text-right">
+                                                                        <button className="text-[10px] align-[2.5px] h-4 w-5 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>✖</button>
+                                                                    </div>
+                                                                </div>}
+                                                                <div className="flex flex-row gap-2 items-end">
+                                                                    <div className="flex-1">
+                                                                        <textarea
+                                                                            id={`post-input-${replyPost.postId}`}
+                                                                            rows={1}
+                                                                            className="w-full min-h-[26px] rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px]"
+                                                                            placeholder="Comment here..."
+                                                                            disabled={inputPostDisabled}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <button className="h-7.5 w-16 my-1 px-4 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler(replyPost.postId, discussReplyToPostId, discussParentId)}>{submittingPost === replyPost.postId ? '...' : 'Post!'}</button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>}
                                                         </div>
                                                     </li>
                                                 );
