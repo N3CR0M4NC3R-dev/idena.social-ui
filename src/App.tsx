@@ -906,7 +906,7 @@ function App() {
                                                                             <li key={discussionPost.postId} className="hover:bg-stone-800">
                                                                                 <div className="my-1.5 flex flex-col">
                                                                                     {replyToPost && <div className="flex flex-row">
-                                                                                        <div className="w-8 justify-items-end content-end">
+                                                                                        <div className="w-8 flex justify-end items-end">
                                                                                             <div className="h-2.5 w-4 border-t-1 border-l-1 border-gray-500"></div>
                                                                                         </div>
                                                                                         <div className="flex-1 flex flex-row mr-3">
