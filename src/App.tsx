@@ -787,6 +787,14 @@ function App() {
                         const showReplies = !post.postDomSettings.repliesHidden;
                         const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v5.timestamp;
 
+                        let totalNumberOfReplies = repliesToThisPost.length;
+                        const discussionPostsAll = repliesToThisPost.reduce((acc, curr) => {
+                            const discussParentId = discussPrefix + curr;
+                            const discussionPosts = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
+                            totalNumberOfReplies += discussionPosts.length;
+                            return { ...acc, [discussParentId]: discussionPosts };
+                        }, {}) as Record<string, string[]>;
+
                         return (
                             <li key={post.postId}>
                                 <div className="flex flex-col mb-10 pt-3 rounded-md bg-stone-800">
@@ -830,7 +838,7 @@ function App() {
                                     </div>}
                                     <div className="px-4 mb-1.5 text-[12px]">
                                         {repliesToThisPost.length ?
-                                            <a className="-mt-2 text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowRepliesHandler(post, repliesToThisPost)}>{showReplies ? 'hide replies' : `show replies (${repliesToThisPost.length})`}</a>
+                                            <a className="-mt-2 text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowRepliesHandler(post, repliesToThisPost)}>{showReplies ? 'hide replies' : `show replies (${totalNumberOfReplies})`}</a>
                                         :
                                             <span className="-mt-2 text-gray-500">no replies</span>
                                         }
@@ -849,7 +857,7 @@ function App() {
                                                 const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
                                                 const showDiscussion = !replyPost.postDomSettings.repliesHidden;
                                                 const discussParentId = discussPrefix + replyPost.postId;
-                                                const discussionPosts = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
+                                                const discussionPosts = discussionPostsAll[discussParentId];
                                                 const discussReplyToPostId = replyPost.postDomSettings.discussReplyToPostId;
                                                 const discussReplyToPost = discussReplyToPostId && postsRef.current[discussReplyToPostId!];
 
