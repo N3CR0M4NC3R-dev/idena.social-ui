@@ -754,7 +754,7 @@ function App() {
                     </div>
                 </div>
             </div>
-            <div className="flex-none min-w-[400px] max-w-[400px]">
+            <div className="flex-none min-w-[430px] max-w-[430px]">
                 <div>
                     <textarea
                         id='post-input-main'
