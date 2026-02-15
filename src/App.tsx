@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState, type FocusEventHandler } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { getChildPostIds, submitPost, type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash } from './logic/asyncUtils';
+import { type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost } from './logic/asyncUtils';
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
-import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getMessageLines, isObjectEmpty } from './logic/utils';
+import { getDisplayAddress, isObjectEmpty } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
+import type { PostDomSettingsCollection } from './components/PostComponent.exports';
+import type { NavigateWrapper } from './App.exports';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -18,8 +21,6 @@ const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
-const postTextHeight = 'max-h-[288px]';
-const replyPostTextHeight = 'max-h-[146px]';
 const defaultAd = {
     title: 'IDENA: Proof-of-Person blockchain',
     desc: 'Coordination of individuals',
@@ -30,11 +31,12 @@ const defaultAd = {
 
 const POLLING_INTERVAL = 5000;
 const SCANNING_INTERVAL = 10;
-const SUBMITTING_POST_INTERVAL = 2000;
 const ADS_INTERVAL = 10000;
 const SCAN_POSTS_TTL = 1 * 60;
 const INDEXER_API_ITEMS_LIMIT = 10;
 const SET_NEW_POSTS_ADDED_DELAY = 20;
+const SUBMITTING_POST_INTERVAL = 2000;
+
 
 const DEBUG = false;
 
@@ -50,7 +52,6 @@ function App() {
     const rpcClientRef = useRef(undefined as undefined | RpcClient);
     const [viewOnlyNode, setViewOnlyNode] = useState<boolean>(false);
     const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
-    const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
     const [inputPostersAddress, setInputPostersAddress] = useState<string>(zeroAddress);
     const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState<boolean>(true);
     const [inputNodeUrl, setInputNodeUrl] = useState<string>(defaultNodeUrl);
@@ -58,7 +59,6 @@ function App() {
     const [postersAddress, setPostersAddress] = useState<string>(zeroAddress);
     const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
     const [inputSendingTxs, setInputSendingTxs] = useState<string>('idena-app');
-    const [submittingPost, setSubmittingPost] = useState<string>('');
     const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
     const postsRef = useRef({} as Record<string, Post>);
     const postersRef = useRef({} as Record<string, Poster>);
@@ -88,6 +88,41 @@ function App() {
     const backwardOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
     const continuationTokenRef = useRef(undefined as undefined | string);
     const pastContractAddressRef = useRef(contractAddressV2);
+    const [submittingPost, setSubmittingPost] = useState<string>('');
+    const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
+    
+    const navigate = useNavigate();
+    const location = useLocation();
+    const historyStack = useRef<{ key: string, pathname: string, state?: PostDomSettingsCollection }[]>([]);
+    const lastBrowserStateHistory = useRef<PostDomSettingsCollection>(null);
+    const locationInHistoryStack = useRef<number>(0);
+
+    useEffect(() => {
+        const { key, pathname } = location;
+        const index = historyStack.current.findIndex((item) => item.key === key);
+
+        if (index === -1) {
+            if (locationInHistoryStack.current !== 0) {
+                historyStack.current = historyStack.current.slice(index);
+            }
+            if (lastBrowserStateHistory.current) {
+                historyStack.current[0].state = lastBrowserStateHistory.current;
+                lastBrowserStateHistory.current = null;
+            }
+            historyStack.current.unshift({ key, pathname });
+
+            locationInHistoryStack.current = 0;
+        } else {
+            locationInHistoryStack.current = index;
+        }
+    }, [location]);
+
+    const navigateWrapper: NavigateWrapper = async (to, state, options) => {
+        if (to !== location.pathname) {
+            lastBrowserStateHistory.current = state;
+            await navigate(to, options);
+        }
+    };
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
@@ -271,68 +306,6 @@ function App() {
             return () => clearInterval(recurseBackwardIntervalId);
         }
     }, [scanningPastBlocks, initialBlock, nodeAvailable]);
-
-    useEffect(() => {
-        let intervalSubmittingPost: NodeJS.Timeout;
-
-        if (submittingPost) {
-            intervalSubmittingPost = setTimeout(() => {
-                setSubmittingPost('');
-            }, SUBMITTING_POST_INTERVAL);
-        }
-
-        return () => clearInterval(intervalSubmittingPost);
-    }, [submittingPost]);
-
-    useEffect(() => {
-        setInputPostDisabled(!!submittingPost || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
-    }, [submittingPost, inputSendingTxs, viewOnlyNode, postersAddressInvalid]);
-
-    const setNewPostsAdded = (newPostsAdded: string[]) => {
-        const updatedPosts: Record<string, Post> = {};
-
-        for (let index = 0; index < newPostsAdded.length; index++) {
-            const key = newPostsAdded[index];
-            const post = postsRef.current[key];
-            const messageDiv = document.getElementById(`post-text-${post.postId}`);
-
-            if (messageDiv!.scrollHeight > messageDiv!.clientHeight) {
-                updatedPosts[post.postId] = { ...post, postDomSettings: { ...post.postDomSettings, textOverflows: true } };
-            }
-        }
-
-        postsRef.current = ({ ...postsRef.current, ...updatedPosts });
-        setOrderedPostIds(current => [...current]);
-    }
-
-    const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
-        if (!nodeAvailable) {
-            alert('Node unavailable, cannot post!');
-            return;
-        }
-
-        const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
-        const inputText = postTextareaElement.value;
-
-        if (inputText) {
-            postTextareaElement.value = '';
-        } else {
-            return;
-        }
-
-        setSubmittingPost(location);
-
-        if (location !== 'main') {
-            postTextareaElement.rows = 1;
-        }
-
-        const post = postsRef.current[location];
-        if (post) {
-            setDiscussReplyToPostIdHandler(post);
-        }
-
-        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
-    };
 
     const handleInputSendingTxsToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
         setInputSendingTxs(event.target.value);
@@ -561,19 +534,6 @@ function App() {
                 }
 
                 setOrderedPostIds((currentOrderedPostIds) => isRecurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
-                setTimeout(() => {
-                    setNewPostsAdded(newOrderedPostIds!);
-                }, SET_NEW_POSTS_ADDED_DELAY);
-
-                const newReplyToPostIds = [ ...new Set([ ...Object.keys(newReplyPostsCollection!) ].map(item => item.split('-')[0])) ];
-                newReplyToPostIds.forEach((replyToId) => {
-                    if (!postsRef.current[replyToId]?.postDomSettings?.repliesHidden) {
-                        const repliesToThisPost = getChildPostIds(replyToId, newReplyPostsCollection!);
-                        setTimeout(() => {
-                            setNewPostsAdded(repliesToThisPost);
-                        }, SET_NEW_POSTS_ADDED_DELAY);
-                    }
-                });
 
                 let lastBlockHeight;
 
@@ -618,69 +578,53 @@ function App() {
         };
     };
 
-    const toggleViewMoreHandler = (post: Post) => {
-        post.postDomSettings.textOverflowHidden = !post.postDomSettings.textOverflowHidden;
-        postsRef.current = ({ ...postsRef.current, [post.postId]: post });
+    useEffect(() => {
+        let intervalSubmittingPost: NodeJS.Timeout;
 
-        if (post.postDomSettings.textOverflowHidden) {
-            const messageDiv = document.getElementById(`post-text-${post.postId}`);
-            const isReply = !!post.replyToPostId;
-            const rawTextHeight = isReply ? replyPostTextHeight : postTextHeight;
-            const textHeightNumber = parseInt(rawTextHeight.split('max-h-[')[1].split('px]')[0]);
-            const adjustheight = messageDiv!.scrollHeight - textHeightNumber;
-            window.scrollBy({ top: -adjustheight });
+        if (submittingPost) {
+            intervalSubmittingPost = setTimeout(() => {
+                setSubmittingPost('');
+            }, SUBMITTING_POST_INTERVAL);
         }
-        setOrderedPostIds(current => [...current]);
-    };
 
-    const toggleShowRepliesHandler = (post: Post, repliesToThisPost: string[]) => {
-        post.postDomSettings.repliesHidden = !post.postDomSettings.repliesHidden;
-        postsRef.current = ({ ...postsRef.current, [post.postId]: post });
-        setOrderedPostIds(current => [...current]);
-        
-        if (!post.postDomSettings.repliesHidden) {
-            setOrderedPostIds(current => [...current]);
-            setTimeout(() => {
-                setNewPostsAdded(repliesToThisPost);
-            }, SET_NEW_POSTS_ADDED_DELAY);
+        return () => clearInterval(intervalSubmittingPost);
+    }, [submittingPost]);
+
+    useEffect(() => {
+        setInputPostDisabled(!!submittingPost || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
+    }, [submittingPost, inputSendingTxs, viewOnlyNode, postersAddressInvalid]);
+
+    const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
+        if (!nodeAvailable) {
+            alert('Node unavailable, cannot post!');
+            return;
         }
-    };
 
-    const toggleShowDiscussionHandler = (post: Post, override?: boolean) => {
-        post.postDomSettings.repliesHidden = override ?? !post.postDomSettings.repliesHidden;
-        postsRef.current = ({ ...postsRef.current, [post.postId]: post });
-        setOrderedPostIds(current => [...current]);
-    };
+        const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
+        const inputText = postTextareaElement.value;
 
-    const toggleReplyDiscussionHandler = (post: Post) => {
-        toggleShowDiscussionHandler(post, false);
-        setDiscussReplyToPostIdHandler(post, post.postId);
-    };
+        if (inputText) {
+            postTextareaElement.value = '';
+        } else {
+            return;
+        }
 
-    const replyInputOnFocusHandler: FocusEventHandler<HTMLTextAreaElement> = (event) => {
-        event.target.rows = 4;
-    };
+        setSubmittingPost(location);
 
-    const replyInputOnBlurHandler: FocusEventHandler<HTMLTextAreaElement> = (event) => {
-        if (event.target.value === '') event.target.rows = 1;
-    };
+        if (location !== 'main') {
+            postTextareaElement.rows = 1;
+        }
 
-    const setDiscussReplyToPostIdHandler = (post: Post, discussReplyToPostId?: string) => {
-        post.postDomSettings.discussReplyToPostId = discussReplyToPostId;
-        postsRef.current = ({ ...postsRef.current, [post.postId]: post });
-        setOrderedPostIds(current => [...current]);
-
-        setTimeout(() => {
-            const postTextareaElement = document.getElementById(`post-input-${post.postId}`) as HTMLTextAreaElement;
-            postTextareaElement.focus();
-        }, SET_NEW_POSTS_ADDED_DELAY);
+        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
     };
 
     return (
         <main className="w-full flex flex-row p-2">
             <div className="flex-1 flex justify-end">
                 <div className="w-[288px] min-w-[288px] ml-2 mr-8 flex flex-col">
-                    <div className="text-[28px] mb-3"><a href={`https://scan.idena.io/contract/${contractAddressV2}`} target="_blank">idena.social</a></div>
+                    <div className="text-[28px] mb-3">
+                        <Link to="/">idena.social</Link>
+                    </div>
                     <div className="mb-4 text-[14px]">
                         <div className="flex flex-col">
                             <div className="flex flex-row mb-2 gap-1">
@@ -755,248 +699,28 @@ function App() {
                 </div>
             </div>
             <div className="flex-none min-w-[430px] max-w-[430px]">
-                <div>
-                    <textarea
-                        id='post-input-main'
-                        rows={4}
-                        className="w-full min-h-[104px] rounded-md py-1 px-2 mt-5 outline-1 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                        placeholder="Write your post here..."
-                        disabled={inputPostDisabled}
-                    />
-                    <div className="flex flex-row gap-2">
-                        <button className="h-9 w-27 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
-                        <p className="mt-1.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
-                    </div>
-                </div>
-                <div className="text-center my-3">
-                    <p>Current Block: #{currentBlockCaptured ? currentBlockCaptured : (nodeAvailable ? 'Loading...' : '')}</p>
-                    {!nodeAvailable && <p className="text-[11px] text-red-400">Blocks are not being captured. Please update your node.</p>}
-                </div>
-                <ul>
-                    {orderedPostIds.map((postId) => {
-                        const post = postsRef.current[postId];
-                        const poster = postersRef.current[post.poster];
-                        const displayAddress = getDisplayAddress(poster.address);
-                        const { displayDate, displayTime } = getDisplayDateTime(post.timestamp);
-                        const messageLines = getMessageLines(post.message);
-                        const postDomSettingsItem = post.postDomSettings;
-                        const textOverflows = postDomSettingsItem.textOverflows;
-                        const displayViewMore = postDomSettingsItem.textOverflowHidden;
-                        const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
-                        const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
-                        const showReplies = !post.postDomSettings.repliesHidden;
-                        const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v5.timestamp;
-
-                        let totalNumberOfReplies = repliesToThisPost.length;
-                        const discussionPostsAll = repliesToThisPost.reduce((acc, curr) => {
-                            const discussParentId = discussPrefix + curr;
-                            const discussionPosts = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
-                            totalNumberOfReplies += discussionPosts.length;
-                            return { ...acc, [discussParentId]: discussionPosts };
-                        }, {}) as Record<string, string[]>;
-
-                        return (
-                            <li key={post.postId}>
-                                <div className="flex flex-col mb-10 pt-3 rounded-md bg-stone-800">
-                                    <div className="flex flex-row">
-                                        <div className="w-15 flex-none flex flex-col">
-                                            <div className="h-17 flex-none -mt-3">
-                                                <img src={`https://robohash.org/${poster.address}?set=set1`} />
-                                            </div>
-                                            <div className="flex-1"></div>
-                                        </div>
-                                        <div className="mr-3 flex-1 flex flex-col overflow-hidden">
-                                            <div className="flex-none flex flex-col gap-x-3 items-start">
-                                                <div><a className="text-[18px] font-[600]" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noreferrer">{displayAddress}</a></div>
-                                                <div><p className="text-[11px]/4">{`Age: ${poster.age}, State: ${poster.state}, Stake: ${parseInt(poster.stake)}`}</p></div>
-                                                <div className="flex-1"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id={`post-text-${post.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : postTextHeight} flex-1 px-4 pt-2 pb-1 text-[17px] text-wrap leading-5 overflow-hidden`}>
-                                        <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
-                                    </div>
-                                    {textOverflows && <div className="px-4 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(post)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
-                                    <div className="px-2">
-                                        <p className="text-[11px]/6 text-stone-500 font-[700] text-right"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
-                                    </div>
-                                    {!isBreakingChangeDisabled && <div className="flex flex-row gap-2 px-2 items-end">
-                                        <div className="flex-1">
-                                            <textarea
-                                                id={`post-input-${post.postId}`}
-                                                rows={1}
-                                                className="w-full min-h-[32px] rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                                                placeholder="Write your reply here..."
-                                                disabled={inputPostDisabled}
-                                                onFocus={replyInputOnFocusHandler}
-                                                onBlur={replyInputOnBlurHandler}
-                                            />
-                                        </div>
-                                        <div>
-                                            <button className="h-9 w-17 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler(post.postId, post.postId)}>{submittingPost === post.postId ? '...' : 'Post!'}</button>
-                                        </div>
-                                    </div>}
-                                    <div className="px-4 mb-1.5 text-[12px]">
-                                        {repliesToThisPost.length ?
-                                            <a className="-mt-2 text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowRepliesHandler(post, repliesToThisPost)}>{showReplies ? 'hide replies' : `show replies (${totalNumberOfReplies})`}</a>
-                                        :
-                                            <span className="-mt-2 text-gray-500">no replies</span>
-                                        }
-                                    </div>
-                                    {showReplies && <div className="mt-1">
-                                        <ul>
-                                            {repliesToThisPost.map((replyPostId, index) => {
-                                                const replyPost = postsRef.current[replyPostId];
-                                                const poster = postersRef.current[replyPost.poster];
-                                                const displayAddress = getDisplayAddress(poster.address);
-                                                const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
-                                                const messageLines = getMessageLines(replyPost.message);
-                                                const postDomSettingsItem = replyPost.postDomSettings;
-                                                const textOverflows = postDomSettingsItem.textOverflows;
-                                                const displayViewMore = postDomSettingsItem.textOverflowHidden;
-                                                const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
-                                                const showDiscussion = !replyPost.postDomSettings.repliesHidden;
-                                                const discussParentId = discussPrefix + replyPost.postId;
-                                                const discussionPosts = discussionPostsAll[discussParentId];
-                                                const discussReplyToPostId = replyPost.postDomSettings.discussReplyToPostId;
-                                                const discussReplyToPost = discussReplyToPostId && postsRef.current[discussReplyToPostId!];
-
-                                                return (
-                                                    <li key={replyPost.postId}>
-                                                        {index !== 0 && <hr className="mx-2 text-gray-700" />}
-                                                        <div className="mt-1.5 mb-2.5 flex flex-col">
-                                                            <div className="h-5 flex flex-row">
-                                                                <div className="w-11 flex-none flex flex-col">
-                                                                    <div className="h-13 flex-none">
-                                                                        <img src={`https://robohash.org/${poster.address}?set=set1`} />
-                                                                    </div>
-                                                                    <div className="flex-1"></div>
-                                                                </div>
-                                                                <div className="ml-1 mr-3 flex-1 flex flex-col overflow-hidden">
-                                                                    <div className="flex-none flex flex-col gap-x-3">
-                                                                        <div className="flex flex-row items-center">
-                                                                            <a className="text-[16px] font-[600]" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noreferrer">{displayAddress}</a>
-                                                                            <span className="ml-2 text-[11px]">{`(${poster.age}, ${poster.state}, ${parseInt(poster.stake)})`}</span>
-                                                                        </div>
-                                                                        <div className="flex-1"></div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div id={`post-text-${replyPost.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : replyPostTextHeight} flex-1 pl-12 pr-4 pt-2 pb-1 text-[14px] text-wrap leading-5 overflow-hidden`}>
-                                                                <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
-                                                            </div>
-                                                            {textOverflows && <div className="px-12 text-[12px]/5 text-blue-400"><a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(replyPost)}>{displayViewMore ? 'view more' : 'view less'}</a></div>}
-                                                            <div className="w-full px-2 flex flex-row justify-end">
-                                                                {!isBreakingChangeDisabled && <>
-                                                                    <div className="mt-0.5 w-36 text-[12px]">
-                                                                        {discussionPosts.length || showDiscussion ?
-                                                                            <a className="text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowDiscussionHandler(replyPost)}>{showDiscussion ? 'hide discussion' : `show discussion (${discussionPosts.length})`}</a>
-                                                                        :
-                                                                            <span className="text-gray-500">no discussion</span>
-                                                                        }
-                                                                    </div>
-                                                                    <div className="-mt-0.5 flex-1"><button className="text-[11px] h-4 w-14 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => toggleReplyDiscussionHandler(replyPost)}>Reply</button></div>
-                                                                </>}
-                                                                <div><p className="text-[11px]/6 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p></div>
-                                                            </div>
-                                                            {showDiscussion && <div className="mt-2.5 mx-2 p-2 bg-stone-900 rounded-md text-[14px]">
-                                                                <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
-                                                                    {discussionPosts.length === 0 && <li className="mb-1"><p className="italic text-center text-[12px] text-gray-500">no comments yet</p></li>}
-                                                                    {discussionPosts.map((discussionPostId) => {
-                                                                        const discussionPost = postsRef.current[discussionPostId];
-                                                                        const poster = postersRef.current[discussionPost.poster];
-                                                                        const displayAddress = getDisplayAddressShort(poster.address);
-                                                                        const { displayDate, displayTime } = getDisplayDateTime(discussionPost.timestamp);
-                                                                        const messageLines = getMessageLines(discussionPost.message);
-                                                                        const replyToPost = postsRef.current[discussionPost.replyToPostId];
-
-                                                                        return (
-                                                                            <li key={discussionPost.postId} className="hover:bg-stone-800">
-                                                                                <div className="my-1.5 flex flex-col">
-                                                                                    {replyToPost && <div className="flex flex-row">
-                                                                                        <div className="w-8 flex justify-end items-end">
-                                                                                            <div className="h-2.5 w-4 border-t-1 border-l-1 border-gray-500"></div>
-                                                                                        </div>
-                                                                                        <div className="flex-1 flex flex-row mr-3">
-                                                                                            <div className="w-5"><img src={`https://robohash.org/${replyToPost.poster}?set=set1`} /></div>
-                                                                                            <div className="flex-1 text-nowrap overflow-hidden">
-                                                                                                <p className="max-w-[120px] text-[12px] text-gray-500">{getMessageLines(replyToPost.message)[0]}</p>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>}
-                                                                                    <div className="h-5 flex flex-row">
-                                                                                        <div className="w-9 flex-none flex flex-col">
-                                                                                            <div className="h-11 flex-none">
-                                                                                                <img src={`https://robohash.org/${poster.address}?set=set1`} />
-                                                                                            </div>
-                                                                                            <div className="flex-1"></div>
-                                                                                        </div>
-                                                                                        <div className="ml-1 mr-3 flex-1 flex flex-col overflow-hidden">
-                                                                                            <div className="flex-none flex flex-col gap-x-3">
-                                                                                                <div className="flex flex-row items-center">
-                                                                                                    <div className="flex-1">
-                                                                                                        <a className="text-[14px] font-[600]" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noreferrer">{displayAddress}</a>
-                                                                                                        <span className="ml-2 text-[9px] align-[2px]">{`(${poster.age}, ${poster.state}, ${parseInt(poster.stake)})`}</span>
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                        <p className="ml-2 text-[10px] text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                                <div className="flex-1"></div>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="flex flex-row">
-                                                                                        <div id={`post-text-${discussionPost.postId}`} className="flex-1 max-h-[9999px] flex-1 pl-10 pr-4 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
-                                                                                            <p>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
-                                                                                        </div>
-                                                                                        <div className="w-10 pt-0.5"><button className="text-[12px] h-4 w-8 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)}>↩</button></div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </li>
-                                                                        );
-                                                                    })}
-                                                                </ul>
-                                                                {discussReplyToPost && <div className="w-full mt-1 px-1 flex flex-row bg-stone-800 rounded-sm">
-                                                                    <div className="flex-1 overflow-hidden text-nowrap text-[12px] text-gray-500"><p>Replying to {getDisplayAddressShort(discussReplyToPost!.poster)}: {getMessageLines(discussReplyToPost!.message)[0]}</p></div>
-                                                                    <div className="w-6 text-right">
-                                                                        <button className="text-[10px] align-[2.5px] h-4 w-5 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>✖</button>
-                                                                    </div>
-                                                                </div>}
-                                                                <div className="flex flex-row gap-2 items-end">
-                                                                    <div className="flex-1">
-                                                                        <textarea
-                                                                            id={`post-input-${replyPost.postId}`}
-                                                                            rows={2}
-                                                                            className="w-full min-h-[26px] rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                                                                            placeholder="Comment here..."
-                                                                            disabled={inputPostDisabled}
-                                                                        />
-                                                                    </div>
-                                                                    <div>
-                                                                        <button className="h-7.5 w-16 my-1 px-4 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler(replyPost.postId, discussReplyToPostId, discussParentId)}>{submittingPost === replyPost.postId ? '...' : 'Post!'}</button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>}
-                                                        </div>
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
-                                    </div>}
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
-                <div className="flex flex-col gap-2 mb-15">
-                    <button className={`h-9 mt-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${scanningPastBlocks || noMorePastBlocks ? '' : 'hover:bg-white/20 cursor-pointer'}`} disabled={scanningPastBlocks || noMorePastBlocks || !nodeAvailable} onClick={() => setScanningPastBlocks(true)}>
-                        {scanningPastBlocks ? "Scanning blockchain...." : (noMorePastBlocks ? "No more past posts" : "Scan for more posts")}
-                    </button>
-                    <p className="pr-12 text-gray-400 text-[12px] text-center">
-                        {!scanningPastBlocks ? <>Posts found down to Block # <span className="absolute">{pastBlockCaptured || 'unavailable'}</span></> : <>&nbsp;</>}
-                    </p>
-                </div>
+                <Outlet
+                    context={{
+                        currentBlockCaptured,
+                        nodeAvailable,
+                        orderedPostIds,
+                        postsRef,
+                        postersRef,
+                        replyPostsTreeRef,
+                        deOrphanedReplyPostsTreeRef,
+                        discussPrefix,
+                        scanningPastBlocks,
+                        setScanningPastBlocks,
+                        noMorePastBlocks,
+                        pastBlockCaptured,
+                        SET_NEW_POSTS_ADDED_DELAY,
+                        inputPostDisabled,
+                        submitPostHandler,
+                        submittingPost,
+                        navigateWrapper,
+                        historyStack,
+                    }}
+                />
             </div>
             <div className="flex-1 flex justify-start">
                 <div className="w-[288px] min-w-[288px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">

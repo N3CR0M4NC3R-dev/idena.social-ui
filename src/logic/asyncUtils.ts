@@ -7,7 +7,6 @@ export const breakingChanges = {
     v5: { timestamp: 1767946325, block: 10219188, firstTxId: '0x8524a0147c9f32ae5b5bbf456b85a062819d971f475607639e59b0fb85be9847', prefixPreV5: 'preV5:' },
 };
 
-export type PostDomSettings = { textOverflows: boolean, textOverflowHidden: boolean, repliesHidden: boolean, discussReplyToPostId?: string }
 export type Post = {
     timestamp: number,
     postId: string,
@@ -17,7 +16,6 @@ export type Post = {
     txHash: string,
     replyToPostId: string,
     orphaned: boolean,
-    postDomSettings: PostDomSettings
 };
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
 
@@ -110,11 +108,6 @@ export const getNewPosterAndPost = async (
         txHash,
         replyToPostId,
         orphaned: false,
-        postDomSettings: {
-            textOverflows: false,
-            textOverflowHidden: true,
-            repliesHidden: true,
-        },
     } as Post;
 
     let newPoster: Poster | undefined;
