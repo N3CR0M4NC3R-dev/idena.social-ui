@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
 import { type Post, type Poster } from './logic/asyncUtils';
-import { useLocation, useOutletContext } from 'react-router';
+import { useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
-import { initDomSettings, type PostDomSettingsCollection } from './components/PostComponent.exports';
-import type { NavigateWrapper } from './App.exports';
+import { type PostDomSettingsCollection } from './App.exports';
 
 type LatestPostsProps = {
     currentBlockCaptured: number,
@@ -22,13 +20,10 @@ type LatestPostsProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
-    navigateWrapper: NavigateWrapper,
-    historyStack: React.RefObject<{ key: string; pathname: string; state?: any; }[]>
+    browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
 };
 
 function LatestPosts() {
-    const location = useLocation();
-
     const {
         currentBlockCaptured,
         nodeAvailable,
@@ -46,17 +41,8 @@ function LatestPosts() {
         inputPostDisabled,
         submitPostHandler,
         submittingPost,
-        navigateWrapper,
-        historyStack,
+        browserStateHistoryRef,
     } = useOutletContext() as LatestPostsProps;
-
-    const savedState = historyStack.current.find((item) => item.key === location.key)?.state;
-    const [postDomSettingsCollection, setPostDomSettingsCollection] = useState(savedState ?? {});
-
-    useEffect(() => {
-        const newPostDomSettingsCollection: PostDomSettingsCollection = orderedPostIds.reduce((acc, curr) => ({ ...acc, [curr]: { [curr]: initDomSettings } }), {});
-        setPostDomSettingsCollection((current: PostDomSettingsCollection) => ({ ...newPostDomSettingsCollection, ...current }));
-    }, [orderedPostIds]);
 
     return (<>
         <div>
@@ -90,9 +76,7 @@ function LatestPosts() {
                         inputPostDisabled={inputPostDisabled}
                         submitPostHandler={submitPostHandler}
                         submittingPost={submittingPost}
-                        postDomSettingsCollection={postDomSettingsCollection}
-                        setPostDomSettingsCollection={setPostDomSettingsCollection}
-                        navigateWrapper={navigateWrapper}
+                        browserStateHistoryRef={browserStateHistoryRef}
                     />
                 </li>
             ))}

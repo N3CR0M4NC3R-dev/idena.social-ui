@@ -1,3 +1,4 @@
-import type { NavigateOptions, To } from "react-router";
-
-export type NavigateWrapper = (to: To, state: any | null, options?: NavigateOptions) => void | Promise<void>;
+export type PostDomSettingsCollection = Record<string, Record<string, PostDomSettings>>;
+export type PostDomSettings = { textOverflows: boolean, textOverflowHidden: boolean, repliesHidden: boolean, discussReplyToPostId?: string };
+export const initDomSettings = { textOverflows: false, textOverflowHidden: true, repliesHidden: true };
+export const isPostOutletDomSettings = { textOverflows: false, textOverflowHidden: false, repliesHidden: false };

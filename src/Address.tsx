@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster } from "./logic/asyncUtils";
 import { getDisplayAddress } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
-import { initDomSettings, type PostDomSettingsCollection } from "./components/PostComponent.exports";
-import type { NavigateWrapper } from "./App.exports";
+import { type PostDomSettingsCollection } from "./App.exports";
+
+type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
 
 type AddressProps = {
     orderedPostIds: string[],
@@ -17,8 +17,7 @@ type AddressProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
-    navigateWrapper: NavigateWrapper,
-    historyStack: React.RefObject<{ key: string; pathname: string; state?: any; }[]>
+    browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
 };
 
 function Address() {
@@ -37,8 +36,7 @@ function Address() {
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
         submitPostHandler,
-        navigateWrapper,
-        historyStack,
+        browserStateHistoryRef,
     } = useOutletContext() as AddressProps;
 
     const poster = postersRef.current[address!];
@@ -49,16 +47,15 @@ function Address() {
         return post.poster === address;
     });
 
-    const savedState = historyStack.current.find((item) => item.key === location.key)?.state;
-    const [postDomSettingsCollection, setPostDomSettingsCollection] = useState(savedState ?? {});
-
-    useEffect(() => {
-        const newPostDomSettingsCollection: PostDomSettingsCollection = orderedPostIds.reduce((acc, curr) => ({ ...acc, [curr]: { [curr]: initDomSettings } }), {});
-        setPostDomSettingsCollection((current: PostDomSettingsCollection) => ({ ...newPostDomSettingsCollection, ...current }));
-    }, [orderedPostIds]);
-
     const handleGoBack = () => {
         navigate(-1);
+    };
+
+    const handleClickAddress = (e: MouseEventLocal, to: string) => {
+        e.stopPropagation();
+        if (to !== location.pathname) {
+            navigate(to);
+        }
     };
 
     return (<>
@@ -77,7 +74,7 @@ function Address() {
             </div>
         </div>
         <div className="h-8 mb-5 flex border-b-1 border-gray-500 gap-3">
-            <p className={location.pathname === `/address/${poster.address}` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={() => navigateWrapper(`/address/${poster.address}`, postDomSettingsCollection)}>Posts</p>
+            <p className={location.pathname === `/address/${poster.address}` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>Posts</p>
         </div>
         <ul>
             {filteredOrderedPosts.map((postId) => (
@@ -93,9 +90,7 @@ function Address() {
                         inputPostDisabled={inputPostDisabled}
                         submitPostHandler={submitPostHandler}
                         submittingPost={submittingPost}
-                        postDomSettingsCollection={postDomSettingsCollection}
-                        setPostDomSettingsCollection={setPostDomSettingsCollection}
-                        navigateWrapper={navigateWrapper}
+                        browserStateHistoryRef={browserStateHistoryRef}
                     />
                 </li>
             ))}

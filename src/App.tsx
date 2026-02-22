@@ -4,9 +4,8 @@ import { type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyP
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
 import { getDisplayAddress, isObjectEmpty } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import type { PostDomSettingsCollection } from './components/PostComponent.exports';
-import type { NavigateWrapper } from './App.exports';
+import { Link, Outlet } from 'react-router';
+import type { PostDomSettingsCollection } from './App.exports';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -90,39 +89,7 @@ function App() {
     const pastContractAddressRef = useRef(contractAddressV2);
     const [submittingPost, setSubmittingPost] = useState<string>('');
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
-    
-    const navigate = useNavigate();
-    const location = useLocation();
-    const historyStack = useRef<{ key: string, pathname: string, state?: PostDomSettingsCollection }[]>([]);
-    const lastBrowserStateHistory = useRef<PostDomSettingsCollection>(null);
-    const locationInHistoryStack = useRef<number>(0);
-
-    useEffect(() => {
-        const { key, pathname } = location;
-        const index = historyStack.current.findIndex((item) => item.key === key);
-
-        if (index === -1) {
-            if (locationInHistoryStack.current !== 0) {
-                historyStack.current = historyStack.current.slice(index);
-            }
-            if (lastBrowserStateHistory.current) {
-                historyStack.current[0].state = lastBrowserStateHistory.current;
-                lastBrowserStateHistory.current = null;
-            }
-            historyStack.current.unshift({ key, pathname });
-
-            locationInHistoryStack.current = 0;
-        } else {
-            locationInHistoryStack.current = index;
-        }
-    }, [location]);
-
-    const navigateWrapper: NavigateWrapper = async (to, state, options) => {
-        if (to !== location.pathname) {
-            lastBrowserStateHistory.current = state;
-            await navigate(to, options);
-        }
-    };
+    const browserStateHistoryRef = useRef<Record<string, PostDomSettingsCollection>>({});
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
@@ -717,8 +684,7 @@ function App() {
                         inputPostDisabled,
                         submitPostHandler,
                         submittingPost,
-                        navigateWrapper,
-                        historyStack,
+                        browserStateHistoryRef,
                     }}
                 />
             </div>

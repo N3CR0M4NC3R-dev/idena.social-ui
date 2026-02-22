@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
-import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
+import { useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster } from "./logic/asyncUtils";
 import PostComponent from "./components/PostComponent";
-import { isPostOutletDomSettings, type PostDomSettingsCollection } from "./components/PostComponent.exports";
-import type { NavigateWrapper } from "./App.exports";
+import { type PostDomSettingsCollection } from "./App.exports";
 
 type PostOutletProps = {
     orderedPostIds: string[],
@@ -16,14 +14,12 @@ type PostOutletProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
-    navigateWrapper: NavigateWrapper,
-    historyStack: React.RefObject<{ key: string; pathname: string; state?: any; }[]>
+    browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
 };
 
 function PostOutlet() {
     const { postId } = useParams();
     const navigate = useNavigate();
-    const location = useLocation();
 
     const {
         postsRef,
@@ -35,21 +31,8 @@ function PostOutlet() {
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
         submitPostHandler,
-        navigateWrapper,
-        historyStack,
+        browserStateHistoryRef,
     } = useOutletContext() as PostOutletProps;
-
-    const savedState = historyStack.current.find((item) => item.key === location.key)?.state;
-    const [postDomSettingsCollection, setPostDomSettingsCollection] = useState(savedState ?? {});
-
-    useEffect(() => {
-        const initPostDomSettingsCollection: PostDomSettingsCollection = {
-            [postId!]: {
-                [postId!]: isPostOutletDomSettings,
-            }
-        };
-        setPostDomSettingsCollection((current: PostDomSettingsCollection) => ({ ...initPostDomSettingsCollection, ...current }));
-    }, [postId]);
 
     const handleGoBack = () => {
         navigate(-1);
@@ -68,9 +51,7 @@ function PostOutlet() {
             inputPostDisabled={inputPostDisabled}
             submitPostHandler={submitPostHandler}
             submittingPost={submittingPost}
-            postDomSettingsCollection={postDomSettingsCollection}
-            setPostDomSettingsCollection={setPostDomSettingsCollection}
-            navigateWrapper={navigateWrapper}
+            browserStateHistoryRef={browserStateHistoryRef}
             isPostOutlet={true}
         />
     </>);

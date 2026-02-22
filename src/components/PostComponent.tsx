@@ -1,13 +1,13 @@
-import { useEffect, type FocusEventHandler } from 'react';
+import { useEffect, useReducer, type FocusEventHandler } from 'react';
 import { getChildPostIds, breakingChanges, type Post, type Poster } from '../logic/asyncUtils';
 import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getMessageLines } from '../logic/utils';
-import { initDomSettings, type PostDomSettings, type PostDomSettingsCollection } from './PostComponent.exports';
-import type { NavigateWrapper } from '../App.exports';
+import { initDomSettings, isPostOutletDomSettings, type PostDomSettings, type PostDomSettingsCollection } from '../App.exports';
+import { useLocation, useNavigate } from 'react-router';
 
 const postTextHeight = 'max-h-[288px]';
 const replyPostTextHeight = 'max-h-[146px]';
 
-type MouseEventLocal = React.MouseEvent<HTMLAnchorElement | HTMLButtonElement | HTMLParagraphElement, MouseEvent>;
+type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
 
 type PostComponentProps = {
     postId: string,
@@ -20,13 +20,15 @@ type PostComponentProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
-    postDomSettingsCollection: PostDomSettingsCollection,
-    setPostDomSettingsCollection: React.Dispatch<React.SetStateAction<PostDomSettingsCollection>>,
-    navigateWrapper: NavigateWrapper,
+    browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
     isPostOutlet?: boolean,
 };
 
 function PostComponent(props: PostComponentProps) {
+
+    const location = useLocation();
+    const navigate = useNavigate();
+
     const {
         postId,
         postsRef,
@@ -38,49 +40,13 @@ function PostComponent(props: PostComponentProps) {
         inputPostDisabled,
         submitPostHandler,
         submittingPost,
-        postDomSettingsCollection,
-        setPostDomSettingsCollection,
-        navigateWrapper,
+        browserStateHistoryRef,
         isPostOutlet,
     } = props;
 
-    if (!postDomSettingsCollection[postId]) {
-        return <></>;
-    }
+    const [, forceUpdate] = useReducer(x => x + 1, 0);
 
-    const setPostDomSettings = (childPostId: string, postDomSettings: Partial<PostDomSettings>) => {
-        setPostDomSettingsCollection(current => ({
-            ...current,
-            [postId]: {
-                ...current[postId],
-                [childPostId]: {
-                    ...(current[postId]?.[childPostId] ?? initDomSettings),
-                    ...postDomSettings,
-                }
-            }
-        }));
-    }
-
-    const post = postsRef.current[postId];
-    const poster = postersRef.current[post.poster];
-    const displayAddress = getDisplayAddress(poster.address);
-    const { displayDate, displayTime } = getDisplayDateTime(post.timestamp);
-    const messageLines = getMessageLines(post.message);
-    const postDomSettingsItem = postDomSettingsCollection[postId][postId];
-    const textOverflows = postDomSettingsItem.textOverflows;
-    const displayViewMore = postDomSettingsItem.textOverflowHidden;
-    const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
-    const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
-    const showReplies = !postDomSettingsItem.repliesHidden;
-    const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v5.timestamp;
-
-    let totalNumberOfReplies = repliesToThisPost.length;
-    const discussionPostsAll = repliesToThisPost.reduce((acc, curr) => {
-        const discussParentId = discussPrefix + curr;
-        const discussionPosts = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
-        totalNumberOfReplies += discussionPosts.length;
-        return { ...acc, [discussParentId]: discussionPosts };
-    }, {}) as Record<string, string[]>;
+    const { key: locationKey } = location;
 
     useEffect(() => {
         setTimeout(() => {
@@ -101,17 +67,62 @@ function PostComponent(props: PostComponentProps) {
             const messageDiv = document.getElementById(`post-text-${post.postId}`);
 
             if (messageDiv!.scrollHeight > messageDiv!.clientHeight) {
-                setPostDomSettings(post.postId, { textOverflows: true });
+                setPostDomSettings(post.postId, { textOverflows: true }, true);
             }
         }
     };
 
+    const setPostDomSettings = (childPostId: string, postDomSettings: Partial<PostDomSettings>, rerender?: boolean) => {
+        browserStateHistoryRef.current = {
+            ...browserStateHistoryRef.current,
+            [locationKey]: {
+                ...browserStateHistoryRef.current[locationKey],
+                [postId]: {
+                    ...browserStateHistoryRef.current[locationKey]?.[postId],
+                    [childPostId]: {
+                        ...(browserStateHistoryRef.current[locationKey]?.[postId]?.[childPostId] ?? initDomSettings),
+                        ...postDomSettings,
+                    }
+                }
+            }
+        };
+
+        rerender && forceUpdate();
+    }
+
+    const mainPostDomSettings = isPostOutlet ? isPostOutletDomSettings : initDomSettings;
+
+    if (!browserStateHistoryRef.current[locationKey]?.[postId]?.[postId]) {
+        setPostDomSettings(postId, mainPostDomSettings);
+    }
+
+    const post = postsRef.current[postId];
+    const poster = postersRef.current[post.poster];
+    const displayAddress = getDisplayAddress(poster.address);
+    const { displayDate, displayTime } = getDisplayDateTime(post.timestamp);
+    const messageLines = getMessageLines(post.message);
+    const postDomSettingsItem = browserStateHistoryRef.current[locationKey][postId][postId];
+    const textOverflows = postDomSettingsItem.textOverflows;
+    const displayViewMore = postDomSettingsItem.textOverflowHidden;
+    const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
+    const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
+    const showReplies = !postDomSettingsItem.repliesHidden;
+    const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v5.timestamp;
+
+    let totalNumberOfReplies = repliesToThisPost.length;
+    const discussionPostsAll = repliesToThisPost.reduce((acc, curr) => {
+        const discussParentId = discussPrefix + curr;
+        const discussionPosts = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
+        totalNumberOfReplies += discussionPosts.length;
+        return { ...acc, [discussParentId]: discussionPosts };
+    }, {}) as Record<string, string[]>;
+
     const toggleShowRepliesHandler = (e: MouseEventLocal, post: Post, repliesToThisPost: string[]) => {
-        const newRepliesHidden = !postDomSettingsCollection[postId][post.postId].repliesHidden;
+        const newRepliesHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].repliesHidden;
 
         if (newRepliesHidden || repliesToThisPost.length < 10 || isPostOutlet) {
             e.stopPropagation();
-            setPostDomSettings(post.postId, { repliesHidden: newRepliesHidden });
+            setPostDomSettings(post.postId, { repliesHidden: newRepliesHidden }, true);
 
             if (!newRepliesHidden) {
                 setTimeout(() => {
@@ -122,8 +133,8 @@ function PostComponent(props: PostComponentProps) {
     };
 
     const toggleShowDiscussionHandler = (post: Post, override?: boolean) => {
-        const newRepliesHidden = !postDomSettingsCollection[postId][post.postId].repliesHidden;
-        setPostDomSettings(post.postId, { repliesHidden: override ?? newRepliesHidden });
+        const newRepliesHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].repliesHidden;
+        setPostDomSettings(post.postId, { repliesHidden: override ?? newRepliesHidden }, true);
     };
 
     const toggleReplyDiscussionHandler = (post: Post) => {
@@ -140,7 +151,7 @@ function PostComponent(props: PostComponentProps) {
     };
 
     const setDiscussReplyToPostIdHandler = (post: Post, discussReplyToPostId?: string) => {
-        setPostDomSettings(post.postId, { discussReplyToPostId });
+        setPostDomSettings(post.postId, { discussReplyToPostId }, true);
 
         setTimeout(() => {
             const postTextareaElement = document.getElementById(`post-input-${post.postId}`) as HTMLTextAreaElement;
@@ -151,8 +162,8 @@ function PostComponent(props: PostComponentProps) {
     const toggleViewMoreHandler = (post: Post, e?: MouseEventLocal) => {
         e?.stopPropagation();
 
-        const newTextOverflowHidden = !postDomSettingsCollection[postId][post.postId].textOverflowHidden;
-        setPostDomSettings(post.postId, { textOverflowHidden: newTextOverflowHidden });
+        const newTextOverflowHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].textOverflowHidden;
+        setPostDomSettings(post.postId, { textOverflowHidden: newTextOverflowHidden }, true);
 
         if (newTextOverflowHidden) {
             const messageDiv = document.getElementById(`post-text-${post.postId}`);
@@ -188,14 +199,19 @@ function PostComponent(props: PostComponentProps) {
     const handlePostClick = () => {
         if (!isPostOutlet) {
             if (mouseClicked) {
-                navigateWrapper(`/post/${postId}`, postDomSettingsCollection);
+                const to = `/post/${postId}`;
+                if (to !== location.pathname) {
+                    navigate(to);
+                }
             }
         }
     };
 
     const handleClickAddress = (e: MouseEventLocal, to: string) => {
         e.stopPropagation();
-        navigateWrapper(to, postDomSettingsCollection);
+        if (to !== location.pathname) {
+            navigate(to);
+        }
     };
 
     return (<>
@@ -251,7 +267,7 @@ function PostComponent(props: PostComponentProps) {
             <ul>
                 {repliesToThisPost.map((replyPostId, index) => {
 
-                    if (!postDomSettingsCollection[postId]?.[replyPostId]) {
+                    if (!browserStateHistoryRef.current[locationKey]?.[postId]?.[replyPostId]) {
                         setPostDomSettings(replyPostId, initDomSettings);
                     }
 
@@ -260,7 +276,7 @@ function PostComponent(props: PostComponentProps) {
                     const displayAddress = getDisplayAddress(poster.address);
                     const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
                     const messageLines = getMessageLines(replyPost.message);
-                    const postDomSettingsItem = postDomSettingsCollection[postId]?.[replyPostId] ?? initDomSettings;
+                    const postDomSettingsItem = browserStateHistoryRef.current[locationKey][postId][replyPostId];
                     const textOverflows = postDomSettingsItem.textOverflows;
                     const displayViewMore = postDomSettingsItem.textOverflowHidden;
                     const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
@@ -342,18 +358,13 @@ function PostComponent(props: PostComponentProps) {
                                                                 </div>
                                                                 <div className="flex-1"></div>
                                                             </div>
-                                                            <div className="ml-1 mr-3 flex-1 flex flex-col overflow-hidden">
-                                                                <div className="flex-none flex flex-col gap-x-3">
-                                                                    <div className="flex flex-row items-center">
-                                                                        <div className="flex-1">
-                                                                            <p className="text-[14px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>{displayAddress}</p>
-                                                                            <span className="ml-2 text-[9px] align-[2px]">{`(${poster.age}, ${poster.state}, ${parseInt(poster.stake)})`}</span>
-                                                                        </div>
-                                                                        <div>
-                                                                            <p className="ml-2 text-[10px] text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex-1"></div>
+                                                            <div className="ml-1 mr-3 flex-1 flex flex-row items-center overflow-hidden">
+                                                                <div className="flex-1">
+                                                                    <span className="text-[14px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>{displayAddress}</span>
+                                                                    <span className="ml-2 text-[9px] align-[2px]">{`(${poster.age}, ${poster.state}, ${parseInt(poster.stake)})`}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="ml-2 text-[10px] text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                                                 </div>
                                                             </div>
                                                         </div>
