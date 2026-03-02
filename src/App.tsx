@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { type Post, type Poster, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost } from './logic/asyncUtils';
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
-import { getDisplayAddress, isObjectEmpty } from './logic/utils';
+import { getDisplayAddress, getDisplayDateTime, isObjectEmpty } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
-import { Link, Outlet } from 'react-router';
-import type { PostDomSettingsCollection } from './App.exports';
+import { Link, Outlet, useNavigate } from 'react-router';
+import type { MouseEventLocal, PostDomSettingsCollection } from './App.exports';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -20,6 +21,7 @@ const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
+const attributionsUrl = `${window.location.origin}/attributions.html`;
 const defaultAd = {
     title: 'IDENA: Proof-of-Person blockchain',
     desc: 'Coordination of individuals',
@@ -44,6 +46,26 @@ if (!DEBUG) {
     console.warn = () => {};
     console.error = () => {};
 }
+
+const customModalStyles = {
+    overlay: {
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    },
+    content: {
+        border: 'none',
+        backgroundColor: 'rgb(41, 37, 38)',
+        top: '50%',
+        left: '50%',
+        right: 'auto',
+        bottom: 'auto',
+        marginRight: '-50%',
+        transform: 'translate(-50%, -50%)',
+        padding: '5px 0px 5px 0px',
+        width: '430px',
+    },
+};
+
+Modal.setAppElement('#root');
 
 function App() {
     const [nodeAvailable, setNodeAvailable] = useState<boolean>(true);
@@ -88,8 +110,13 @@ function App() {
     const continuationTokenRef = useRef(undefined as undefined | string);
     const pastContractAddressRef = useRef(contractAddressV2);
     const [submittingPost, setSubmittingPost] = useState<string>('');
+    const [submittingLike, setSubmittingLike] = useState<string>('');
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
     const browserStateHistoryRef = useRef<Record<string, PostDomSettingsCollection>>({});
+    const [likesModalOpen, setLikesModalOpen] = useState(false);
+    const modalLikePostsRef = useRef<Post[]>([]);
+
+    const navigate = useNavigate();
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
@@ -547,18 +574,17 @@ function App() {
 
     useEffect(() => {
         let intervalSubmittingPost: NodeJS.Timeout;
-
-        if (submittingPost) {
+        if (submittingPost || submittingLike) {
             intervalSubmittingPost = setTimeout(() => {
                 setSubmittingPost('');
+                setSubmittingLike('');
             }, SUBMITTING_POST_INTERVAL);
         }
-
         return () => clearInterval(intervalSubmittingPost);
-    }, [submittingPost]);
+    }, [submittingPost, submittingLike]);
 
     useEffect(() => {
-        setInputPostDisabled(!!submittingPost || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
+        setInputPostDisabled(!!submittingPost || !!submittingLike || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
     }, [submittingPost, inputSendingTxs, viewOnlyNode, postersAddressInvalid]);
 
     const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
@@ -583,6 +609,30 @@ function App() {
         }
 
         await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+    };
+
+    const submitLikeHandler = async (emoji: string, location: string, replyToPostId?: string, channelId?: string) => {
+        if (!nodeAvailable) {
+            alert('Node unavailable, cannot like!');
+            return;
+        }
+
+        setSubmittingLike(location);
+
+        await submitPost(postersAddress, contractAddressV2, makePostMethod, emoji, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+    };
+
+    const handleClickAddress = (e: MouseEventLocal, to: string) => {
+        e.stopPropagation();
+        if (to !== location.pathname) {
+            navigate(to);
+        }
+    };
+
+    const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
+        e.stopPropagation();
+        modalLikePostsRef.current = [ ...likePosts ];
+        setLikesModalOpen(true);
     };
 
     return (
@@ -659,9 +709,13 @@ function App() {
                             </div>
                         )}
                     </div>
-                    <div className="mb-3">
-                        <hr className="text-gray-500" />
-                        <p className="my-1 text-[14px] text-gray-500"><a className="hover:underline" href={termsOfServiceUrl} target="_blank">Terms of Service</a></p>
+                    <div className="mb-3 text-gray-500">
+                        <hr />
+                        <div className="flex flex-row gap-1">
+                            <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank">Terms of Service</a></p>
+                            <p className="text-[14px]/7">|</p>
+                            <p className="my-1 text-[14px]"><a className="hover:underline" href={attributionsUrl} target="_blank">Attributions</a></p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -683,8 +737,11 @@ function App() {
                         SET_NEW_POSTS_ADDED_DELAY,
                         inputPostDisabled,
                         submitPostHandler,
+                        submitLikeHandler,
                         submittingPost,
+                        submittingLike,
                         browserStateHistoryRef,
+                        handleOpenLikesModal,
                     }}
                 />
             </div>
@@ -708,6 +765,48 @@ function App() {
                         </div>
                     </div>
                 </div>
+            </div>
+            <div onClick={(e) => e.stopPropagation()}>
+                <Modal
+                    isOpen={likesModalOpen} 
+                    onRequestClose={() => setLikesModalOpen(false)}
+                    style={customModalStyles}
+                >
+                    <ul className="max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
+                        <li className="text-[18px] text-center">Likes</li>
+                        {modalLikePostsRef.current.map((likePost, index) => {
+                            const isLastItem = index === (modalLikePostsRef.current.length - 1);
+                            const poster = postersRef.current[likePost.poster];
+                            const displayAddress = getDisplayAddress(poster.address);
+                            const { displayDate, displayTime } = getDisplayDateTime(likePost.timestamp);
+
+                            return (
+                                <li className="px-3">
+                                    <div className="h-9 flex flex-row">
+                                        <div className="w-8 flex-none flex flex-col">
+                                            <div className="flex-none">
+                                                <img src={`https://robohash.org/${poster.address}?set=set1`} />
+                                            </div>
+                                            <div className="flex-1"></div>
+                                        </div>
+                                        <div className="ml-1 mr-3 flex flex-col justify-center overflow-hidden">
+                                            <div className="flex flex-row items-center">
+                                                <p className="text-[15px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>{displayAddress}</p>
+                                                <span className="ml-2 text-[10px]">{`(${poster.age}, ${poster.state}, ${parseInt(poster.stake)})`}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1"></div>
+                                        <div className="flex flex-col justify-center">
+                                            <p className="text-[10px]/6 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${likePost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                        </div>
+                                    </div>
+                                    {!isLastItem && <hr className="text-gray-700" />}
+                                </li>
+                            )
+                        })}
+                    </ul>
+                    <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setLikesModalOpen(false)}>Close</button></div>
+                </Modal>
             </div>
         </main>
     );

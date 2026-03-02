@@ -1,7 +1,7 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster } from "./logic/asyncUtils";
 import PostComponent from "./components/PostComponent";
-import { type PostDomSettingsCollection } from "./App.exports";
+import { type MouseEventLocal, type PostDomSettingsCollection } from "./App.exports";
 
 type PostOutletProps = {
     orderedPostIds: string[],
@@ -13,8 +13,11 @@ type PostOutletProps = {
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
+    submittingLike: string,
     browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
+    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
 };
 
 function PostOutlet() {
@@ -28,10 +31,13 @@ function PostOutlet() {
         deOrphanedReplyPostsTreeRef,
         discussPrefix,
         submittingPost,
+        submittingLike,
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
         submitPostHandler,
+        submitLikeHandler,
         browserStateHistoryRef,
+        handleOpenLikesModal,
     } = useOutletContext() as PostOutletProps;
 
     const handleGoBack = () => {
@@ -50,8 +56,11 @@ function PostOutlet() {
             SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
             inputPostDisabled={inputPostDisabled}
             submitPostHandler={submitPostHandler}
+            submitLikeHandler={submitLikeHandler}
             submittingPost={submittingPost}
+            submittingLike={submittingLike}
             browserStateHistoryRef={browserStateHistoryRef}
+            handleOpenLikesModal={handleOpenLikesModal}
             isPostOutlet={true}
         />
     </>);

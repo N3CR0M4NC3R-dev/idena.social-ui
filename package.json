@@ -1,6 +1,6 @@
 {
 	"name": "idena.social-ui",
-	"version": "7.0.1",
+	"version": "7.1.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
@@ -20,6 +20,7 @@
 		"js-sha3": "^0.9.3",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
+		"react-modal": "^3.16.3",
 		"react-router": "^7.13.0",
 		"secp256k1": "^5.0.1",
 		"tailwindcss": "^4.1.17"
@@ -29,6 +30,7 @@
 		"@types/bn.js": "^5.2.0",
 		"@types/react": "^19.2.5",
 		"@types/react-dom": "^19.2.3",
+		"@types/react-modal": "^3.16.3",
 		"@types/secp256k1": "^4.0.7",
 		"@vitejs/plugin-react": "^5.1.1",
 		"eslint": "^9.39.1",

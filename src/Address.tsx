@@ -16,8 +16,11 @@ type AddressProps = {
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
+    submittingLike: string,
     browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
+    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
 };
 
 function Address() {
@@ -33,10 +36,13 @@ function Address() {
         deOrphanedReplyPostsTreeRef,
         discussPrefix,
         submittingPost,
+        submittingLike,
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
         submitPostHandler,
+        submitLikeHandler,
         browserStateHistoryRef,
+        handleOpenLikesModal,
     } = useOutletContext() as AddressProps;
 
     const poster = postersRef.current[address!];
@@ -89,8 +95,11 @@ function Address() {
                         SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
                         inputPostDisabled={inputPostDisabled}
                         submitPostHandler={submitPostHandler}
+                        submitLikeHandler={submitLikeHandler}
                         submittingPost={submittingPost}
+                        submittingLike={submittingLike}
                         browserStateHistoryRef={browserStateHistoryRef}
+                        handleOpenLikesModal={handleOpenLikesModal}
                     />
                 </li>
             ))}
