@@ -72,7 +72,7 @@ export const getPastTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: str
             ...(continuationToken && { continuationToken }),
         });
 
-        const path = `api/Address/${contractAddress}/Contract/${contractAddress}/BalanceUpdates`;
+        const path = `api/Contract/${contractAddress}/BalanceUpdates`;
 
         const response = await fetch(`${inputIdenaIndexerApiUrl}/${path}?${params}`);
 

@@ -1,6 +1,7 @@
+import Decimal from "decimal.js";
 import { getMaxFee, type RpcClient } from "./api";
-import { calculateMaxFee, hex2str, hexToDecimal, sanitizeStr } from "./utils";
-import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, Transaction, transactionType } from "idena-sdk-js-lite";
+import { calculateMaxFee, hex2str, hexToDecimal, numStr2dnaStr, sanitizeStr } from "./utils";
+import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, Transaction, transactionType, type ContractArgumentFormatValue } from "idena-sdk-js-lite";
 
 export const breakingChanges = {
     v3: { timestamp: 1767578641 },
@@ -18,6 +19,8 @@ export type Post = {
     orphaned: boolean,
 };
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
+export type Tip = { postId: string, txHash: string, timestamp: number, tipper: string, amount: number };
+
 
 export const getChildPostIds = (parentId: string, postsTreeRef: Record<string, string>) => {
     const childPostIds = [];
@@ -37,7 +40,7 @@ type GetTransactionDetailsInput = { txHash: string, timestamp: number, blockHeig
 export const getTransactionDetails = async (
     transactions: GetTransactionDetailsInput[],
     contractAddress: string,
-    makePostMethod: string,
+    methods: string[],
     rpcClient: RpcClient,
 ) => {
     const transactionReceipts = await Promise.all(transactions.map((transaction) => rpcClient('bcn_txReceipt', [transaction.txHash])));
@@ -47,10 +50,11 @@ export const getTransactionDetails = async (
         receipt.result &&
         receipt.result.success === true &&
         receipt.result.contract === contractAddress.toLowerCase() &&
-        receipt.result.method === makePostMethod
+        methods.includes(receipt.result.method)
     );
+
     const reducedTxs = transactions.reduce((acc, curr) => ({ ...acc, [curr.txHash]: curr }), {}) as Record<string, GetTransactionDetailsInput>;
-    const transactionDetails = filteredReceipts.map(receipt => ({ eventArgs: receipt.result.events[0].args, ...reducedTxs[receipt.result.txHash] }));
+    const transactionDetails = filteredReceipts.map(receipt => ({ eventArgs: receipt.result.events?.[0].args, method: receipt.result.method, ...reducedTxs[receipt.result.txHash] }));
 
     return transactionDetails;
 }
@@ -113,18 +117,49 @@ export const getNewPosterAndPost = async (
     let newPoster: Poster | undefined;
 
     if (!postersRef.current[poster]) {
-        const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClient('dna_identity', [poster]);
-
-        if (getDnaIdentityError) {
-            throw 'rpc unavailable';
-        }
-
-        const { address, stake, age, pubkey, state } = getDnaIdentityResult;
-        newPoster = { address, stake, age, pubkey, state };
+        newPoster =  await getPoster(rpcClient, poster);
     }
 
     return { newPost, newPoster };
 }
+
+export const processTip = async (
+    transaction: { txHash: string, eventArgs: string[], timestamp: number, blockHeight?: number },
+    rpcClient: RpcClient,
+    tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
+    postersRef: React.RefObject<Record<string, Poster>>,
+) => {
+    const { txHash, eventArgs, timestamp } = transaction;
+
+    const tipper = eventArgs[0];
+    const postId = hexToDecimal(eventArgs[1]);
+    const amount = parseInt(eventArgs[2]);
+
+    const updatedPostTips = {
+        totalAmount: (tipsRef.current[postId]?.totalAmount ?? 0) + amount,
+        tips: [ ...(tipsRef.current[postId]?.tips ?? []), { postId, txHash, timestamp, tipper, amount } ],
+    }
+
+    let newPoster: Poster | undefined;
+
+    if (!postersRef.current[tipper]) {
+        newPoster =  await getPoster(rpcClient, tipper);
+    }
+
+    return { postId, updatedPostTips, newPoster };
+}
+
+export const getPoster = async (rpcClient: RpcClient, posterAddress: string) => {
+    const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClient('dna_identity', [posterAddress]);
+
+    if (getDnaIdentityError) {
+        throw 'rpc unavailable';
+    }
+
+    const { address, stake, age, pubkey, state } = getDnaIdentityResult;
+
+    return { address, stake, age, pubkey, state };
+};
 
 export const getReplyPosts = (
     newPostId: string,
@@ -213,7 +248,7 @@ export const submitPost = async (
     rpcClient: RpcClient,
     callbackUrl: string,
 ) => {
-    const txAmount = 0.00001;
+    const txAmount = new Decimal(0.00001);
     const args = [
         {
             format: contractArgumentFormat.String,
@@ -230,23 +265,188 @@ export const submitPost = async (
     payload.setArgs(args);
     payload.method = makePostMethod;
 
+    await makeCallTransaction(
+        postersAddress,
+        contractAddress,
+        makePostMethod,
+        inputSendingTxs,
+        rpcClient,
+        callbackUrl,
+        txAmount,
+        args,
+        payload,
+        inputPost.length,
+    );
+};
+
+export const submitDeposit = async (
+    postersAddress: string,
+    contractAddress: string,
+    depositMethod: string,
+    amount: string,
+    inputSendingTxs: string,
+    rpcClient: RpcClient,
+    callbackUrl: string,
+) => {
+    const txAmount = new Decimal(amount);
+    const args = [] as CallContractArg[];
+    const payload = new CallContractAttachment();
+    payload.method = depositMethod;
+
+    await makeCallTransaction(
+        postersAddress,
+        contractAddress,
+        depositMethod,
+        inputSendingTxs,
+        rpcClient,
+        callbackUrl,
+        txAmount,
+        args,
+        payload,
+    );
+};
+
+export const submitWithdraw = async (
+    postersAddress: string,
+    contractAddress: string,
+    withdrawMethod: string,
+    amount: string,
+    inputSendingTxs: string,
+    rpcClient: RpcClient,
+    callbackUrl: string,
+) => {
+
+    const txAmount = new Decimal(0);
+    const args = [
+        {
+            format: contractArgumentFormat.Dna,
+            index: 0,
+            value: amount,
+        }
+    ];
+    const payload = new CallContractAttachment();
+    payload.setArgs(args);
+    payload.method = withdrawMethod;
+
+    await makeCallTransaction(
+        postersAddress,
+        contractAddress,
+        withdrawMethod,
+        inputSendingTxs,
+        rpcClient,
+        callbackUrl,
+        txAmount,
+        args,
+        payload,
+        100,
+    );
+};
+
+export const submitSendTip = async (
+    postersAddress: string,
+    contractAddress: string,
+    sendTipMethod: string,
+    postId: string,
+    amount: string,
+    inputSendingTxs: string,
+    rpcClient: RpcClient,
+    callbackUrl: string,
+) => {
+    const txAmount = new Decimal(amount);
+    const args = [
+        {
+            format: contractArgumentFormat.String,
+            index: 0,
+            value: postId,
+        }
+    ];
+    const payload = new CallContractAttachment();
+    payload.setArgs(args);
+    payload.method = sendTipMethod;
+
+    await makeCallTransaction(
+        postersAddress,
+        contractAddress,
+        sendTipMethod,
+        inputSendingTxs,
+        rpcClient,
+        callbackUrl,
+        txAmount,
+        args,
+        payload,
+    );
+};
+
+export const submitSendTipFromBalance = async (
+    postersAddress: string,
+    contractAddress: string,
+    sendTipFromBalanceMethod: string,
+    postId: string,
+    amount: string,
+    inputSendingTxs: string,
+    rpcClient: RpcClient,
+    callbackUrl: string,
+) => {
+    const txAmount = new Decimal(0);
+    const args = [
+        {
+            format: contractArgumentFormat.String,
+            index: 0,
+            value: JSON.stringify({ postId, tipAmount: numStr2dnaStr(amount) }),
+        }
+    ];
+    const payload = new CallContractAttachment();
+    payload.setArgs(args);
+    payload.method = sendTipFromBalanceMethod;
+
+    await makeCallTransaction(
+        postersAddress,
+        contractAddress,
+        sendTipFromBalanceMethod,
+        inputSendingTxs,
+        rpcClient,
+        callbackUrl,
+        txAmount,
+        args,
+        payload,
+        100,
+    );
+};
+
+type CallContractArg = {
+    format: ContractArgumentFormatValue;
+    index: number;
+    value: string;
+};
+export const makeCallTransaction = async (
+    from: string,
+    to: string,
+    method: string,
+    inputSendingTxs: string,
+    rpcClient: RpcClient,
+    callbackUrl: string,
+    txAmount: Decimal,
+    args: CallContractArg[],
+    payload: CallContractAttachment,
+    inputPostLength = 0,
+) => {
     const maxFeeResult = await getMaxFee(rpcClient, {
-        from: postersAddress,
-        to: contractAddress,
+        from,
+        to,
         type: transactionType.CallContractTx,
-        amount: txAmount,
-        payload: payload,
+        amount: txAmount.toNumber(),
+        payload,
     });
 
-    const { maxFeeDecimal, maxFeeDna } = calculateMaxFee(maxFeeResult, inputPost.length);
+    const { maxFeeDecimal, maxFeeDna } = calculateMaxFee(maxFeeResult, inputPostLength);
 
     if (inputSendingTxs === 'rpc') {
         await rpcClient('contract_call', [
             {
-                from: postersAddress,
-                contract: contractAddress,
-                method: makePostMethod,
-                amount: txAmount,
+                from,
+                contract: to,
+                method,
+                amount: txAmount.toNumber(),
                 args,
                 maxFee: maxFeeDecimal,
             }
@@ -254,20 +454,20 @@ export const submitPost = async (
     }
 
     if (inputSendingTxs === 'idena-app') {
-        const { result: getBalanceResult } = await rpcClient('dna_getBalance', [postersAddress]);
+        const { result: getBalanceResult } = await rpcClient('dna_getBalance', [from]);
         const { result: epochResult } = await rpcClient('dna_epoch', []);
 
         const tx = new Transaction();
         tx.type = transactionType.CallContractTx;
-        tx.to = hexToUint8Array(contractAddress);
-        tx.amount = txAmount * 1e18;
+        tx.to = hexToUint8Array(to);
+        tx.amount = txAmount.mul(1e18).toString();
         tx.nonce = getBalanceResult.nonce + 1;
         tx.epoch = epochResult.epoch;
         tx.maxFee = maxFeeDna;
         tx.payload = payload.toBytes();
         const txHex = tx.toHex();
 
-        const dnaLink = `https://app.idena.io/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${makePostMethod}`;
+        const dnaLink = `https://app.idena.io/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${method}`;
         window.open(dnaLink, '_blank');
     }
 };

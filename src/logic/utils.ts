@@ -1,6 +1,8 @@
 import Decimal from "decimal.js";
 import { hexToUint8Array, toHexString } from "idena-sdk-js-lite";
 
+const dnaBase = 1e18;
+
 export function getDisplayAddress(address: string) {
     return `${address.slice(0, 7)}...${address.slice(-5)}`;
 }
@@ -34,7 +36,6 @@ export function getMessageLines(message: string) {
 export function calculateMaxFee(maxFeeResult: string, inputPostLength: number) {
     const perCharMaxFeeDivisor = 200;
     const totalMaxFeeMultiplier = 10;
-    const dnaBase = 1e18;
 
     const maxFeeDecimal = new Decimal(maxFeeResult).div(new Decimal(dnaBase));
     const additionalPerCharFee = maxFeeDecimal.div(perCharMaxFeeDivisor).mul(inputPostLength);
@@ -42,6 +43,14 @@ export function calculateMaxFee(maxFeeResult: string, inputPostLength: number) {
     const maxFeeCalculatedDna = maxFeeCalculated.mul(new Decimal(dnaBase));
 
     return { maxFeeDecimal: maxFeeCalculated.toString(), maxFeeDna: maxFeeCalculatedDna.toString() };
+}
+
+export function dna2numStr(dna: string | number) {
+    return (new Decimal(dna).div(new Decimal(dnaBase))).toString();
+}
+
+export function numStr2dnaStr(num: string) {
+    return (new Decimal(num).mul(new Decimal(dnaBase))).toString();
 }
 
 export function hex2str(hex: string) {
@@ -97,4 +106,37 @@ export function isObjectEmpty(obj: object) {
     // @ts-ignore
     for (const i in obj) return false;
     return true;
+}
+
+export function getDisplayTipAmount(amount: number) {
+    const numStr = dna2numStr(amount);
+    return (Number(Number(numStr).toFixed(3)) || '0.000').toString();
+}
+
+export function getShortDisplayTipAmount(amount: number) {
+    const num = Number(dna2numStr(amount));
+
+    let display;
+
+    if (num < 1) {
+        display = '<1';
+    }
+    if (num >= 1) {
+        display = num.toFixed(0);
+    }
+    if (num >= 1000) {
+        display = '1K+';
+    }
+    if (num >= 10000) {
+        display = '10K+';
+    }
+    if (num >= 100000) {
+        display = '100K+';
+    }
+    if (num >= 1000000) {
+        display = '1M+';
+    }
+
+    return display;
+
 }

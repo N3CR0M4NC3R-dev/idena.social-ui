@@ -1,4 +1,4 @@
-import { type Post, type Poster } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip } from './logic/asyncUtils';
 import { useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
 import { type MouseEventLocal, type PostDomSettingsCollection } from './App.exports';
@@ -22,8 +22,12 @@ type LatestPostsProps = {
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
     submittingLike: string,
+    submittingTip: string,
     browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
+    handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
+    handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
+    tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
 };
 
 function LatestPosts() {
@@ -46,8 +50,12 @@ function LatestPosts() {
         submitLikeHandler,
         submittingPost,
         submittingLike,
+        submittingTip,
         browserStateHistoryRef,
         handleOpenLikesModal,
+        handleOpenTipsModal,
+        handleOpenSendTipModal,
+        tipsRef,
     } = useOutletContext() as LatestPostsProps;
 
     return (<>
@@ -84,8 +92,12 @@ function LatestPosts() {
                         submitLikeHandler={submitLikeHandler}
                         submittingPost={submittingPost}
                         submittingLike={submittingLike}
+                        submittingTip={submittingTip}
                         browserStateHistoryRef={browserStateHistoryRef}
                         handleOpenLikesModal={handleOpenLikesModal}
+                        handleOpenTipsModal={handleOpenTipsModal}
+                        handleOpenSendTipModal={handleOpenSendTipModal}
+                        tipsRef={tipsRef}
                     />
                 </li>
             ))}

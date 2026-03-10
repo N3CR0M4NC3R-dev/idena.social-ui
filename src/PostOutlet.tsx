@@ -1,5 +1,5 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
-import type { Post, Poster } from "./logic/asyncUtils";
+import type { Post, Poster, Tip } from "./logic/asyncUtils";
 import PostComponent from "./components/PostComponent";
 import { type MouseEventLocal, type PostDomSettingsCollection } from "./App.exports";
 
@@ -16,8 +16,12 @@ type PostOutletProps = {
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
     submittingLike: string,
+    submittingTip: string,
     browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
+    handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
+    handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
+    tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
 };
 
 function PostOutlet() {
@@ -32,12 +36,16 @@ function PostOutlet() {
         discussPrefix,
         submittingPost,
         submittingLike,
+        submittingTip,
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
         submitPostHandler,
         submitLikeHandler,
         browserStateHistoryRef,
         handleOpenLikesModal,
+        handleOpenTipsModal,
+        handleOpenSendTipModal,
+        tipsRef,
     } = useOutletContext() as PostOutletProps;
 
     const handleGoBack = () => {
@@ -59,8 +67,12 @@ function PostOutlet() {
             submitLikeHandler={submitLikeHandler}
             submittingPost={submittingPost}
             submittingLike={submittingLike}
+            submittingTip={submittingTip}
             browserStateHistoryRef={browserStateHistoryRef}
             handleOpenLikesModal={handleOpenLikesModal}
+            handleOpenTipsModal={handleOpenTipsModal}
+            handleOpenSendTipModal={handleOpenSendTipModal}
+            tipsRef={tipsRef}
             isPostOutlet={true}
         />
     </>);
