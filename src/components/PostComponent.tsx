@@ -444,7 +444,7 @@ function PostComponent(props: PostComponentProps) {
                                                                     </div>
                                                                 </div>
                                                                 <div id={`post-text-${discussionPost.postId}`} className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
-                                                                    <p>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                                                    <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                                 </div>
                                                             </div>
                                                             <div className="w-12 pt-0.5 text-[10px] flex flex-col gap-0.5">
