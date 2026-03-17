@@ -865,9 +865,9 @@ function App() {
                     </div>
                     <hr className="mb-3 text-gray-500" />
                     <div className="flex flex-col mb-1">
-                        <div>
+                        <div className="mb-2">
                             <span>Tips Balance: </span>
-                            <span className="[word-break:break-all]">{dna2numStr(tipsBalance)} <span className="[word-break:keep-all]">iDNA</span></span>
+                            <span className={`[word-break:break-all] ${tipsBalance === '0' ? '' : ' text-green-400'}`}>{dna2numStr(tipsBalance)} <span className="[word-break:keep-all]">iDNA</span></span>
                         </div>
                     </div>
                     <div className="mb-4 text-[14px]">
