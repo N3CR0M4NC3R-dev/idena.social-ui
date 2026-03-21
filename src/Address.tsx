@@ -2,7 +2,7 @@ import { useLocation, useNavigate, useOutletContext, useParams } from "react-rou
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
 import { getDisplayAddress } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
-import { type PostDomSettingsCollection } from "./App.exports";
+import { type PostDomSettingsCollection, type PostImageAttachment } from "./App.exports";
 
 type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
 
@@ -17,6 +17,9 @@ type AddressProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    postImageAttachments: Record<string, PostImageAttachment>,
+    setPostImageAttachmentHandler: (location: string, file?: File) => Promise<void>,
+    clearPostImageAttachmentHandler: (location: string) => void,
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
@@ -46,6 +49,9 @@ function Address() {
         inputPostDisabled,
         submitPostHandler,
         submitLikeHandler,
+        postImageAttachments,
+        setPostImageAttachmentHandler,
+        clearPostImageAttachmentHandler,
         browserStateHistoryRef,
         handleOpenLikesModal,
         handleOpenTipsModal,
@@ -104,6 +110,9 @@ function Address() {
                         inputPostDisabled={inputPostDisabled}
                         submitPostHandler={submitPostHandler}
                         submitLikeHandler={submitLikeHandler}
+                        postImageAttachments={postImageAttachments}
+                        setPostImageAttachmentHandler={setPostImageAttachmentHandler}
+                        clearPostImageAttachmentHandler={clearPostImageAttachmentHandler}
                         submittingPost={submittingPost}
                         submittingLike={submittingLike}
                         submittingTip={submittingTip}

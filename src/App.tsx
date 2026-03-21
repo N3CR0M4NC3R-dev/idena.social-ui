@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitDeposit, submitWithdraw, submitSendTipFromBalance, submitSendTip } from './logic/asyncUtils';
-import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
-import { dna2numStr, getDisplayAddress, isObjectEmpty } from './logic/utils';
+import { getPastTxsWithIdenaIndexerApi, getRpcClient, type NodeDetails, type RpcClient } from './logic/api';
+import { dna2numStr, encodePostMessage, getDisplayAddress, isObjectEmpty, isSupportedPostImageType, MAX_POST_IMAGE_BYTES, type EncodedIpfsImage } from './logic/utils';
+import { MIN_IPFS_PIN_NODES, storeCidWithDnaStoreToIpfs, uploadImageToIpfsRpcNodes } from './logic/ipfs';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import { Link, Outlet } from 'react-router';
-import type { MouseEventLocal, PostDomSettingsCollection } from './App.exports';
+import type { MouseEventLocal, PostDomSettingsCollection, PostImageAttachment } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 
@@ -30,6 +31,19 @@ const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
 const attributionsUrl = `${window.location.origin}/attributions.html`;
+const imagePostingOwnRpcNotice = 'To post images, set your own RPC URL and API key above. restricted.idena.io is read-only.';
+const sessionNodeUrlKey = 'idena.social.session.rpc.url';
+const sessionNodeApiKey = 'idena.social.session.rpc.apikey';
+
+const getSessionNodeDetails = () => {
+    const sessionNodeUrl = window.sessionStorage.getItem(sessionNodeUrlKey)?.trim() ?? '';
+    const sessionApiKey = window.sessionStorage.getItem(sessionNodeApiKey)?.trim() ?? '';
+
+    return {
+        idenaNodeUrl: sessionNodeUrl || defaultNodeUrl,
+        idenaNodeApiKey: sessionApiKey || defaultNodeApiKey,
+    } as NodeDetails;
+};
 const defaultAd = {
     title: 'IDENA: Proof-of-Person blockchain',
     desc: 'Coordination of individuals',
@@ -76,15 +90,17 @@ const customModalStyles = {
 Modal.setAppElement('#root');
 
 function App() {
+    const sessionNodeDetails = getSessionNodeDetails();
     const [nodeAvailable, setNodeAvailable] = useState<boolean>(true);
     const nodeAvailableRef = useRef(nodeAvailable);
     const rpcClientRef = useRef(undefined as undefined | RpcClient);
+    const activeNodeDetailsRef = useRef(sessionNodeDetails);
     const [viewOnlyNode, setViewOnlyNode] = useState<boolean>(false);
     const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
     const [inputPostersAddress, setInputPostersAddress] = useState<string>(zeroAddress);
     const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState<boolean>(true);
-    const [inputNodeUrl, setInputNodeUrl] = useState<string>(defaultNodeUrl);
-    const [inputNodeKey, setInputNodeKey] = useState<string>(defaultNodeApiKey);
+    const [inputNodeUrl, setInputNodeUrl] = useState<string>(sessionNodeDetails.idenaNodeUrl);
+    const [inputNodeKey, setInputNodeKey] = useState<string>(sessionNodeDetails.idenaNodeApiKey);
     const [postersAddress, setPostersAddress] = useState<string>(zeroAddress);
     const postersAddressRef = useRef<string>(postersAddress);
     const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
@@ -125,6 +141,7 @@ function App() {
     const [submittingDeposit, setSubmittingDeposit] = useState<string>('');
     const [submittingWithdrawal, setSubmittingWithdrawal] = useState<string>('');
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
+    const [postImageAttachments, setPostImageAttachments] = useState<Record<string, PostImageAttachment>>({});
     const browserStateHistoryRef = useRef<Record<string, PostDomSettingsCollection>>({});
     const [modalOpen, setModalOpen] = useState<string>('');
     const modalLikePostsRef = useRef<Post[]>([]);
@@ -135,9 +152,10 @@ function App() {
     const [depositAmount, setDepositAmount] = useState<string>('0');
     const [withdrawAmount, setWithdrawAmount] = useState<string>('0');
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
-
-
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
+        activeNodeDetailsRef.current = { idenaNodeUrl, idenaNodeApiKey };
+        window.sessionStorage.setItem(sessionNodeUrlKey, idenaNodeUrl);
+        window.sessionStorage.setItem(sessionNodeApiKey, idenaNodeApiKey);
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
 
         (async function() {
@@ -168,7 +186,7 @@ function App() {
                 setViewOnlyNode(true);
             }
 
-            const adsClient = new IdenaApprovedAds({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey });
+            const adsClient = new IdenaApprovedAds({ idenaNodeUrl, idenaNodeApiKey });
 
             try {
                 const ads = await adsClient.getApprovedAds();
@@ -669,6 +687,51 @@ function App() {
         setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || !!submittingDeposit || !!submittingWithdrawal || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
     }, [submittingPost, submittingLike, submittingTip, submittingDeposit, submittingWithdrawal, inputSendingTxs, viewOnlyNode, postersAddressInvalid]);
 
+    const clearPostImageAttachmentHandler = (location: string) => {
+        setPostImageAttachments((currentPostImageAttachments) => {
+            if (!currentPostImageAttachments[location]) {
+                return currentPostImageAttachments;
+            }
+
+            const newPostImageAttachments = { ...currentPostImageAttachments };
+            delete newPostImageAttachments[location];
+            return newPostImageAttachments;
+        });
+    };
+
+    const setPostImageAttachmentHandler = async (location: string, file?: File) => {
+        if (!file) {
+            clearPostImageAttachmentHandler(location);
+            return;
+        }
+
+        if (!isSupportedPostImageType(file.type)) {
+            alert('Only PNG, JPG/JPEG, GIF, WEBP and AVIF images are supported.');
+            return;
+        }
+
+        if (file.size > MAX_POST_IMAGE_BYTES) {
+            alert(`Image is too large. Max size is ${Math.round(MAX_POST_IMAGE_BYTES / 1024)}KB.`);
+            return;
+        }
+
+        try {
+            const imageDataUrl = await new Promise<string>((resolve, reject) => {
+                const fileReader = new FileReader();
+                fileReader.onload = () => resolve(fileReader.result as string);
+                fileReader.onerror = () => reject(new Error('Failed to read image file.'));
+                fileReader.readAsDataURL(file);
+            });
+
+            setPostImageAttachments((currentPostImageAttachments) => ({
+                ...currentPostImageAttachments,
+                [location]: { dataUrl: imageDataUrl, name: file.name, size: file.size, file },
+            }));
+        } catch {
+            alert('Failed to read image file.');
+        }
+    };
+
     const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot post!');
@@ -677,20 +740,63 @@ function App() {
 
         const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
         const inputText = postTextareaElement.value;
+        const postImageAttachment = postImageAttachments[location];
 
-        if (inputText) {
-            postTextareaElement.value = '';
-        } else {
+        if (!inputText && !postImageAttachment) {
             return;
         }
 
         setSubmittingPost(location);
 
-        if (location !== 'main') {
-            postTextareaElement.rows = 1;
-        }
+        try {
+            let encodedIpfsImage: EncodedIpfsImage | undefined;
+            let storeToIpfsWarning = '';
+            if (postImageAttachment) {
+                const { cid, pinnedNodes } = await uploadImageToIpfsRpcNodes(
+                    postImageAttachment.file,
+                    activeNodeDetailsRef.current,
+                    [],
+                    MIN_IPFS_PIN_NODES,
+                );
 
-        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+                try {
+                    await storeCidWithDnaStoreToIpfs(activeNodeDetailsRef.current, cid);
+                } catch (error: unknown) {
+                    const storeToIpfsErrorMessage = error instanceof Error ? error.message : 'unknown error';
+                    storeToIpfsWarning = `Image was pinned on your node, but dna_storeToIpfs failed (${storeToIpfsErrorMessage}).`;
+                }
+
+                encodedIpfsImage = {
+                    cid,
+                    mimeType: postImageAttachment.file.type,
+                    size: postImageAttachment.file.size,
+                    pinnedOn: pinnedNodes,
+                };
+            }
+
+            const encodedMessage = encodePostMessage(inputText, encodedIpfsImage);
+
+            await submitPost(postersAddress, contractAddressV2, makePostMethod, encodedMessage, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+
+            postTextareaElement.value = '';
+            clearPostImageAttachmentHandler(location);
+
+            if (location !== 'main') {
+                postTextareaElement.rows = 1;
+            }
+
+            if (storeToIpfsWarning) {
+                alert(`${storeToIpfsWarning} The post was submitted anyway.`);
+            }
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to post.';
+            if (postImageAttachment && /(method not available|No Idena RPC node configured for IPFS uploads|Could not upload image via Idena RPC IPFS)/i.test(errorMessage)) {
+                alert(`${imagePostingOwnRpcNotice} (${errorMessage})`);
+            } else {
+                alert(errorMessage);
+            }
+            setSubmittingPost('');
+        }
     };
 
     const submitLikeHandler = async (emoji: string, location: string, replyToPostId?: string, channelId?: string) => {
@@ -839,6 +945,12 @@ function App() {
                         )}
                     </div>
                     <hr className="mb-3 text-gray-500" />
+                    <div className="flex flex-col mb-6 text-[14px]">
+                        <p className="mb-1">For image posts (Idena RPC pinning):</p>
+                        <p className="mb-1 text-[11px] text-gray-400">Default is `restricted.idena.io`. For image posts, switch the RPC above to your own node first.</p>
+                        <p className="text-[11px] text-yellow-300">{imagePostingOwnRpcNotice}</p>
+                    </div>
+                    <hr className="mb-3 text-gray-500" />
                     <div className="flex flex-col mb-6">
                         <p>For finding past posts:</p>
                         <div className="flex flex-row gap-2">
@@ -911,6 +1023,9 @@ function App() {
                         inputPostDisabled,
                         submitPostHandler,
                         submitLikeHandler,
+                        postImageAttachments,
+                        setPostImageAttachmentHandler,
+                        clearPostImageAttachmentHandler,
                         submittingPost,
                         submittingLike,
                         submittingTip,

@@ -1,7 +1,7 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
 import PostComponent from "./components/PostComponent";
-import { type MouseEventLocal, type PostDomSettingsCollection } from "./App.exports";
+import { type MouseEventLocal, type PostDomSettingsCollection, type PostImageAttachment } from "./App.exports";
 
 type PostOutletProps = {
     orderedPostIds: string[],
@@ -14,6 +14,9 @@ type PostOutletProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    postImageAttachments: Record<string, PostImageAttachment>,
+    setPostImageAttachmentHandler: (location: string, file?: File) => Promise<void>,
+    clearPostImageAttachmentHandler: (location: string) => void,
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
@@ -41,6 +44,9 @@ function PostOutlet() {
         inputPostDisabled,
         submitPostHandler,
         submitLikeHandler,
+        postImageAttachments,
+        setPostImageAttachmentHandler,
+        clearPostImageAttachmentHandler,
         browserStateHistoryRef,
         handleOpenLikesModal,
         handleOpenTipsModal,
@@ -65,6 +71,9 @@ function PostOutlet() {
             inputPostDisabled={inputPostDisabled}
             submitPostHandler={submitPostHandler}
             submitLikeHandler={submitLikeHandler}
+            postImageAttachments={postImageAttachments}
+            setPostImageAttachmentHandler={setPostImageAttachmentHandler}
+            clearPostImageAttachmentHandler={clearPostImageAttachmentHandler}
             submittingPost={submittingPost}
             submittingLike={submittingLike}
             submittingTip={submittingTip}

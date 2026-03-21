@@ -2,6 +2,139 @@ import Decimal from "decimal.js";
 import { hexToUint8Array, toHexString } from "idena-sdk-js-lite";
 
 const dnaBase = 1e18;
+const postMessagePayloadPrefix = 'idena.social-ui:post-content:v1:';
+const postImageDataUrlRegex = /^data:image\/(png|jpe?g|gif|webp|avif);base64,[A-Za-z0-9+/=]+$/i;
+const ipfsCidRegex = /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})$/i;
+
+export const MAX_POST_IMAGE_BYTES = 100 * 1024;
+export const POST_IMAGE_FILE_ACCEPT = 'image/png,image/jpeg,image/jpg,image/gif,image/webp,image/avif';
+
+export type EncodedIpfsImage = {
+    cid: string,
+    mimeType: string,
+    size: number,
+    pinnedOn?: string[],
+};
+
+type PostMessagePayload = {
+    text?: string,
+    imageDataUrl?: string,
+    image?: {
+        scheme?: string,
+        cid?: string,
+        mimeType?: string,
+        size?: number,
+        pinnedOn?: string[],
+    },
+};
+
+export type ParsedPostMessage = {
+    text: string,
+    image?: {
+        kind: 'inline',
+        dataUrl: string,
+    } | {
+        kind: 'ipfs',
+        cid: string,
+        mimeType: string,
+        size?: number,
+        pinnedOn: string[],
+    },
+};
+
+export function isSupportedPostImageType(mimeType: string) {
+    return POST_IMAGE_FILE_ACCEPT.split(',').includes(mimeType.toLowerCase());
+}
+
+export function isSupportedPostImageDataUrl(imageDataUrl: string) {
+    return postImageDataUrlRegex.test(imageDataUrl);
+}
+
+export function isValidIpfsCid(cid: string) {
+    return ipfsCidRegex.test(cid);
+}
+
+function sanitizePinnedOnNodes(nodes: unknown) {
+    if (!Array.isArray(nodes)) {
+        return [];
+    }
+
+    const validNodes = nodes.filter((node) => typeof node === 'string' && node.trim() !== '').map((node) => node.trim());
+    return [ ...new Set(validNodes) ];
+}
+
+export function encodePostMessage(text: string, image?: EncodedIpfsImage) {
+    if (!image) {
+        return text;
+    }
+
+    return `${postMessagePayloadPrefix}${JSON.stringify({
+        text,
+        image: {
+            scheme: 'ipfs',
+            cid: image.cid,
+            mimeType: image.mimeType,
+            size: image.size,
+            pinnedOn: image.pinnedOn,
+        },
+    })}`;
+}
+
+export function parsePostMessage(message: string): ParsedPostMessage {
+    if (!message.startsWith(postMessagePayloadPrefix)) {
+        return { text: message };
+    }
+
+    try {
+        const payload = JSON.parse(message.slice(postMessagePayloadPrefix.length)) as PostMessagePayload;
+
+        if (!payload || typeof payload !== 'object') {
+            return { text: message };
+        }
+
+        const text = typeof payload.text === 'string' ? payload.text : '';
+        const imageDataUrlRaw = typeof payload.imageDataUrl === 'string' ? payload.imageDataUrl : '';
+        if (isSupportedPostImageDataUrl(imageDataUrlRaw)) {
+            return {
+                text,
+                image: {
+                    kind: 'inline',
+                    dataUrl: imageDataUrlRaw,
+                },
+            };
+        }
+
+        const image = payload.image;
+        if (
+            image &&
+            image.scheme === 'ipfs' &&
+            typeof image.cid === 'string' &&
+            isValidIpfsCid(image.cid) &&
+            typeof image.mimeType === 'string' &&
+            typeof image.size === 'number'
+        ) {
+            return {
+                text,
+                image: {
+                    kind: 'ipfs',
+                    cid: image.cid,
+                    mimeType: image.mimeType,
+                    size: image.size,
+                    pinnedOn: sanitizePinnedOnNodes(image.pinnedOn),
+                },
+            };
+        }
+
+        return { text };
+    } catch {
+        return { text: message };
+    }
+}
+
+export function isLikePostMessage(message: string, likeEmoji: string) {
+    const { text, image } = parsePostMessage(message);
+    return text === likeEmoji && !image;
+}
 
 export function getDisplayAddress(address: string) {
     return `${address.slice(0, 7)}...${address.slice(-5)}`;
