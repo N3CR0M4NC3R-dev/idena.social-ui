@@ -1,9 +1,11 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
+import type { NodeDetails } from "./logic/api";
 import PostComponent from "./components/PostComponent";
-import { type MouseEventLocal, type PostDomSettingsCollection } from "./App.exports";
+import { type MouseEventLocal, type PostDomSettingsCollection, type PostImageAttachment } from "./App.exports";
 
 type PostOutletProps = {
+    activeNodeDetails: NodeDetails,
     orderedPostIds: string[],
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
@@ -14,6 +16,10 @@ type PostOutletProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    postImageAttachments: Record<string, PostImageAttachment>,
+    setPostImageAttachmentHandler: (location: string, file?: File) => Promise<void>,
+    clearPostImageAttachmentHandler: (location: string) => void,
+    handleAddImageClick: (e: MouseEventLocal) => void,
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
@@ -29,6 +35,7 @@ function PostOutlet() {
     const navigate = useNavigate();
 
     const {
+        activeNodeDetails,
         postsRef,
         postersRef,
         replyPostsTreeRef,
@@ -41,6 +48,10 @@ function PostOutlet() {
         inputPostDisabled,
         submitPostHandler,
         submitLikeHandler,
+        postImageAttachments,
+        setPostImageAttachmentHandler,
+        clearPostImageAttachmentHandler,
+        handleAddImageClick,
         browserStateHistoryRef,
         handleOpenLikesModal,
         handleOpenTipsModal,
@@ -65,6 +76,10 @@ function PostOutlet() {
             inputPostDisabled={inputPostDisabled}
             submitPostHandler={submitPostHandler}
             submitLikeHandler={submitLikeHandler}
+            postImageAttachments={postImageAttachments}
+            setPostImageAttachmentHandler={setPostImageAttachmentHandler}
+            clearPostImageAttachmentHandler={clearPostImageAttachmentHandler}
+            handleAddImageClick={handleAddImageClick}
             submittingPost={submittingPost}
             submittingLike={submittingLike}
             submittingTip={submittingTip}
@@ -73,6 +88,7 @@ function PostOutlet() {
             handleOpenTipsModal={handleOpenTipsModal}
             handleOpenSendTipModal={handleOpenSendTipModal}
             tipsRef={tipsRef}
+            activeNodeDetails={activeNodeDetails}
             isPostOutlet={true}
         />
     </>);

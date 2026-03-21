@@ -1,9 +1,12 @@
 import { type Post, type Poster, type Tip } from './logic/asyncUtils';
+import type { NodeDetails } from './logic/api';
 import { useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
-import { type MouseEventLocal, type PostDomSettingsCollection } from './App.exports';
+import { POST_IMAGE_FILE_ACCEPT, POST_IMAGE_MAX_SIZE_LABEL } from './logic/utils';
+import { type MouseEventLocal, type PostDomSettingsCollection, type PostImageAttachment } from './App.exports';
 
 type LatestPostsProps = {
+    activeNodeDetails: NodeDetails,
     currentBlockCaptured: number,
     nodeAvailable: boolean,
     orderedPostIds: string[],
@@ -20,6 +23,10 @@ type LatestPostsProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    postImageAttachments: Record<string, PostImageAttachment>,
+    setPostImageAttachmentHandler: (location: string, file?: File) => Promise<void>,
+    clearPostImageAttachmentHandler: (location: string) => void,
+    handleAddImageClick: (e: MouseEventLocal) => void,
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
@@ -32,6 +39,7 @@ type LatestPostsProps = {
 
 function LatestPosts() {
     const {
+        activeNodeDetails,
         currentBlockCaptured,
         nodeAvailable,
         orderedPostIds,
@@ -48,6 +56,10 @@ function LatestPosts() {
         inputPostDisabled,
         submitPostHandler,
         submitLikeHandler,
+        postImageAttachments,
+        setPostImageAttachmentHandler,
+        clearPostImageAttachmentHandler,
+        handleAddImageClick,
         submittingPost,
         submittingLike,
         submittingTip,
@@ -58,6 +70,8 @@ function LatestPosts() {
         tipsRef,
     } = useOutletContext() as LatestPostsProps;
 
+    const mainPostImageAttachment = postImageAttachments.main;
+
     return (<>
         <div>
             <textarea
@@ -67,6 +81,28 @@ function LatestPosts() {
                 placeholder="Write your post here..."
                 disabled={inputPostDisabled}
             />
+            <div className="mt-1 mb-1.5 flex flex-row flex-wrap items-center gap-2 text-[12px]">
+                <input
+                    id="post-image-input-main"
+                    type="file"
+                    className="hidden"
+                    accept={POST_IMAGE_FILE_ACCEPT}
+                    disabled={inputPostDisabled}
+                    onChange={(e) => {
+                        void setPostImageAttachmentHandler('main', e.currentTarget.files?.[0]);
+                        e.currentTarget.value = '';
+                    }}
+                />
+                <label htmlFor="post-image-input-main" className={`px-2 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} onClick={(e) => !inputPostDisabled && handleAddImageClick(e)}>Add image</label>
+                {mainPostImageAttachment && <button className="px-2 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => clearPostImageAttachmentHandler('main')}>Remove image</button>}
+                <span className="text-gray-400">Max {POST_IMAGE_MAX_SIZE_LABEL}</span>
+            </div>
+            {mainPostImageAttachment && (
+                <div className="mb-2 rounded-md bg-stone-900 p-2">
+                    <img className="max-h-45 rounded-md" src={mainPostImageAttachment.dataUrl} alt="Selected post image preview" />
+                    <p className="mt-1 text-[11px] text-gray-400">{mainPostImageAttachment.name} ({Math.round(mainPostImageAttachment.size / 1024)}KB)</p>
+                </div>
+            )}
             <div className="flex flex-row gap-2">
                 <button className="h-9 w-27 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
                 <p className="mt-1.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
@@ -90,6 +126,10 @@ function LatestPosts() {
                         inputPostDisabled={inputPostDisabled}
                         submitPostHandler={submitPostHandler}
                         submitLikeHandler={submitLikeHandler}
+                        postImageAttachments={postImageAttachments}
+                        setPostImageAttachmentHandler={setPostImageAttachmentHandler}
+                        clearPostImageAttachmentHandler={clearPostImageAttachmentHandler}
+                        handleAddImageClick={handleAddImageClick}
                         submittingPost={submittingPost}
                         submittingLike={submittingLike}
                         submittingTip={submittingTip}
@@ -98,6 +138,7 @@ function LatestPosts() {
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}
                         tipsRef={tipsRef}
+                        activeNodeDetails={activeNodeDetails}
                     />
                 </li>
             ))}

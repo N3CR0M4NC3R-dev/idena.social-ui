@@ -1,12 +1,14 @@
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
+import type { NodeDetails } from "./logic/api";
 import { getDisplayAddress } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
-import { type PostDomSettingsCollection } from "./App.exports";
+import { type PostDomSettingsCollection, type PostImageAttachment } from "./App.exports";
 
 type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
 
 type AddressProps = {
+    activeNodeDetails: NodeDetails,
     orderedPostIds: string[],
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
@@ -17,6 +19,10 @@ type AddressProps = {
     inputPostDisabled: boolean,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    postImageAttachments: Record<string, PostImageAttachment>,
+    setPostImageAttachmentHandler: (location: string, file?: File) => Promise<void>,
+    clearPostImageAttachmentHandler: (location: string) => void,
+    handleAddImageClick: (e: MouseEventLocal) => void,
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
@@ -33,6 +39,7 @@ function Address() {
     const location = useLocation();
 
     const {
+        activeNodeDetails,
         orderedPostIds,
         postsRef,
         postersRef,
@@ -46,6 +53,10 @@ function Address() {
         inputPostDisabled,
         submitPostHandler,
         submitLikeHandler,
+        postImageAttachments,
+        setPostImageAttachmentHandler,
+        clearPostImageAttachmentHandler,
+        handleAddImageClick,
         browserStateHistoryRef,
         handleOpenLikesModal,
         handleOpenTipsModal,
@@ -104,6 +115,10 @@ function Address() {
                         inputPostDisabled={inputPostDisabled}
                         submitPostHandler={submitPostHandler}
                         submitLikeHandler={submitLikeHandler}
+                        postImageAttachments={postImageAttachments}
+                        setPostImageAttachmentHandler={setPostImageAttachmentHandler}
+                        clearPostImageAttachmentHandler={clearPostImageAttachmentHandler}
+                        handleAddImageClick={handleAddImageClick}
                         submittingPost={submittingPost}
                         submittingLike={submittingLike}
                         submittingTip={submittingTip}
@@ -112,6 +127,7 @@ function Address() {
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}
                         tipsRef={tipsRef}
+                        activeNodeDetails={activeNodeDetails}
                     />
                 </li>
             ))}
