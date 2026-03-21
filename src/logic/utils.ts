@@ -23,14 +23,57 @@ export function getDisplayDateTime(timestamp: number) {
     return { displayDate, displayTime };
 }
 
-export function getMessageLines(message: string) {
-    const limit = 20;
+export function getMessageLines(message: string, calculateViewMoreIndex = false, maxLines = 10) {
+    const limit = 30;
 
     let messageLines = message.split(/\r\n/g, limit);
     if (messageLines.length === 1) {
         messageLines = message.split(/\n/g), limit;
     }
-    return messageLines;
+
+    if (!calculateViewMoreIndex) {
+        return { messageLines };
+    }
+
+    const charsPerLine = 55;
+    let accLines = 0;
+    let index = 0;
+    let textOverflows = false;
+    let truncatedMessageLines: string[] = [];
+
+    for (; index < messageLines.length; index++) {
+        const messageLineItem = messageLines[index];
+        const isLastIteration = index === messageLines.length - 1;
+        const messagelineLength = messageLineItem.length;
+        const addedLinesFloat = messagelineLength / charsPerLine;
+        const addedLines = isLastIteration ? addedLinesFloat : Math.ceil(addedLinesFloat);
+
+        accLines += addedLines;
+
+        if (accLines >= maxLines) {
+            const overflowChars = Math.floor((accLines - maxLines) * charsPerLine);
+            truncatedMessageLines = messageLines.slice(0, index);
+
+            const lastLineLength = messageLineItem.length - overflowChars;
+            let lastLine = overflowChars === 0 ? messageLineItem : messageLineItem.slice(0, lastLineLength);
+            
+            if (
+                overflowChars !== 0 &&
+                messageLineItem.charAt(lastLineLength - 1) !== '.' &&
+                messageLineItem.charAt(lastLineLength - 1) !== ' ' &&
+                messageLineItem.charAt(lastLineLength) !== '.' &&
+                messageLineItem.charAt(lastLineLength) !== ' '
+            ) {
+                lastLine += '...';
+            }
+
+            truncatedMessageLines.push(lastLine);
+            textOverflows = true;
+            break;
+        }
+    }
+
+    return { messageLines, textOverflows, truncatedMessageLines };
 }
 
 export function calculateMaxFee(maxFeeResult: string, inputPostLength: number) {
@@ -110,7 +153,7 @@ export function isObjectEmpty(obj: object) {
 
 export function getDisplayTipAmount(amount: number) {
     const numStr = dna2numStr(amount);
-    return (Number(Number(numStr).toFixed(3)) || '0.000').toString();
+    return (Number(Number(numStr).toFixed(2)) || '0.00').toString();
 }
 
 export function getShortDisplayTipAmount(amount: number) {

@@ -1,15 +1,15 @@
-import { useEffect, useReducer, type FocusEventHandler } from 'react';
+import { useReducer, type FocusEventHandler } from 'react';
 import { getChildPostIds, breakingChanges, type Post, type Poster, type Tip } from '../logic/asyncUtils';
 import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getMessageLines, getShortDisplayTipAmount } from '../logic/utils';
 import { initDomSettings, isPostOutletDomSettings, type MouseEventLocal, type PostDomSettings, type PostDomSettingsCollection } from '../App.exports';
 import { useLocation, useNavigate } from 'react-router';
+import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
+import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
 import heartGraySvg from '../assets/heart-gray.svg';
 import heartRedSvg from '../assets/heart-red.svg';
 import cashGraySvg from '../assets/cash-gray.svg';
 import cashGreenSvg from '../assets/cash-green.svg';
 
-const postTextHeight = 'max-h-[288px]';
-const replyPostTextHeight = 'max-h-[146px]';
 const likeEmoji = '❤️';
 
 type PostComponentProps = {
@@ -65,30 +65,6 @@ function PostComponent(props: PostComponentProps) {
 
     const { key: locationKey } = location;
 
-    useEffect(() => {
-        setTimeout(() => {
-            setNewPostsAdded([postId]);
-        }, SET_NEW_POSTS_ADDED_DELAY);
-
-        if (isPostOutlet) {
-            setTimeout(() => {
-                setNewPostsAdded(repliesToThisPost);
-            }, SET_NEW_POSTS_ADDED_DELAY);
-        }
-    }, []);
-
-    const setNewPostsAdded = (newPostsAdded: string[]) => {
-        for (let index = 0; index < newPostsAdded.length; index++) {
-            const key = newPostsAdded[index];
-            const post = postsRef.current[key];
-            const messageDiv = document.getElementById(`post-text-${post.postId}`);
-
-            if (messageDiv!.scrollHeight > messageDiv!.clientHeight) {
-                setPostDomSettings(post.postId, { textOverflows: true }, true);
-            }
-        }
-    };
-
     const setPostDomSettings = (childPostId: string, postDomSettings: Partial<PostDomSettings>, rerender?: boolean) => {
         browserStateHistoryRef.current = {
             ...browserStateHistoryRef.current,
@@ -118,11 +94,15 @@ function PostComponent(props: PostComponentProps) {
     const postTips = tipsRef.current[postId] ?? { totalAmount: 0, tips: [] };
     const displayAddress = getDisplayAddress(poster.address);
     const { displayDate, displayTime } = getDisplayDateTime(post.timestamp);
-    const messageLines = getMessageLines(post.message);
+    
+    const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(post.message, true);
+
     const postDomSettingsItem = browserStateHistoryRef.current[locationKey][postId][postId];
-    const textOverflows = postDomSettingsItem.textOverflows;
-    const displayViewMore = postDomSettingsItem.textOverflowHidden;
-    const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
+
+    const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
+
+    const messageLinesDisplay = showTruncatedMessageLines ? truncatedMessageLines : messageLines;
+
     const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
     const showReplies = !postDomSettingsItem.repliesHidden;
     const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v5.timestamp;
@@ -148,12 +128,6 @@ function PostComponent(props: PostComponentProps) {
         if (newRepliesHidden || replyPostIds.length < 10 || isPostOutlet) {
             e.stopPropagation();
             setPostDomSettings(post.postId, { repliesHidden: newRepliesHidden }, true);
-
-            if (!newRepliesHidden) {
-                setTimeout(() => {
-                    setNewPostsAdded(replyPostIds);
-                }, SET_NEW_POSTS_ADDED_DELAY);
-            }
         }
     };
 
@@ -175,6 +149,13 @@ function PostComponent(props: PostComponentProps) {
         if (e.target.value === '') e.target.rows = 1;
     };
 
+    const setReplyToPostInputFocusHandler = (postId: string, e?: MouseEventLocal) => {
+        e?.stopPropagation();
+
+        const replyToPostTextareaElement = document.getElementById(`post-input-${postId}`) as HTMLTextAreaElement;
+        replyToPostTextareaElement.focus();
+    };
+
     const setDiscussReplyToPostIdHandler = (post: Post, discussReplyToPostId?: string) => {
         setPostDomSettings(post.postId, { discussReplyToPostId }, true);
 
@@ -189,15 +170,6 @@ function PostComponent(props: PostComponentProps) {
 
         const newTextOverflowHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].textOverflowHidden;
         setPostDomSettings(post.postId, { textOverflowHidden: newTextOverflowHidden }, true);
-
-        if (newTextOverflowHidden) {
-            const messageDiv = document.getElementById(`post-text-${post.postId}`);
-            const isReply = !!post.replyToPostId;
-            const rawTextHeight = isReply ? replyPostTextHeight : postTextHeight;
-            const textHeightNumber = parseInt(rawTextHeight.split('max-h-[')[1].split('px]')[0]);
-            const adjustheight = messageDiv!.scrollHeight - textHeightNumber;
-            window.scrollBy({ top: -adjustheight });
-        }
     };
 
     const localSubmitPostHandler = async (location: string, replyToPostId?: string, e?: MouseEventLocal, channelId?: string) => {
@@ -266,11 +238,11 @@ function PostComponent(props: PostComponentProps) {
                     </div>
                 </div>
             </div>
-            <div id={`post-text-${post.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : postTextHeight} flex-1 px-4 pt-2 pb-1 text-[17px] text-wrap leading-5 overflow-hidden`}>
-                <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+            <div id={`post-text-${post.postId}`} className="flex-1 px-4 pt-2 pb-1 text-[17px] text-wrap leading-5">
+                <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(post, e)}>view more</a></span>}</p>
             </div>
             <div className="h-6 px-2 flex flex-row justify-between">
-                <div className="ml-2 -mt-0.5 text-[12px]/5 text-blue-400">{textOverflows && <a className="hover:underline cursor-pointer" onClick={(e) => toggleViewMoreHandler(post, e)}>{displayViewMore ? 'view more' : 'view less'}</a>}</div>
+                <div className=""></div>
                 <div className="self-end text-[11px]/6 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
             </div>
             {!isBreakingChangeDisabled && <div className="flex flex-row gap-2 px-2 items-end">
@@ -290,26 +262,26 @@ function PostComponent(props: PostComponentProps) {
                     <button className="h-9 w-17 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={(e) => localSubmitPostHandler(post.postId, post.postId, e)}>{submittingPost === post.postId ? '...' : 'Post!'}</button>
                 </div>
             </div>}
-            <div className="flex flex-row px-4 mb-1.5 text-[12px]">
-                <div className="w-20">
+            <div className="flex flex-row px-2 mb-1.5 text-[12px]">
+                <div className="w-23">
                     {replyComments.length ?
-                        <a className="text-blue-400 hover:underline cursor-pointer" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{showReplies ? 'hide replies' : `replies (${totalNumberOfReplies})`}</a>
+                        <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => setReplyToPostInputFocusHandler(post.postId, e)} /><a className="text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{ totalNumberOfReplies} replies</a></div>
                     :
-                        <p className="text-gray-500">replies (0)</p>
+                        <div className="text-gray-500"><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => setReplyToPostInputFocusHandler(post.postId, e)} /><span className="align-[-0.5px]">0 replies</span></div>
                     }
                 </div>
                 <div className="w-20">
                     {replyLikes.length ?
-                        <div className="text-red-400"><img src={heartRedSvg} className={'h-5 mr-0.5 p-0.5 inline-block rounded-full hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === post.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(post.postId, post.postId, e)} /><a className="text-red-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{ replyLikes.length} likes</a></div>
+                        <div className="text-red-400"><img src={heartRedSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === post.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(post.postId, post.postId, e)} /><a className="text-red-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{ replyLikes.length} likes</a></div>
                     :
-                        <div className="text-gray-500"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 mr-0.5 p-0.5 inline-block rounded-full hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === post.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(post.postId, post.postId, e)} /><span className="align-[-0.5px]">no likes</span></div>
+                        <div className="text-gray-500"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === post.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(post.postId, post.postId, e)} /><span className="align-[-0.5px]">0 likes</span></div>
                     }
                 </div>
                 <div className="flex-1">
                     {postTips.totalAmount ?
-                        <div className="text-green-400"><img src={cashGreenSvg} className={'h-5 mr-0.5 p-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === post.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, post)} /><a className="text-green-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} idna</a></div>
+                        <div className="text-green-400"><img src={cashGreenSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === post.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, post)} /><a className="text-green-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} idna</a></div>
                     :
-                        <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-5 mr-0.5 p-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === post.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, post)} /><span className="align-[-0.5px]">no tips</span></div>
+                        <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === post.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, post)} /><span className="align-[-0.5px]">0 idna</span></div>
                     }
                 </div>
             </div>
@@ -326,11 +298,13 @@ function PostComponent(props: PostComponentProps) {
                     const poster = postersRef.current[replyPost.poster];
                     const displayAddress = getDisplayAddress(poster.address);
                     const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
-                    const messageLines = getMessageLines(replyPost.message);
+                    const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(replyPost.message, true, 3);
                     const postDomSettingsItem = browserStateHistoryRef.current[locationKey][postId][replyPost.postId];
-                    const textOverflows = postDomSettingsItem.textOverflows;
-                    const displayViewMore = postDomSettingsItem.textOverflowHidden;
-                    const showOverflowPostText = postDomSettingsItem.textOverflows === true && postDomSettingsItem.textOverflowHidden === false;
+
+                    const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
+
+                    const messageLinesDisplay = showTruncatedMessageLines ? truncatedMessageLines : messageLines;
+
                     const showDiscussion = !postDomSettingsItem.repliesHidden;
                     const discussParentId = discussPrefix + replyPost.postId;
 
@@ -363,44 +337,38 @@ function PostComponent(props: PostComponentProps) {
                                         </div>
                                     </div>
                                 </div>
-                                <div id={`post-text-${replyPost.postId}`} className={`${showOverflowPostText ? 'max-h-[9999px]' : replyPostTextHeight} flex-1 pl-12 pr-4 pt-2 text-[14px] text-wrap leading-5 overflow-hidden`}>
-                                    <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                <div id={`post-text-${replyPost.postId}`} className="flex-1 pl-12 pr-4 pt-2 text-[14px] text-wrap leading-5">
+                                    <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-[12px] text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>view more</a></span>}</p>
                                 </div>
-                                <div className="h-5 px-12 text-[12px]/5 text-blue-400">
-                                    {textOverflows && <a className="hover:underline cursor-pointer" onClick={() => toggleViewMoreHandler(replyPost)}>{displayViewMore ? 'view more' : 'view less'}</a>}
-                                </div>
-                                <div className="w-full px-2 flex flex-row text-[12px]">
+                                <div className="w-full pt-2 px-4 flex flex-row text-[12px]">
                                     {!isBreakingChangeDisabled && <>
-                                        <div className="w-22">
+                                        <div className="w-26">
                                             {discussionPostComments.length || showDiscussion ?
-                                                <a className="text-blue-400 hover:underline cursor-pointer" onClick={() => toggleShowDiscussionHandler(replyPost)}>{showDiscussion ? 'hide discussion' : `discussion (${discussionPostComments.length})`}</a>
+                                                <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => toggleReplyDiscussionHandler(replyPost)} /><a className="text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={() => toggleShowDiscussionHandler(replyPost)}>{ discussionPostComments.length} comments</a></div>
                                             :
-                                                <span className="text-gray-500">discussion (0)</span>
+                                                <div className="text-gray-500"><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => toggleReplyDiscussionHandler(replyPost)} /><span className="align-[-0.5px]">0 comments</span></div>
                                             }
                                         </div>
-                                        <div className="w-10 mt-0.5 ml-1">
-                                            <button className="h-4 w-8 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => toggleReplyDiscussionHandler(replyPost)}>↩</button>
-                                        </div>
-                                        <div className="w-20">
+                                        <div className="w-19">
                                             {likesForReplyPost.length ?
-                                                <div className="text-red-400"><img src={heartRedSvg} className={'h-5 mr-0.5 p-0.5 inline-block rounded-full hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === replyPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(replyPost.postId, replyPost.postId, e, discussParentId)} /><a className="text-red-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForReplyPost)}>{likesForReplyPost.length} likes</a></div>
+                                                <div className="text-red-400"><img src={heartRedSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === replyPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(replyPost.postId, replyPost.postId, e, discussParentId)} /><a className="text-red-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForReplyPost)}>{likesForReplyPost.length} likes</a></div>
                                             :
-                                                <div className="text-gray-500"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 mr-0.5 p-0.5 inline-block rounded-full hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === replyPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(replyPost.postId, replyPost.postId, e, discussParentId)} /><span className="align-[-0.5px]">no likes</span></div>
+                                                <div className="text-gray-500"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === replyPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(replyPost.postId, replyPost.postId, e, discussParentId)} /><span className="align-[-0.5px]">0 likes</span></div>
                                             }
                                         </div>
                                     </>}
                                     <div className="flex-1">
                                         {postTips.totalAmount ?
-                                            <div className="text-green-400"><img src={cashGreenSvg} className={'h-5 mr-0.5 p-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === replyPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, replyPost)} /><a className="text-green-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} idna</a></div>
+                                            <div className="text-green-400"><img src={cashGreenSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === replyPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, replyPost)} /><a className="text-green-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} idna</a></div>
                                         :
-                                            <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-5 mr-0.5 p-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === replyPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, replyPost)} /><span className="align-[-0.5px]">no tips</span></div>
+                                            <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === replyPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, replyPost)} /><span className="align-[-0.5px]">0 idna</span></div>
                                         }
                                     </div>
                                     <div>
                                         <p className="text-[10px]/5 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
                                 </div>
-                                {showDiscussion && <div className="mt-2.5 mx-2 p-2 bg-stone-900 rounded-md text-[14px]">
+                                {showDiscussion && <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 rounded-md text-[14px]">
                                     <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
                                         {discussionPostComments.length === 0 && <li className="mb-1"><p className="italic text-center text-[12px] text-gray-500">no comments yet</p></li>}
                                         {discussionPostComments.map((discussionPost) => {
@@ -408,7 +376,7 @@ function PostComponent(props: PostComponentProps) {
                                             const poster = postersRef.current[discussionPost.poster];
                                             const displayAddress = getDisplayAddressShort(poster.address);
                                             const { displayDate, displayTime } = getDisplayDateTime(discussionPost.timestamp);
-                                            const messageLines = getMessageLines(discussionPost.message);
+                                            const { messageLines } = getMessageLines(discussionPost.message);
                                             const replyToPost = postsRef.current[discussionPost.replyToPostId];
                                             const likesForDiscussionPost = discussionPostLikes.filter(like => like.replyToPostId === discussionPost.postId);
 
@@ -422,7 +390,7 @@ function PostComponent(props: PostComponentProps) {
                                                             <div className="flex-1 flex flex-row mr-3">
                                                                 <div className="w-5"><img src={`https://robohash.org/${replyToPost.poster}?set=set1`} /></div>
                                                                 <div className="flex-1 text-nowrap overflow-hidden">
-                                                                    <p className="max-w-[120px] text-[12px] text-gray-500">{getMessageLines(replyToPost.message)[0]}</p>
+                                                                    <p className="max-w-[120px] text-[12px] text-gray-500">{getMessageLines(replyToPost.message).messageLines[0]}</p>
                                                                 </div>
                                                             </div>
                                                         </div>}
@@ -447,17 +415,17 @@ function PostComponent(props: PostComponentProps) {
                                                                     <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                                 </div>
                                                             </div>
-                                                            <div className="w-12 pt-0.5 text-[10px] flex flex-col gap-0.5">
-                                                                <button className="h-4 w-8 mb-0.5 text-[12px] rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)}>↩</button>
+                                                            <div className="w-11 pt-0.5 text-[10px] flex flex-col gap-0.5">
+                                                                <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)} /></div>
                                                                 {likesForDiscussionPost.length ?
-                                                                    <div className="text-red-400 text-left whitespace-nowrap"><img src={heartRedSvg} className={'h-5 p-0.5 inline-block rounded-full hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === discussionPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(discussionPost.postId, discussionPost.postId, e, discussParentId)} /><a className="text-red-400 align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForDiscussionPost)}>{likesForDiscussionPost.length}</a></div>
+                                                                    <div className="text-red-400 text-left whitespace-nowrap"><img src={heartRedSvg} className={'h-5 p-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === discussionPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(discussionPost.postId, discussionPost.postId, e, discussParentId)} /><a className="text-red-400 align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForDiscussionPost)}>{likesForDiscussionPost.length}</a></div>
                                                                 :
-                                                                    <div className="text-gray-500 text-left"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 p-0.5 inline-block rounded-full hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === discussionPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(discussionPost.postId, discussionPost.postId, e, discussParentId)} /></div>
+                                                                    <div className="text-gray-500 text-left"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === discussionPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(discussionPost.postId, discussionPost.postId, e, discussParentId)} /></div>
                                                                 }
                                                                 {postTips.totalAmount ?
                                                                     <div className="text-green-400 text-left whitespace-nowrap"><img src={cashGreenSvg} className={'h-5 p-0.5 -ml-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === discussionPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, discussionPost)} /><a className="text-green-400 ml-0.5 align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getShortDisplayTipAmount(postTips.totalAmount)}</a></div>
                                                                 :
-                                                                    <div className="text-gray-500 text-left"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-5 p-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === discussionPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, discussionPost)} /></div>
+                                                                    <div className="text-gray-500 text-left"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === discussionPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, discussionPost)} /></div>
                                                                 }
                                                             </div>
                                                         </div>
@@ -467,7 +435,7 @@ function PostComponent(props: PostComponentProps) {
                                         })}
                                     </ul>
                                     {discussReplyToPost && <div className="w-full mt-1 px-1 flex flex-row bg-stone-800 rounded-sm">
-                                        <div className="flex-1 overflow-hidden text-nowrap text-[12px] text-gray-500"><p>Replying to {getDisplayAddressShort(discussReplyToPost!.poster)}: {getMessageLines(discussReplyToPost!.message)[0]}</p></div>
+                                        <div className="flex-1 overflow-hidden text-nowrap text-[12px] text-gray-500"><p>Replying to {getDisplayAddressShort(discussReplyToPost!.poster)}: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p></div>
                                         <div className="w-6 text-right">
                                             <button className="text-[10px] align-[2.5px] h-4 w-5 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>✖</button>
                                         </div>
