@@ -3,7 +3,7 @@ import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitDeposit, submitWithdraw, submitSendTipFromBalance, submitSendTip } from './logic/asyncUtils';
 import { getPastTxsWithIdenaIndexerApi, getRpcClient, type NodeDetails, type RpcClient } from './logic/api';
-import { dna2numStr, encodePostMessage, getDisplayAddress, isObjectEmpty, isSupportedPostImageType, MAX_POST_IMAGE_BYTES, type EncodedIpfsImage } from './logic/utils';
+import { dna2numStr, encodePostMessage, getDisplayAddress, isObjectEmpty, isSupportedPostImageType, MAX_POST_IMAGE_BYTES, POST_IMAGE_MAX_SIZE_LABEL, type EncodedIpfsImage } from './logic/utils';
 import { MIN_IPFS_PIN_NODES, storeCidWithDnaStoreToIpfs, uploadImageToIpfsRpcNodes } from './logic/ipfs';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import { Link, Outlet } from 'react-router';
@@ -91,6 +91,7 @@ Modal.setAppElement('#root');
 
 function App() {
     const sessionNodeDetails = getSessionNodeDetails();
+    const [activeNodeDetails, setActiveNodeDetails] = useState<NodeDetails>(sessionNodeDetails);
     const [nodeAvailable, setNodeAvailable] = useState<boolean>(true);
     const nodeAvailableRef = useRef(nodeAvailable);
     const rpcClientRef = useRef(undefined as undefined | RpcClient);
@@ -154,6 +155,7 @@ function App() {
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
         activeNodeDetailsRef.current = { idenaNodeUrl, idenaNodeApiKey };
+        setActiveNodeDetails({ idenaNodeUrl, idenaNodeApiKey });
         window.sessionStorage.setItem(sessionNodeUrlKey, idenaNodeUrl);
         window.sessionStorage.setItem(sessionNodeApiKey, idenaNodeApiKey);
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
@@ -711,7 +713,7 @@ function App() {
         }
 
         if (file.size > MAX_POST_IMAGE_BYTES) {
-            alert(`Image is too large. Max size is ${Math.round(MAX_POST_IMAGE_BYTES / 1024)}KB.`);
+            alert(`Image is too large. Max size is ${POST_IMAGE_MAX_SIZE_LABEL}.`);
             return;
         }
 
@@ -1009,6 +1011,7 @@ function App() {
             <div className="flex-none min-w-[430px] max-w-[430px]">
                 <Outlet
                     context={{
+                        activeNodeDetails,
                         currentBlockCaptured,
                         nodeAvailable,
                         orderedPostIds,

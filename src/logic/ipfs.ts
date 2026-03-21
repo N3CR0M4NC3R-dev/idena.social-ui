@@ -1,5 +1,6 @@
 import type { NodeDetails } from "./api";
 import { isValidIpfsCid } from "./utils";
+import { hexToUint8Array } from "idena-sdk-js-lite";
 
 export const MIN_IPFS_PIN_NODES = 1;
 export const DEFAULT_IPFS_GATEWAYS = [
@@ -284,4 +285,30 @@ export const uploadImageToIpfsRpcNodes = async (
     }
 
     return { cid, pinnedNodes, failedNodes } as IpfsPinResult;
+};
+
+export const getIpfsBlobUrlFromRpc = async (node: NodeDetails, cid: string, mimeType?: string) => {
+    const normalizedNode = {
+        idenaNodeUrl: normalizeRpcNodeUrl(node.idenaNodeUrl),
+        idenaNodeApiKey: node.idenaNodeApiKey,
+    } as NodeDetails;
+
+    if (!normalizedNode.idenaNodeUrl) {
+        throw new Error('No Idena RPC node configured for IPFS reads.');
+    }
+
+    const result = await rpcCall(normalizedNode, 'ipfs_get', [cid]);
+
+    if (typeof result !== 'string' || !result.startsWith('0x')) {
+        throw new Error(`Invalid ipfs_get payload from ${normalizedNode.idenaNodeUrl}`);
+    }
+
+    const bytes = hexToUint8Array(result);
+    if (!bytes.length) {
+        throw new Error(`Empty ipfs_get payload from ${normalizedNode.idenaNodeUrl}`);
+    }
+
+    const bytesCopy = new Uint8Array(bytes);
+    const blob = new Blob([bytesCopy], { type: mimeType || 'application/octet-stream' });
+    return URL.createObjectURL(blob);
 };

@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
+import type { NodeDetails } from "./logic/api";
 import { getDisplayAddress } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
 import { type PostDomSettingsCollection, type PostImageAttachment } from "./App.exports";
@@ -7,6 +8,7 @@ import { type PostDomSettingsCollection, type PostImageAttachment } from "./App.
 type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
 
 type AddressProps = {
+    activeNodeDetails: NodeDetails,
     orderedPostIds: string[],
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
@@ -37,6 +39,7 @@ function Address() {
     const location = useLocation();
 
     const {
+        activeNodeDetails,
         orderedPostIds,
         postsRef,
         postersRef,
@@ -124,6 +127,7 @@ function Address() {
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}
                         tipsRef={tipsRef}
+                        activeNodeDetails={activeNodeDetails}
                     />
                 </li>
             ))}

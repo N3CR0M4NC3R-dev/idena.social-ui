@@ -1,10 +1,12 @@
 import { type Post, type Poster, type Tip } from './logic/asyncUtils';
+import type { NodeDetails } from './logic/api';
 import { useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
-import { MAX_POST_IMAGE_BYTES, POST_IMAGE_FILE_ACCEPT } from './logic/utils';
+import { POST_IMAGE_FILE_ACCEPT, POST_IMAGE_MAX_SIZE_LABEL } from './logic/utils';
 import { type MouseEventLocal, type PostDomSettingsCollection, type PostImageAttachment } from './App.exports';
 
 type LatestPostsProps = {
+    activeNodeDetails: NodeDetails,
     currentBlockCaptured: number,
     nodeAvailable: boolean,
     orderedPostIds: string[],
@@ -37,6 +39,7 @@ type LatestPostsProps = {
 
 function LatestPosts() {
     const {
+        activeNodeDetails,
         currentBlockCaptured,
         nodeAvailable,
         orderedPostIds,
@@ -92,7 +95,7 @@ function LatestPosts() {
                 />
                 <label htmlFor="post-image-input-main" className={`px-2 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} onClick={(e) => !inputPostDisabled && handleAddImageClick(e)}>Add image</label>
                 {mainPostImageAttachment && <button className="px-2 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => clearPostImageAttachmentHandler('main')}>Remove image</button>}
-                <span className="text-gray-400">Max {Math.round(MAX_POST_IMAGE_BYTES / 1024)}KB</span>
+                <span className="text-gray-400">Max {POST_IMAGE_MAX_SIZE_LABEL}</span>
             </div>
             {mainPostImageAttachment && (
                 <div className="mb-2 rounded-md bg-stone-900 p-2">
@@ -135,6 +138,7 @@ function LatestPosts() {
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}
                         tipsRef={tipsRef}
+                        activeNodeDetails={activeNodeDetails}
                     />
                 </li>
             ))}

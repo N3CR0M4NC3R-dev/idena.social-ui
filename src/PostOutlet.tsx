@@ -1,9 +1,11 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
+import type { NodeDetails } from "./logic/api";
 import PostComponent from "./components/PostComponent";
 import { type MouseEventLocal, type PostDomSettingsCollection, type PostImageAttachment } from "./App.exports";
 
 type PostOutletProps = {
+    activeNodeDetails: NodeDetails,
     orderedPostIds: string[],
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
@@ -33,6 +35,7 @@ function PostOutlet() {
     const navigate = useNavigate();
 
     const {
+        activeNodeDetails,
         postsRef,
         postersRef,
         replyPostsTreeRef,
@@ -85,6 +88,7 @@ function PostOutlet() {
             handleOpenTipsModal={handleOpenTipsModal}
             handleOpenSendTipModal={handleOpenSendTipModal}
             tipsRef={tipsRef}
+            activeNodeDetails={activeNodeDetails}
             isPostOutlet={true}
         />
     </>);

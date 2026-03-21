@@ -1,6 +1,7 @@
 import { useReducer, type FocusEventHandler } from 'react';
 import { getChildPostIds, breakingChanges, type Post, type Poster, type Tip } from '../logic/asyncUtils';
-import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getMessageLines, getShortDisplayTipAmount, isLikePostMessage, MAX_POST_IMAGE_BYTES, parsePostMessage, POST_IMAGE_FILE_ACCEPT } from '../logic/utils';
+import type { NodeDetails } from '../logic/api';
+import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getMessageLines, getShortDisplayTipAmount, isLikePostMessage, parsePostMessage, POST_IMAGE_FILE_ACCEPT, POST_IMAGE_MAX_SIZE_LABEL } from '../logic/utils';
 import { initDomSettings, isPostOutletDomSettings, type MouseEventLocal, type PostDomSettings, type PostDomSettingsCollection, type PostImageAttachment } from '../App.exports';
 import { useLocation, useNavigate } from 'react-router';
 import PostImage from './PostImage';
@@ -36,6 +37,7 @@ type PostComponentProps = {
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
+    activeNodeDetails: NodeDetails,
     isPostOutlet?: boolean,
 };
 
@@ -67,6 +69,7 @@ function PostComponent(props: PostComponentProps) {
         handleOpenTipsModal,
         handleOpenSendTipModal,
         tipsRef,
+        activeNodeDetails,
         isPostOutlet,
     } = props;
 
@@ -252,7 +255,7 @@ function PostComponent(props: PostComponentProps) {
             </div>
             <div id={`post-text-${post.postId}`} className="flex-1 px-4 pt-2 pb-1 text-[17px] text-wrap leading-5">
                 {hasPostText && <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(post, e)}>view more</a></span>}</p>}
-                {postContent.image && <PostImage image={postContent.image} className={`rounded-md ${hasPostText ? 'max-h-72' : 'max-h-90'}`} alt="Post attachment" />}
+                {postContent.image && <PostImage image={postContent.image} rpcNode={activeNodeDetails} className={`rounded-md ${hasPostText ? 'max-h-72' : 'max-h-90'}`} alt="Post attachment" />}
             </div>
             <div className="h-6 px-2 flex flex-row justify-between">
                 <div className=""></div>
@@ -284,7 +287,7 @@ function PostComponent(props: PostComponentProps) {
                         />
                         <label htmlFor={`post-image-input-${post.postId}`} className={`px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} onClick={(e) => !inputPostDisabled && handleAddImageClick(e)}>Add image</label>
                         {postComposerImageAttachment && <button className="px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => clearPostImageAttachmentHandler(post.postId)}>Remove image</button>}
-                        <span className="text-gray-400">Max {Math.round(MAX_POST_IMAGE_BYTES / 1024)}KB</span>
+                        <span className="text-gray-400">Max {POST_IMAGE_MAX_SIZE_LABEL}</span>
                     </div>
                     {postComposerImageAttachment && <img className="mt-1 max-h-36 rounded-md" src={postComposerImageAttachment.dataUrl} alt="Selected reply image preview" onClick={(e) => e.stopPropagation()} />}
                 </div>
@@ -373,7 +376,7 @@ function PostComponent(props: PostComponentProps) {
                                 </div>
                                 <div id={`post-text-${replyPost.postId}`} className="flex-1 pl-12 pr-4 pt-2 text-[14px] text-wrap leading-5">
                                     {hasReplyPostText && <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-[12px] text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>view more</a></span>}</p>}
-                                    {replyPostContent.image && <PostImage image={replyPostContent.image} className={`rounded-md ${hasReplyPostText ? 'max-h-60' : 'max-h-80'}`} alt="Reply attachment" />}
+                                    {replyPostContent.image && <PostImage image={replyPostContent.image} rpcNode={activeNodeDetails} className={`rounded-md ${hasReplyPostText ? 'max-h-60' : 'max-h-80'}`} alt="Reply attachment" />}
                                 </div>
                                 <div className="w-full pt-2 px-4 flex flex-row text-[12px]">
                                     {!isBreakingChangeDisabled && <>
@@ -451,7 +454,7 @@ function PostComponent(props: PostComponentProps) {
                                                                 </div>
                                                                 <div id={`post-text-${discussionPost.postId}`} className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
                                                                     {hasDiscussionPostText && <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>}
-                                                                    {discussionPostContent.image && <PostImage image={discussionPostContent.image} className={`rounded-md ${hasDiscussionPostText ? 'max-h-40' : 'max-h-56'}`} alt="Comment attachment" />}
+                                                                    {discussionPostContent.image && <PostImage image={discussionPostContent.image} rpcNode={activeNodeDetails} className={`rounded-md ${hasDiscussionPostText ? 'max-h-40' : 'max-h-56'}`} alt="Comment attachment" />}
                                                                 </div>
                                                             </div>
                                                             <div className="w-11 pt-0.5 text-[10px] flex flex-col gap-0.5">
@@ -502,7 +505,7 @@ function PostComponent(props: PostComponentProps) {
                                                 />
                                                 <label htmlFor={`post-image-input-${replyPost.postId}`} className={`px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} onClick={(e) => !inputPostDisabled && handleAddImageClick(e)}>Add image</label>
                                                 {discussionComposerImageAttachment && <button className="px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => clearPostImageAttachmentHandler(replyPost.postId)}>Remove image</button>}
-                                                <span className="text-gray-400">Max {Math.round(MAX_POST_IMAGE_BYTES / 1024)}KB</span>
+                                                <span className="text-gray-400">Max {POST_IMAGE_MAX_SIZE_LABEL}</span>
                                             </div>
                                             {discussionComposerImageAttachment && <img className="mt-1 max-h-32 rounded-md" src={discussionComposerImageAttachment.dataUrl} alt="Selected comment image preview" />}
                                         </div>

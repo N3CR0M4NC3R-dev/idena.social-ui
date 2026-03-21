@@ -6,7 +6,8 @@ const postMessagePayloadPrefix = 'idena.social-ui:post-content:v1:';
 const postImageDataUrlRegex = /^data:image\/(png|jpe?g|gif|webp|avif);base64,[A-Za-z0-9+/=]+$/i;
 const ipfsCidRegex = /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})$/i;
 
-export const MAX_POST_IMAGE_BYTES = 100 * 1024;
+export const MAX_POST_IMAGE_BYTES = 1024 * 1024;
+export const POST_IMAGE_MAX_SIZE_LABEL = '1MB';
 export const POST_IMAGE_FILE_ACCEPT = 'image/png,image/jpeg,image/jpg,image/gif,image/webp,image/avif';
 
 export type EncodedIpfsImage = {
@@ -41,6 +42,51 @@ export type ParsedPostMessage = {
         pinnedOn: string[],
     },
 };
+
+function extractFirstJsonObject(input: string) {
+    const trimmed = input.trim();
+    if (!trimmed.startsWith('{')) {
+        return '';
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i];
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (ch === '"') {
+            inString = !inString;
+            continue;
+        }
+
+        if (inString) {
+            continue;
+        }
+
+        if (ch === '{') {
+            depth++;
+        } else if (ch === '}') {
+            depth--;
+            if (depth === 0) {
+                return trimmed.slice(0, i + 1);
+            }
+        }
+    }
+
+    return '';
+}
 
 export function isSupportedPostImageType(mimeType: string) {
     return POST_IMAGE_FILE_ACCEPT.split(',').includes(mimeType.toLowerCase());
@@ -81,14 +127,28 @@ export function encodePostMessage(text: string, image?: EncodedIpfsImage) {
 }
 
 export function parsePostMessage(message: string): ParsedPostMessage {
-    if (!message.startsWith(postMessagePayloadPrefix)) {
+    const normalizedMessage = message.replace(/\u0000/g, '').trim();
+    if (!normalizedMessage.includes(postMessagePayloadPrefix)) {
         return { text: message };
     }
 
     try {
-        const payload = JSON.parse(message.slice(postMessagePayloadPrefix.length)) as PostMessagePayload;
+        const prefixIndex = normalizedMessage.indexOf(postMessagePayloadPrefix);
+        const payloadRaw = normalizedMessage.slice(prefixIndex + postMessagePayloadPrefix.length).trim();
+        let payloadString = payloadRaw;
+        let payload = undefined as PostMessagePayload | undefined;
 
-        if (!payload || typeof payload !== 'object') {
+        try {
+            payload = JSON.parse(payloadString) as PostMessagePayload;
+        } catch {
+            const extractedPayload = extractFirstJsonObject(payloadString);
+            if (extractedPayload) {
+                payload = JSON.parse(extractedPayload) as PostMessagePayload;
+                payloadString = extractedPayload;
+            }
+        }
+
+        if (!payload || typeof payload !== 'object' || !payloadString) {
             return { text: message };
         }
 
