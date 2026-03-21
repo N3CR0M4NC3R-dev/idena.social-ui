@@ -1,7 +1,7 @@
 
 import type { MouseEventLocal } from '../App.exports';
 import type { Post, Poster, Tip } from '../logic/asyncUtils';
-import { getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount } from '../logic/utils';
+import { getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, parsePostMessage } from '../logic/utils';
 import { useNavigate } from 'react-router';
 
 type ModalLikesTipsComponentProps = {
@@ -39,7 +39,8 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                 const poster = postersRef.current[address];
                 const displayAddress = getDisplayAddressShort(poster.address);
                 const { displayDate, displayTime } = getDisplayDateTime(item.timestamp);
-                const detail = (item as Post).message ?? getDisplayTipAmount((item as Tip).amount) + ' iDNA';
+                const parsedPostMessage = (item as Post).message ? parsePostMessage((item as Post).message) : undefined;
+                const detail = parsedPostMessage ? (parsedPostMessage.text || (parsedPostMessage.image ? '[image attachment]' : '')) : getDisplayTipAmount((item as Tip).amount) + ' iDNA';
 
                 return (
                     <li className="pl-2 pr-3">
