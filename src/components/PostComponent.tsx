@@ -27,6 +27,7 @@ type PostComponentProps = {
     postImageAttachments: Record<string, PostImageAttachment>,
     setPostImageAttachmentHandler: (location: string, file?: File) => Promise<void>,
     clearPostImageAttachmentHandler: (location: string) => void,
+    handleAddImageClick: (e: MouseEventLocal) => void,
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
@@ -57,6 +58,7 @@ function PostComponent(props: PostComponentProps) {
         postImageAttachments,
         setPostImageAttachmentHandler,
         clearPostImageAttachmentHandler,
+        handleAddImageClick,
         submittingPost,
         submittingLike,
         submittingTip,
@@ -280,7 +282,7 @@ function PostComponent(props: PostComponentProps) {
                                 e.currentTarget.value = '';
                             }}
                         />
-                        <label htmlFor={`post-image-input-${post.postId}`} className={`px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`}>Add image</label>
+                        <label htmlFor={`post-image-input-${post.postId}`} className={`px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} onClick={(e) => !inputPostDisabled && handleAddImageClick(e)}>Add image</label>
                         {postComposerImageAttachment && <button className="px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => clearPostImageAttachmentHandler(post.postId)}>Remove image</button>}
                         <span className="text-gray-400">Max {Math.round(MAX_POST_IMAGE_BYTES / 1024)}KB</span>
                     </div>
@@ -498,7 +500,7 @@ function PostComponent(props: PostComponentProps) {
                                                         e.currentTarget.value = '';
                                                     }}
                                                 />
-                                                <label htmlFor={`post-image-input-${replyPost.postId}`} className={`px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`}>Add image</label>
+                                                <label htmlFor={`post-image-input-${replyPost.postId}`} className={`px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} onClick={(e) => !inputPostDisabled && handleAddImageClick(e)}>Add image</label>
                                                 {discussionComposerImageAttachment && <button className="px-1.5 py-0.5 rounded-sm bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => clearPostImageAttachmentHandler(replyPost.postId)}>Remove image</button>}
                                                 <span className="text-gray-400">Max {Math.round(MAX_POST_IMAGE_BYTES / 1024)}KB</span>
                                             </div>

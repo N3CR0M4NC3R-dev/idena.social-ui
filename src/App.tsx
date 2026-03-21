@@ -31,7 +31,7 @@ const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
 const attributionsUrl = `${window.location.origin}/attributions.html`;
-const imagePostingOwnRpcNotice = 'To post images, set your own RPC URL and API key above. restricted.idena.io is read-only.';
+const imagePostingOwnRpcNotice = 'To post images you need to use your own RPC. restricted.idena.io is read-only.';
 const sessionNodeUrlKey = 'idena.social.session.rpc.url';
 const sessionNodeApiKey = 'idena.social.session.rpc.apikey';
 
@@ -732,6 +732,14 @@ function App() {
         }
     };
 
+    const handleAddImageClick = (e: MouseEventLocal) => {
+        const activeRpcUrl = activeNodeDetailsRef.current.idenaNodeUrl.trim().toLowerCase();
+        if (activeRpcUrl.includes('restricted.idena.io')) {
+            e.preventDefault();
+            alert(imagePostingOwnRpcNotice);
+        }
+    };
+
     const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot post!');
@@ -945,12 +953,6 @@ function App() {
                         )}
                     </div>
                     <hr className="mb-3 text-gray-500" />
-                    <div className="flex flex-col mb-6 text-[14px]">
-                        <p className="mb-1">For image posts (Idena RPC pinning):</p>
-                        <p className="mb-1 text-[11px] text-gray-400">Default is `restricted.idena.io`. For image posts, switch the RPC above to your own node first.</p>
-                        <p className="text-[11px] text-yellow-300">{imagePostingOwnRpcNotice}</p>
-                    </div>
-                    <hr className="mb-3 text-gray-500" />
                     <div className="flex flex-col mb-6">
                         <p>For finding past posts:</p>
                         <div className="flex flex-row gap-2">
@@ -1026,6 +1028,7 @@ function App() {
                         postImageAttachments,
                         setPostImageAttachmentHandler,
                         clearPostImageAttachmentHandler,
+                        handleAddImageClick,
                         submittingPost,
                         submittingLike,
                         submittingTip,

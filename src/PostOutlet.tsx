@@ -17,6 +17,7 @@ type PostOutletProps = {
     postImageAttachments: Record<string, PostImageAttachment>,
     setPostImageAttachmentHandler: (location: string, file?: File) => Promise<void>,
     clearPostImageAttachmentHandler: (location: string) => void,
+    handleAddImageClick: (e: MouseEventLocal) => void,
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
@@ -47,6 +48,7 @@ function PostOutlet() {
         postImageAttachments,
         setPostImageAttachmentHandler,
         clearPostImageAttachmentHandler,
+        handleAddImageClick,
         browserStateHistoryRef,
         handleOpenLikesModal,
         handleOpenTipsModal,
@@ -74,6 +76,7 @@ function PostOutlet() {
             postImageAttachments={postImageAttachments}
             setPostImageAttachmentHandler={setPostImageAttachmentHandler}
             clearPostImageAttachmentHandler={clearPostImageAttachmentHandler}
+            handleAddImageClick={handleAddImageClick}
             submittingPost={submittingPost}
             submittingLike={submittingLike}
             submittingTip={submittingTip}

@@ -24,6 +24,7 @@ type LatestPostsProps = {
     postImageAttachments: Record<string, PostImageAttachment>,
     setPostImageAttachmentHandler: (location: string, file?: File) => Promise<void>,
     clearPostImageAttachmentHandler: (location: string) => void,
+    handleAddImageClick: (e: MouseEventLocal) => void,
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
@@ -55,6 +56,7 @@ function LatestPosts() {
         postImageAttachments,
         setPostImageAttachmentHandler,
         clearPostImageAttachmentHandler,
+        handleAddImageClick,
         submittingPost,
         submittingLike,
         submittingTip,
@@ -88,13 +90,10 @@ function LatestPosts() {
                         e.currentTarget.value = '';
                     }}
                 />
-                <label htmlFor="post-image-input-main" className={`px-2 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`}>Add image</label>
+                <label htmlFor="post-image-input-main" className={`px-2 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 ${inputPostDisabled ? '' : 'hover:bg-white/20 cursor-pointer'}`} onClick={(e) => !inputPostDisabled && handleAddImageClick(e)}>Add image</label>
                 {mainPostImageAttachment && <button className="px-2 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => clearPostImageAttachmentHandler('main')}>Remove image</button>}
                 <span className="text-gray-400">Max {Math.round(MAX_POST_IMAGE_BYTES / 1024)}KB</span>
             </div>
-            <p className="mb-1 text-[11px] text-gray-400">
-                To post images, set your own RPC URL and API key above. restricted.idena.io is read-only.
-            </p>
             {mainPostImageAttachment && (
                 <div className="mb-2 rounded-md bg-stone-900 p-2">
                     <img className="max-h-45 rounded-md" src={mainPostImageAttachment.dataUrl} alt="Selected post image preview" />
@@ -127,6 +126,7 @@ function LatestPosts() {
                         postImageAttachments={postImageAttachments}
                         setPostImageAttachmentHandler={setPostImageAttachmentHandler}
                         clearPostImageAttachmentHandler={clearPostImageAttachmentHandler}
+                        handleAddImageClick={handleAddImageClick}
                         submittingPost={submittingPost}
                         submittingLike={submittingLike}
                         submittingTip={submittingTip}
