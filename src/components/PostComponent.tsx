@@ -238,32 +238,11 @@ function PostComponent(props: PostComponentProps) {
                     </div>
                 </div>
             </div>
-            <div id={`post-text-${post.postId}`} className="flex-1 px-4 pt-2 pb-1 text-[17px] text-wrap leading-5">
+            <div id={`post-text-${post.postId}`} className="flex-1 px-4 pt-2 pb-3 text-[17px] text-wrap leading-5">
                 <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(post, e)}>view more</a></span>}</p>
             </div>
-            <div className="h-6 px-2 flex flex-row justify-between">
-                <div className=""></div>
-                <div className="self-end text-[11px]/6 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
-            </div>
-            {!isBreakingChangeDisabled && <div className="flex flex-row gap-2 px-2 items-end">
-                <div className="flex-1">
-                    <textarea
-                        id={`post-input-${post.postId}`}
-                        rows={1}
-                        className="w-full min-h-[32px] rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                        placeholder="Write your reply here..."
-                        disabled={inputPostDisabled}
-                        onFocus={replyInputOnFocusHandler}
-                        onBlur={replyInputOnBlurHandler}
-                        onClick={(e) => e.stopPropagation()}
-                    />
-                </div>
-                <div>
-                    <button className="h-9 w-17 my-1 px-4 py-1 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={(e) => localSubmitPostHandler(post.postId, post.postId, e)}>{submittingPost === post.postId ? '...' : 'Post!'}</button>
-                </div>
-            </div>}
-            <div className="flex flex-row px-2 mb-1.5 text-[12px]">
-                <div className="w-23">
+            <div className="flex flex-row ml-2 mr-3 mb-1.5 text-[12px]">
+                <div className="w-22">
                     {replyComments.length ?
                         <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => setReplyToPostInputFocusHandler(post.postId, e)} /><a className="text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{ totalNumberOfReplies} replies</a></div>
                     :
@@ -284,11 +263,31 @@ function PostComponent(props: PostComponentProps) {
                         <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === post.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, post)} /><span className="align-[-0.5px]">0 idna</span></div>
                     }
                 </div>
+                <div className="w-35">
+                    <div className="text-right text-[11px]/6 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
+                </div>
             </div>
+            {!isBreakingChangeDisabled && <div className="flex flex-row gap-2 mb-1 px-2 items-end">
+                <div className="flex-1">
+                    <textarea
+                        id={`post-input-${post.postId}`}
+                        rows={1}
+                        className="w-full field-sizing-content min-h-[32px] max-h-[520px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
+                        placeholder="Reply here..."
+                        disabled={inputPostDisabled}
+                        onFocus={replyInputOnFocusHandler}
+                        onBlur={replyInputOnBlurHandler}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+                <div>
+                    <button className="h-8 w-17 mb-1.5 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={(e) => localSubmitPostHandler(post.postId, post.postId, e)}>{submittingPost === post.postId ? '...' : 'Post!'}</button>
+                </div>
+            </div>}
         </div>
         {showReplies && <div className="flex flex-col bg-stone-800">
             <ul>
-                {replyComments.map((replyPost, index) => {
+                {replyComments.map((replyPost) => {
 
                     if (!browserStateHistoryRef.current[locationKey]?.[postId]?.[replyPost.postId]) {
                         setPostDomSettings(replyPost.postId, initDomSettings);
@@ -318,7 +317,7 @@ function PostComponent(props: PostComponentProps) {
 
                     return (
                         <li key={replyPost.postId}>
-                            {index !== 0 && <hr className="mx-2 text-gray-700" />}
+                            <hr className="mx-2 text-gray-700" />
                             <div className="mt-1.5 mb-2.5 flex flex-col">
                                 <div className="h-5 flex flex-row">
                                     <div className="w-11 flex-none flex flex-col">
@@ -368,8 +367,8 @@ function PostComponent(props: PostComponentProps) {
                                         <p className="text-[10px]/5 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
                                 </div>
-                                {showDiscussion && <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 rounded-md text-[14px]">
-                                    <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
+                                {showDiscussion && <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
+                                    <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
                                         {discussionPostComments.length === 0 && <li className="mb-1"><p className="italic text-center text-[12px] text-gray-500">no comments yet</p></li>}
                                         {discussionPostComments.map((discussionPost) => {
                                             const postTips = tipsRef.current[discussionPost.postId] ?? { totalAmount: 0, tips: [] };
@@ -416,7 +415,7 @@ function PostComponent(props: PostComponentProps) {
                                                                 </div>
                                                             </div>
                                                             <div className="w-11 pt-0.5 text-[10px] flex flex-col gap-0.5">
-                                                                <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)} /></div>
+                                                                <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] -ml-0.5 mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)} /></div>
                                                                 {likesForDiscussionPost.length ?
                                                                     <div className="text-red-400 text-left whitespace-nowrap"><img src={heartRedSvg} className={'h-5 p-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === discussionPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(discussionPost.postId, discussionPost.postId, e, discussParentId)} /><a className="text-red-400 align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForDiscussionPost)}>{likesForDiscussionPost.length}</a></div>
                                                                 :
@@ -434,10 +433,10 @@ function PostComponent(props: PostComponentProps) {
                                             );
                                         })}
                                     </ul>
-                                    {discussReplyToPost && <div className="w-full mt-1 px-1 flex flex-row bg-stone-800 rounded-sm">
-                                        <div className="flex-1 overflow-hidden text-nowrap text-[12px] text-gray-500"><p>Replying to {getDisplayAddressShort(discussReplyToPost!.poster)}: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p></div>
+                                    {discussReplyToPost && <div className="w-full mt-1 px-1 flex flex-row bg-stone-800">
+                                        <div className="flex-1 overflow-hidden text-nowrap text-[12px] text-gray-500"><p className="mt-[1px]">Replying to {getDisplayAddressShort(discussReplyToPost!.poster)}: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p></div>
                                         <div className="w-6 text-right">
-                                            <button className="text-[10px] align-[2.5px] h-4 w-5 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>✖</button>
+                                            <button className="text-[10px] align-[2.5px] h-4 w-5 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>✖</button>
                                         </div>
                                     </div>}
                                     <div className="mt-1 flex flex-row gap-2 items-end">
@@ -445,13 +444,13 @@ function PostComponent(props: PostComponentProps) {
                                             <textarea
                                                 id={`post-input-${replyPost.postId}`}
                                                 rows={2}
-                                                className="w-full min-h-[26px] rounded-sm py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
+                                                className="w-full field-sizing-content min-h-[26px] max-h-[312px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
                                                 placeholder="Comment here..."
                                                 disabled={inputPostDisabled}
                                             />
                                         </div>
                                         <div>
-                                            <button className="h-7.5 w-16 my-1 px-4 rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => localSubmitPostHandler(replyPost.postId, discussReplyToPostId, undefined, discussParentId)}>{submittingPost === replyPost.postId ? '...' : 'Post!'}</button>
+                                            <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => localSubmitPostHandler(replyPost.postId, discussReplyToPostId, undefined, discussParentId)}>{submittingPost === replyPost.postId ? '...' : 'Post!'}</button>
                                         </div>
                                     </div>
                                 </div>}

@@ -801,16 +801,16 @@ function App() {
                         <div className="flex flex-col">
                             <div className="flex flex-row mb-2 gap-1">
                                 <p className="w-13 flex-none text-right leading-7">Rpc url:</p>
-                                <input className="h-6.5 flex-1 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeUrl} onChange={e => setInputNodeUrl(e.target.value)} />
+                                <input className="h-6.5 flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeUrl} onChange={e => setInputNodeUrl(e.target.value)} />
                             </div>
                             <div className="flex flex-row mb-1 gap-1">
                                 <p className="w-13 flex-none text-right leading-7">Api key:</p>
-                                <input className="h-6.5 flex-1 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeKey} onChange={e => setInputNodeKey(e.target.value)} />
+                                <input className="h-6.5 flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeKey} onChange={e => setInputNodeKey(e.target.value)} />
                             </div>
                             {!nodeAvailable && <p className="ml-14 text-[11px] text-red-400">Node Unavailable. Please try again.</p>}
                         </div>
                         <div className="flex flex-row">
-                            <button className={`h-7 w-16 ml-14 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeApplied(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
+                            <button className={`h-7 w-16 ml-14 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeApplied(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
                             {!inputNodeApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[11px]">Apply changes to take effect</p>}
                         </div>
                     </div>
@@ -829,10 +829,10 @@ function App() {
                         {inputSendingTxs === 'idena-app' && (
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <p className="mb-1">Your Idena Address:</p>
-                                <input className="flex-1 mb-1 h-6.6 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
+                                <input className="flex-1 mb-1 h-6.6 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
                                 {postersAddressInvalid && <p className="text-[11px] text-red-400">Invalid address. (Posting, liking, tipping is disabled)</p>}
                                 <div className="flex flex-row">
-                                    <button className={`w-16 h-7 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressApplied(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
+                                    <button className={`w-16 h-7 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressApplied(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
                                     {!inputPostersAddressApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
                                 </div>
                             </div>
@@ -853,11 +853,11 @@ function App() {
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <div className="flex flex-row gap-1">
                                     <p className="mb-1 w-13 flex-none text-right leading-7">Api Url:</p>
-                                    <input className="flex-1 mb-1 h-6.6 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
+                                    <input className="flex-1 mb-1 h-6.6 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
                                 </div>
                                 {indexerApiUrlInvalid && <p className="ml-14 text-[11px] text-red-400">Invalid Api Url.</p>}
                                 <div className="flex flex-row">
-                                    <button className={`w-16 h-7 mt-1 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputIdenaIndexerApiUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
+                                    <button className={`w-16 h-7 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputIdenaIndexerApiUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
                                     {!inputIdenaIndexerApiUrlApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
                                 </div>
                             </div>
@@ -873,12 +873,12 @@ function App() {
                     <div className="mb-4 text-[14px]">
                         <div className="flex flex-col">
                             <div className="flex flex-row mb-2 gap-2">
-                                <input className="w-16 h-6.5 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} disabled={inputPostDisabled} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} />
-                                <button className="w-18 h-7 -mt-0.5 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={inputPostDisabled} onClick={() => deposit()}>{submittingDeposit ? '...' : 'Deposit'}</button>
+                                <input className="w-16 h-6.5 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} disabled={inputPostDisabled} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} />
+                                <button className="w-18 h-7 -mt-0.5 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={inputPostDisabled} onClick={() => deposit()}>{submittingDeposit ? '...' : 'Deposit'}</button>
                             </div>
                             <div className="flex flex-row mb-1 gap-2">
-                                <input className="w-16 h-6.5 rounded-sm py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} value={withdrawAmount} disabled={inputPostDisabled} onChange={e => setWithdrawAmount(e.target.value)} />
-                                <button className="w-18 h-7 -mt-0.5 rounded-sm inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={inputPostDisabled} onClick={() => withdraw()}>{submittingWithdrawal ? '...' : 'Withdraw'}</button>
+                                <input className="w-16 h-6.5 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} value={withdrawAmount} disabled={inputPostDisabled} onChange={e => setWithdrawAmount(e.target.value)} />
+                                <button className="w-18 h-7 -mt-0.5 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={inputPostDisabled} onClick={() => withdraw()}>{submittingWithdrawal ? '...' : 'Withdraw'}</button>
                             </div>
                         </div>
                     </div>
@@ -952,7 +952,7 @@ function App() {
                     {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} tipsBalance={tipsBalance} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
-                    <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] rounded-md bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
+                    <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
                 </Modal>
             </div>
         </main>
