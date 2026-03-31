@@ -105,6 +105,7 @@ function PostComponent(props: PostComponentProps) {
 
     const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
     const showReplies = !postDomSettingsItem.repliesHidden;
+    const showReplyInput = !postDomSettingsItem.replyInputHidden;
     const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v5.timestamp;
 
     const replyPosts = repliesToThisPost.map(replyPostId => postsRef.current[replyPostId]);
@@ -122,6 +123,20 @@ function PostComponent(props: PostComponentProps) {
         return { ...acc, [discussParentId]: { discussionPostLikes, discussionPostComments } };
     }, {}) as Record<string, { discussionPostLikes: Post[], discussionPostComments: Post[] }>;
 
+    const toggleShowReplyInputHandler = (e: MouseEventLocal, post: Post) => {
+        e?.stopPropagation();
+
+        const newReplyInputHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].replyInputHidden;
+        setPostDomSettings(post.postId, { replyInputHidden: newReplyInputHidden }, true);
+
+        if (!newReplyInputHidden) {
+            setTimeout(() => {
+                const replyToPostTextareaElement = document.getElementById(`post-input-${post.postId}`) as HTMLTextAreaElement;
+                replyToPostTextareaElement.focus();
+            }, SET_NEW_POSTS_ADDED_DELAY);
+        }
+    };
+
     const toggleShowRepliesHandler = (e: MouseEventLocal, post: Post, replyPostIds: string[]) => {
         const newRepliesHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].repliesHidden;
 
@@ -131,13 +146,13 @@ function PostComponent(props: PostComponentProps) {
         }
     };
 
-    const toggleShowDiscussionHandler = (post: Post, override?: boolean) => {
+    const toggleShowDiscussionHandler = (post: Post) => {
         const newRepliesHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].repliesHidden;
-        setPostDomSettings(post.postId, { repliesHidden: override ?? newRepliesHidden }, true);
+        setPostDomSettings(post.postId, { repliesHidden: newRepliesHidden }, true);
     };
 
     const toggleReplyDiscussionHandler = (post: Post) => {
-        toggleShowDiscussionHandler(post, false);
+        toggleShowDiscussionHandler(post);
         setDiscussReplyToPostIdHandler(post, post.postId);
     };
 
@@ -147,13 +162,6 @@ function PostComponent(props: PostComponentProps) {
 
     const replyInputOnBlurHandler: FocusEventHandler<HTMLTextAreaElement> = (e) => {
         if (e.target.value === '') e.target.rows = 1;
-    };
-
-    const setReplyToPostInputFocusHandler = (postId: string, e?: MouseEventLocal) => {
-        e?.stopPropagation();
-
-        const replyToPostTextareaElement = document.getElementById(`post-input-${postId}`) as HTMLTextAreaElement;
-        replyToPostTextareaElement.focus();
     };
 
     const setDiscussReplyToPostIdHandler = (post: Post, discussReplyToPostId?: string) => {
@@ -244,9 +252,9 @@ function PostComponent(props: PostComponentProps) {
             <div className="flex flex-row ml-2 mr-3 mb-1.5 text-[12px]">
                 <div className="w-22">
                     {replyComments.length ?
-                        <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => setReplyToPostInputFocusHandler(post.postId, e)} /><a className="text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{ totalNumberOfReplies} replies</a></div>
+                        <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => toggleShowReplyInputHandler(e, post)} /><a className="text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{ totalNumberOfReplies} replies</a></div>
                     :
-                        <div className="text-gray-500"><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => setReplyToPostInputFocusHandler(post.postId, e)} /><span className="align-[-0.5px]">0 replies</span></div>
+                        <div className="text-gray-500"><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => toggleShowReplyInputHandler(e, post)} /><span className="align-[-0.5px]">0 replies</span></div>
                     }
                 </div>
                 <div className="w-20">
@@ -267,7 +275,7 @@ function PostComponent(props: PostComponentProps) {
                     <div className="text-right text-[11px]/6 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
                 </div>
             </div>
-            {!isBreakingChangeDisabled && <div className="flex flex-row gap-2 mb-1 px-2 items-end">
+            {!isBreakingChangeDisabled && showReplyInput && <div className="flex flex-row gap-2 mb-1 px-2 items-end">
                 <div className="flex-1">
                     <textarea
                         id={`post-input-${post.postId}`}

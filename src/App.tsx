@@ -38,7 +38,7 @@ const defaultAd = {
     media: WhatIsIdenaPng,
 };
 
-const POLLING_INTERVAL = 5000;
+const POLLING_INTERVAL = 10000;
 const SCANNING_INTERVAL = 10;
 const ADS_INTERVAL = 10000;
 const SCAN_POSTS_TTL = 1 * 60;
