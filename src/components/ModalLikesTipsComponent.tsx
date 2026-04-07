@@ -1,13 +1,12 @@
 
 import type { MouseEventLocal } from '../App.exports';
-import type { Post, Poster, Tip } from '../logic/asyncUtils';
-import { getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount } from '../logic/utils';
+import type { Post, Tip } from '../logic/asyncUtils';
+import { getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus } from '../logic/utils';
 import { useNavigate } from 'react-router';
 
 type ModalLikesTipsComponentProps = {
     heading: string,
     modalItemsRef: React.RefObject<Post[] | Tip[]>,
-    postersRef: React.RefObject<Record<string, Poster>>,
     closeModal: () => void,
 };
 
@@ -16,7 +15,6 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
     const {
         heading,
         modalItemsRef,
-        postersRef,
         closeModal,
     } = props;
 
@@ -36,8 +34,12 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
             {modalItemsRef!.current.map((item, index) => {
                 const isLastItem = index === (modalItemsRef!.current.length - 1);
                 const address = (item as Post).poster ?? (item as Tip).tipper;
-                const poster = postersRef.current[address];
-                const displayAddress = getDisplayAddressShort(poster.address);
+                const posterDetails = (item as Post).posterDetails_atTimeOfPost ?? (item as Tip).tipperDetails_atTimeOfTip;
+                const posterDisplayAddress = getDisplayAddressShort(address);
+                const posterStake = posterDetails.stake;
+                const posterState = posterDetails.state;
+                const posterAge = posterDetails.age;
+
                 const { displayDate, displayTime } = getDisplayDateTime(item.timestamp);
                 const detail = (item as Post).message ?? getDisplayTipAmount((item as Tip).amount) + ' iDNA';
 
@@ -46,14 +48,14 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                         <div className="h-7 flex flex-row">
                             <div className="w-6 flex-none flex flex-col">
                                 <div className="flex-none">
-                                    <img src={`https://robohash.org/${poster.address}?set=set1`} />
+                                    <img src={`https://robohash.org/${address}?set=set1`} />
                                 </div>
                                 <div className="flex-1"></div>
                             </div>
                             <div className="mr-2 flex flex-col justify-center overflow-hidden">
                                 <div className="flex flex-row items-center">
-                                    <p className="text-[14px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>{displayAddress}</p>
-                                    <span className="ml-2 text-[10px]">{`(${poster.age}, ${poster.state}, ${parseInt(poster.stake)})`}</span>
+                                    <p className="text-[14px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${address}`)}>{posterDisplayAddress}</p>
+                                    <span className="ml-2 text-[10px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                 </div>
                             </div>
                             <div className="flex-1 flex flex-col justify-center text-right">

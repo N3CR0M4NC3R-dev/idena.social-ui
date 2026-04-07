@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitDeposit, submitWithdraw, submitSendTipFromBalance, submitSendTip } from './logic/asyncUtils';
-import { getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/api';
-import { dna2numStr, getDisplayAddress, isObjectEmpty } from './logic/utils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/asyncUtils';
+import { getBase64FromDataUrl, getDisplayAddress, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import { Link, Outlet } from 'react-router';
 import type { MouseEventLocal, PostDomSettingsCollection } from './App.exports';
@@ -13,16 +12,13 @@ import ModalSendTipComponent from './components/ModalSendTipComponent';
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
 const initIndexerApiUrl = 'https://api.idena.io';
-const contractAddressV2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9';
-const contractAddressV1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
+const contractAddressCurrent = '0xc0324f3Cf8158D6E27dc0A07c221636056174718';
+const contractAddress2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9';
+const contractAddress1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
 const firstBlock = 10135627;
 const makePostMethod = 'makePost';
 const sendTipMethod = 'sendTip';
-const sendTipFromBalanceMethod = 'sendTipFromBalance';
-const depositMethod = 'deposit';
-const withdrawMethod = 'withdraw';
-const allMethods = [makePostMethod, sendTipMethod, sendTipFromBalanceMethod, depositMethod, withdrawMethod];
-const recurseBackwardMethods = [makePostMethod, sendTipMethod, sendTipFromBalanceMethod];
+const allMethods = [makePostMethod, sendTipMethod];
 const thisChannelId = '';
 const discussPrefix = 'discuss:';
 const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
@@ -45,6 +41,8 @@ const SCAN_POSTS_TTL = 1 * 60;
 const INDEXER_API_ITEMS_LIMIT = 20;
 const SET_NEW_POSTS_ADDED_DELAY = 20;
 const SUBMITTING_POST_INTERVAL = 2000;
+const MAX_POST_MEDIA_BYTES = 1024 * 1024;
+const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
 
 
 const DEBUG = false;
@@ -61,6 +59,7 @@ const customModalStyles = {
     },
     content: {
         border: 'none',
+        borderRadius: 'none',
         backgroundColor: 'rgb(41, 37, 38)',
         top: '50%',
         left: '50%',
@@ -69,7 +68,7 @@ const customModalStyles = {
         marginRight: '-50%',
         transform: 'translate(-50%, -50%)',
         padding: '5px 0px 5px 0px',
-        width: '430px',
+        width: '500px',
     },
 };
 
@@ -118,12 +117,10 @@ function App() {
     const forwardOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
     const backwardOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
     const continuationTokenRef = useRef(undefined as undefined | string);
-    const pastContractAddressRef = useRef(contractAddressV2);
+    const pastContractAddressRef = useRef(contractAddressCurrent);
     const [submittingPost, setSubmittingPost] = useState<string>('');
     const [submittingLike, setSubmittingLike] = useState<string>('');
     const [submittingTip, setSubmittingTip] = useState<string>('');
-    const [submittingDeposit, setSubmittingDeposit] = useState<string>('');
-    const [submittingWithdrawal, setSubmittingWithdrawal] = useState<string>('');
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
     const browserStateHistoryRef = useRef<Record<string, PostDomSettingsCollection>>({});
     const [modalOpen, setModalOpen] = useState<string>('');
@@ -131,10 +128,8 @@ function App() {
     const modalTipsRef = useRef<Tip[]>([]);
     const modalSendTipRef = useRef<Post>(undefined);
     const tipsRef = useRef<Record<string, { totalAmount: number, tips: Tip[] }>>({});
-    const [tipsBalance, setTipsBalance] = useState<string>('0');
-    const [depositAmount, setDepositAmount] = useState<string>('0');
-    const [withdrawAmount, setWithdrawAmount] = useState<string>('0');
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
+    const postMediaAttachmentsRef = useRef<any>({});
 
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
@@ -205,16 +200,6 @@ function App() {
                         }
                         setIdenaWalletBalance(getBalanceResult.balance);
                         setPostersAddressInvalid(false);
-
-                        const { result: getReadMapResult } = await rpcClientRef.current!('contract_readMap', [
-                            contractAddressV2,
-                            'i:',
-                            inputPostersAddress,
-                            'string',
-                        ]);
-
-                        const { tipsBalance } = JSON.parse(getReadMapResult);
-                        setTipsBalance(tipsBalance);
                     }
                 })();
             }
@@ -226,9 +211,9 @@ function App() {
             setIdenaIndexerApiUrl(inputIdenaIndexerApiUrl);
 
             (async function() {
-                const { result, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddressV2, 1);
+                const { result, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddressCurrent, 1);
 
-                if (!error && result?.length === 1 && result?.[0]?.contractAddress === contractAddressV2) {
+                if (!error && result?.length === 1 && result?.[0]?.contractAddress === contractAddressCurrent) {
                     setIdenaIndexerApiUrlInvalid(false);
                 } else {
                     setIdenaIndexerApiUrlInvalid(true);
@@ -306,7 +291,7 @@ function App() {
             (async function recurseForward() {
                 if (nodeAvailableRef.current) {
                     const pendingBlock = currentBlockCapturedRef.current ? currentBlockCapturedRef.current + 1 : initialBlock;
-                    const contractAddress = contractAddressV2;
+                    const contractAddress = contractAddressCurrent;
                     recurseForwardIntervalId = setTimeout(postScannerFactory('recurseForward', recurseForward, setCurrentBlockCaptured, currentBlockCapturedRef, contractAddress, pendingBlock), POLLING_INTERVAL);
                 }
             } as RecurseForward)();
@@ -391,7 +376,6 @@ function App() {
             const isRecurseForward = recurseMethod === 'recurseForward';
             const isRecurseBackwardWithRpcOnly = recurseMethod === 'recurseBackwardWithRpcOnly';
             const isRecurseBackwardWithIndexerApi = recurseMethod === 'recurseBackwardWithIndexerApi';
-            const methods = isRecurseForward ? allMethods : recurseBackwardMethods;
 
             // The ref is updated for immediate effect, the state is updated for the rerender.
             const setBlockCapturedRefState = (block: number) => {
@@ -416,8 +400,12 @@ function App() {
                     if (getBlockByHeightResult.transactions === null) {
                         setBlockCapturedRefState(pendingBlock!);
 
-                        if (isRecurseBackwardWithRpcOnly && getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
-                            pastContractAddressRef!.current = contractAddressV1;
+                        if (isRecurseBackwardWithRpcOnly) {
+                            if (getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
+                                pastContractAddressRef!.current = contractAddress1;
+                            } else if (getBlockByHeightResult.timestamp < breakingChanges.v9.timestamp) {
+                                pastContractAddressRef!.current = contractAddress2;
+                            }
                         }
                         throw 'no transactions';
                     }
@@ -434,15 +422,18 @@ function App() {
                     }
 
                     transactions = result
-                        ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && methods.includes(balanceUpdate.txReceipt.method) && balanceUpdate.address !== pastContractAddressRef!.current && balanceUpdate.txReceipt.success === true)
+                        ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && allMethods.includes(balanceUpdate.txReceipt.method) && balanceUpdate.address !== pastContractAddressRef!.current && balanceUpdate.txReceipt.success === true)
                         .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: Math.floor((new Date(balanceUpdate.timestamp)).getTime() / 1000 ) }))
                     ?? [];
 
                     if (continuationToken) {
                         continuationTokenRef!.current = continuationToken;
                     } else {
-                        if (pastContractAddressRef!.current === contractAddressV2) {
-                            pastContractAddressRef!.current = contractAddressV1;
+                        if (pastContractAddressRef!.current === contractAddressCurrent) {
+                            pastContractAddressRef!.current = contractAddress2;
+                            continuationTokenRef!.current = undefined;
+                        } else if (pastContractAddressRef!.current === contractAddress2) {
+                            pastContractAddressRef!.current = contractAddress1;
                             continuationTokenRef!.current = undefined;
                         } else {
                             continuationTokenRef!.current = 'finished processing';
@@ -453,7 +444,7 @@ function App() {
                     throw 'this should not happen';
                 }
 
-                const transactionsWithDetails = await getTransactionDetails(transactions, contractAddress, methods, rpcClientRef.current!);
+                const transactionsWithDetails = await getTransactionDetails(transactions, contractAddress, allMethods, rpcClientRef.current!);
 
                 let lastValidTransaction;
 
@@ -461,35 +452,18 @@ function App() {
 
                 let newReplyPostsCollection = {};
 
+                const posterPromises = [];
+                const messagePromises = [];
+                const mediaPromises = [];
+
                 for (let index = 0; index < transactionsWithDetails.length; index++) {
                     const transaction = transactionsWithDetails[index];
 
-                    if ([sendTipMethod, sendTipFromBalanceMethod].includes(transaction.method)) {
-                        const { postId, updatedPostTips, newPoster } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef);
+                    if ([sendTipMethod].includes(transaction.method)) {
+                        const { postId, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef);
                         tipsRef.current = { ...tipsRef.current, [postId]: updatedPostTips };
-                        postersRef.current = { ...postersRef.current, ...(newPoster && { [newPoster.address]: newPoster }) };
 
-                        lastValidTransaction = transaction;
-
-                        continue;
-                    }
-
-                    if ([depositMethod, withdrawMethod].includes(transaction.method)) {
-                        if (isRecurseForward && !postersAddressInvalidRef.current) {
-                            const { result: getReadMapResult } = await rpcClientRef.current!('contract_readMap', [
-                                contractAddressV2,
-                                'i:',
-                                postersAddressRef.current,
-                                'string',
-                            ]);
-
-                            try {
-                                const { tipsBalance } = JSON.parse(getReadMapResult);
-                                setTipsBalance(tipsBalance);
-                            } catch (error) {
-                                // do nothing
-                            }
-                        }
+                        posterPromise && posterPromises.push(posterPromise);
 
                         lastValidTransaction = transaction;
 
@@ -498,7 +472,9 @@ function App() {
 
                     const {
                         newPost,
-                        newPoster,
+                        posterPromise,
+                        mediaPromise,
+                        messagePromise,
                         continued,
                     } = await getNewPosterAndPost(
                         transaction,
@@ -515,12 +491,15 @@ function App() {
 
                     lastValidTransaction = transaction;
 
+                    posterPromise && posterPromises.push(posterPromise);
+                    messagePromise && messagePromises.push(messagePromise);
+                    mediaPromise && mediaPromises.push(mediaPromise);
+
                     if (!newPost!.replyToPostId && newPost!.channelId === thisChannelId) {
                         newOrderedPostIds.push(newPost!.postId);
                     }
 
                     const newPosts = { [newPost!.postId]: newPost as Post };
-                    const newPosters = newPoster ? { [newPoster.address]: newPoster } : {};
 
                     const newReplyPosts: Record<string, string> = {};
                     const newForwardOrphanedReplyPosts: Record<string, string> = {};
@@ -530,14 +509,18 @@ function App() {
                     const updatedPosts: Record<string, Post> = {};
 
                     if (postChannelRegex.test(newPost!.channelId)) {
-                        const discussionPostId = newPost!.channelId.split(':')[1];
+                        const preV9 = newPost!.timestamp < breakingChanges.v9.timestamp;
+                        const discussionPostIdRaw = newPost!.channelId.split(discussPrefix)[1];
+                        const discussionPostId = preV9 ? breakingChanges.v9.postIdPrefix + discussionPostIdRaw : discussionPostIdRaw;
                         const discussionPost = postsRef.current[discussionPostId];
                         const orphaned = !discussionPost || discussionPost.orphaned;
-                        postsRef.current = { ...postsRef.current, [newPost!.channelId]: { orphaned } as Post };
+
+                        const channelId = discussPrefix + discussionPostId;
+                        postsRef.current = { ...postsRef.current, [channelId]: { orphaned } as Post };
 
                         getReplyPosts(
                             newPost!.postId,
-                            newPost!.channelId,
+                            channelId,
                             isRecurseForward,
                             postsRef.current,
                             replyPostsTreeRef.current,
@@ -598,12 +581,33 @@ function App() {
                         throw 'this should not happen';
                     }
 
-                    postersRef.current = { ...postersRef.current, ...newPosters };
                     postsRef.current = { ...postsRef.current, ...updatedPosts, ...newPosts };
                     replyPostsTreeRef.current = { ...replyPostsTreeRef.current, ...newReplyPosts };
                     deOrphanedReplyPostsTreeRef.current = { ...deOrphanedReplyPostsTreeRef.current, ...newDeOrphanedReplyPosts };
                     forwardOrphanedReplyPostsTreeRef.current = { ...forwardOrphanedReplyPostsTreeRef.current, ...newForwardOrphanedReplyPosts };
                     backwardOrphanedReplyPostsTreeRef.current = { ...backwardOrphanedReplyPostsTreeRef.current, ...newBackwardOrphanedReplyPosts };
+                }
+
+                const postersResolved = await Promise.all(posterPromises);
+                let newPosters = {};
+                for (let index = 0; index < postersResolved.length; index++) {
+                    const posterResolved = postersResolved[index];
+                    newPosters = { ...newPosters, [posterResolved.address]: posterResolved };
+                }
+                postersRef.current = { ...postersRef.current, ...newPosters };
+
+                const messages = await Promise.all(messagePromises);
+                for (let index = 0; index < messages.length; index++) {
+                    const messagesProps = messages[index];
+                    const updatedPost = { ...postsRef.current[messagesProps!.postId], ...messagesProps };
+                    postsRef.current = { ...postsRef.current, [messagesProps!.postId]: updatedPost };
+                }
+
+                const media = await Promise.all(mediaPromises);
+                for (let index = 0; index < media.length; index++) {
+                    const mediaProps = media[index];
+                    const updatedPost = { ...postsRef.current[mediaProps!.postId], ...mediaProps };
+                    postsRef.current = { ...postsRef.current, [mediaProps!.postId]: updatedPost };
                 }
 
                 setOrderedPostIds((currentOrderedPostIds) => isRecurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
@@ -653,21 +657,51 @@ function App() {
 
     useEffect(() => {
         let intervalSubmittingPost: NodeJS.Timeout;
-        if (submittingPost || submittingLike || submittingTip || submittingDeposit || submittingWithdrawal) {
+        if (submittingPost || submittingLike || submittingTip) {
             intervalSubmittingPost = setTimeout(() => {
                 setSubmittingPost('');
                 setSubmittingLike('');
                 setSubmittingTip('');
-                setSubmittingDeposit('');
-                setSubmittingWithdrawal('');
             }, SUBMITTING_POST_INTERVAL);
         }
         return () => clearInterval(intervalSubmittingPost);
-    }, [submittingPost, submittingLike, submittingTip, submittingDeposit, submittingWithdrawal]);
+    }, [submittingPost, submittingLike, submittingTip]);
 
     useEffect(() => {
-        setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || !!submittingDeposit || !!submittingWithdrawal || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
-    }, [submittingPost, submittingLike, submittingTip, submittingDeposit, submittingWithdrawal, inputSendingTxs, viewOnlyNode, postersAddressInvalid]);
+        setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
+    }, [submittingPost, submittingLike, submittingTip, inputSendingTxs, viewOnlyNode, postersAddressInvalid]);
+
+    const setPostMediaAttachmentHandler = async (location: string, file: File) => {
+        if (!supportedImageTypes.includes(file.type)) {
+            alert('Media format not supported.');
+            return;
+        }
+
+        if (inputSendingTxs === 'rpc' && file.size > MAX_POST_MEDIA_BYTES) {
+            alert('1MB is the maximum size. This image is too large.');
+            return;
+        }
+
+        if (inputSendingTxs === 'idena-app' && file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
+            alert('5KB is the maximum size when using the Idena App. This image is too large.');
+            return;
+        }
+
+        try {
+            const imageDataUrl = await new Promise<string>((resolve, reject) => {
+                const fileReader = new FileReader();
+                fileReader.onload = () => resolve(fileReader.result as string);
+                fileReader.onerror = () => reject(new Error('Failed to read image file.'));
+                fileReader.readAsDataURL(file);
+            });
+
+            const newMedia = { dataUrl: imageDataUrl, file };
+
+            postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [location]: newMedia };
+        } catch {
+            alert('Failed to read media file.');
+        }
+    };
 
     const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
         if (!nodeAvailable) {
@@ -676,21 +710,51 @@ function App() {
         }
 
         const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
-        const inputText = postTextareaElement.value;
+        let inputText = postTextareaElement.value ?? '';
 
-        if (inputText) {
-            postTextareaElement.value = '';
-        } else {
+        const postMediaAttachment = postMediaAttachmentsRef.current[location];
+
+        if (!inputText && !postMediaAttachment) {
             return;
         }
 
-        setSubmittingPost(location);
+        const { base64Media, base64MediaType } = postMediaAttachment ? getBase64FromDataUrl(postMediaAttachment.dataUrl) : {};
 
-        if (location !== 'main') {
-            postTextareaElement.rows = 1;
+        let media = base64Media ? [base64Media] : [];
+        let mediaType = base64MediaType ? [base64MediaType] : [];
+
+        if (inputSendingTxs === 'rpc') {
+            if (inputText.length > 100) {
+                const fileBytes = str2bytes(inputText);
+                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, fileBytes, postersAddressRef.current);
+
+                if (!cidAddress) {
+                    alert('Something went wrong. Probably you have insufficient iDNA.');
+                }
+                
+                inputText = cidAddress!;
+            }
+
+            if (postMediaAttachment) {
+                const fileBytes = new Uint8Array(await postMediaAttachment.file.arrayBuffer());
+
+                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, fileBytes, postersAddressRef.current);
+
+                if (!cidAddress) {
+                    alert('Something went wrong. Probably you have insufficient iDNA.');
+                }
+
+                media = [cidAddress!];
+                mediaType = [postMediaAttachment.file.type];
+            }
         }
 
-        await submitPost(postersAddress, contractAddressV2, makePostMethod, inputText, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+        postTextareaElement.value = '';
+        postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [location]: undefined };
+
+        setSubmittingPost(location);
+
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
     };
 
     const submitLikeHandler = async (emoji: string, location: string, replyToPostId?: string, channelId?: string) => {
@@ -701,10 +765,10 @@ function App() {
 
         setSubmittingLike(location);
 
-        await submitPost(postersAddress, contractAddressV2, makePostMethod, emoji, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
     };
 
-    const submitSendTipHandler = async (location: string, tipToPostId: string, tipAmount: string, sendTipFromBalance: boolean) => {
+    const submitSendTipHandler = async (location: string, tipToPostId: string, tipAmount: string) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot tip!');
             return;
@@ -712,49 +776,7 @@ function App() {
 
         setSubmittingTip(location);
 
-        if (sendTipFromBalance) {
-            await submitSendTipFromBalance(postersAddress, contractAddressV2, sendTipFromBalanceMethod, tipToPostId, tipAmount, inputSendingTxs, rpcClientRef.current!, callbackUrl);
-        } else {
-            await submitSendTip(postersAddress, contractAddressV2, sendTipMethod, tipToPostId, tipAmount, inputSendingTxs, rpcClientRef.current!, callbackUrl);
-        }
-    };
-
-    const deposit = async () => {
-        if (!nodeAvailable) {
-            alert('Node unavailable, cannot deposit!');
-            return;
-        }
-
-        if (!depositAmount || depositAmount === '0') {
-            return;
-        }
-
-        setSubmittingDeposit('true');
-
-        await submitDeposit(postersAddress, contractAddressV2, depositMethod, depositAmount, inputSendingTxs, rpcClientRef.current!, callbackUrl);
-
-        setTimeout(() => {
-            setDepositAmount('0');
-        }, SUBMITTING_POST_INTERVAL);
-    };
-
-    const withdraw = async () => {
-        if (!nodeAvailable) {
-            alert('Node unavailable, cannot withdraw!');
-            return;
-        }
-
-        if (!withdrawAmount || withdrawAmount === '0') {
-            return;
-        }
-
-        setSubmittingWithdrawal('true');
-
-        await submitWithdraw(postersAddress, contractAddressV2, withdrawMethod, withdrawAmount, inputSendingTxs, rpcClientRef.current!, callbackUrl);
-
-        setTimeout(() => {
-            setWithdrawAmount('0');
-        }, SUBMITTING_POST_INTERVAL);
+        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, inputSendingTxs, rpcClientRef.current!, callbackUrl);
     };
 
     const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
@@ -772,7 +794,7 @@ function App() {
     const handleOpenSendTipModal = (e: MouseEventLocal, tipToPost: Post) => {
         e.stopPropagation();
 
-        const isBreakingChangeDisabled = tipToPost.timestamp <= breakingChanges.v5.timestamp;
+        const isBreakingChangeDisabled = tipToPost.timestamp <= breakingChanges.v9.timestamp;
 
         if (inputPostDisabled || isBreakingChangeDisabled) {
             return;
@@ -793,25 +815,25 @@ function App() {
     return (
         <main className="w-full flex flex-row p-2">
             <div className="flex-1 flex justify-end">
-                <div className="w-[288px] min-w-[288px] ml-2 mr-8 flex flex-col">
+                <div className="w-[200px] min-w-[200px] ml-2 mr-8 flex flex-col">
                     <div className="text-[28px] mb-3">
                         <Link to="/">idena.social</Link>
                     </div>
                     <div className="mb-4 text-[14px]">
                         <div className="flex flex-col">
                             <div className="flex flex-row mb-2 gap-1">
-                                <p className="w-13 flex-none text-right leading-7">Rpc url:</p>
-                                <input className="h-6.5 flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeUrl} onChange={e => setInputNodeUrl(e.target.value)} />
+                                <p className="w-13 flex-none text-right">Rpc url:</p>
+                                <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeUrl} onChange={e => setInputNodeUrl(e.target.value)} />
                             </div>
                             <div className="flex flex-row mb-1 gap-1">
-                                <p className="w-13 flex-none text-right leading-7">Api key:</p>
-                                <input className="h-6.5 flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeKey} onChange={e => setInputNodeKey(e.target.value)} />
+                                <p className="w-13 flex-none text-right">Api key:</p>
+                                <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeKey} onChange={e => setInputNodeKey(e.target.value)} />
                             </div>
                             {!nodeAvailable && <p className="ml-14 text-[11px] text-red-400">Node Unavailable. Please try again.</p>}
                         </div>
                         <div className="flex flex-row">
                             <button className={`h-7 w-16 ml-14 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeApplied(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
-                            {!inputNodeApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[11px]">Apply changes to take effect</p>}
+                            {!inputNodeApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
                         </div>
                     </div>
                     <hr className="mb-3 text-gray-500" />
@@ -829,11 +851,11 @@ function App() {
                         {inputSendingTxs === 'idena-app' && (
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <p className="mb-1">Your Idena Address:</p>
-                                <input className="flex-1 mb-1 h-6.6 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
+                                <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
                                 {postersAddressInvalid && <p className="text-[11px] text-red-400">Invalid address. (Posting, liking, tipping is disabled)</p>}
                                 <div className="flex flex-row">
-                                    <button className={`w-16 h-7 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressApplied(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
-                                    {!inputPostersAddressApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
+                                    <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressApplied(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
+                                    {!inputPostersAddressApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
                                 </div>
                             </div>
                         )}
@@ -852,35 +874,16 @@ function App() {
                         {inputFindingPastPosts === 'indexer-api' && (
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <div className="flex flex-row gap-1">
-                                    <p className="mb-1 w-13 flex-none text-right leading-7">Api Url:</p>
-                                    <input className="flex-1 mb-1 h-6.6 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
+                                    <p className="mb-1 w-13 flex-none text-right">Api Url:</p>
+                                    <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
                                 </div>
                                 {indexerApiUrlInvalid && <p className="ml-14 text-[11px] text-red-400">Invalid Api Url.</p>}
                                 <div className="flex flex-row">
-                                    <button className={`w-16 h-7 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputIdenaIndexerApiUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
-                                    {!inputIdenaIndexerApiUrlApplied && <p className="ml-1.5 mt-2.5 text-gray-400 text-[12px]">Apply changes to take effect</p>}
+                                    <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputIdenaIndexerApiUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
+                                    {!inputIdenaIndexerApiUrlApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
                                 </div>
                             </div>
                         )}
-                    </div>
-                    <hr className="mb-3 text-gray-500" />
-                    <div className="flex flex-col mb-1">
-                        <div className="mb-2">
-                            <span>Tips Balance: </span>
-                            <span className={`[word-break:break-all] ${tipsBalance === '0' ? '' : ' text-green-400'}`}>{dna2numStr(tipsBalance)} <span className="[word-break:keep-all]">iDNA</span></span>
-                        </div>
-                    </div>
-                    <div className="mb-4 text-[14px]">
-                        <div className="flex flex-col">
-                            <div className="flex flex-row mb-2 gap-2">
-                                <input className="w-16 h-6.5 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} disabled={inputPostDisabled} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} />
-                                <button className="w-18 h-7 -mt-0.5 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={inputPostDisabled} onClick={() => deposit()}>{submittingDeposit ? '...' : 'Deposit'}</button>
-                            </div>
-                            <div className="flex flex-row mb-1 gap-2">
-                                <input className="w-16 h-6.5 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} value={withdrawAmount} disabled={inputPostDisabled} onChange={e => setWithdrawAmount(e.target.value)} />
-                                <button className="w-18 h-7 -mt-0.5 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={inputPostDisabled} onClick={() => withdraw()}>{submittingWithdrawal ? '...' : 'Withdraw'}</button>
-                            </div>
-                        </div>
                     </div>
                     <div className="mb-3 text-gray-500">
                         <hr />
@@ -892,7 +895,7 @@ function App() {
                     </div>
                 </div>
             </div>
-            <div className="flex-none min-w-[430px] max-w-[430px]">
+            <div className="flex-none min-w-[500px] max-w-[500px]">
                 <Outlet
                     context={{
                         currentBlockCaptured,
@@ -919,6 +922,8 @@ function App() {
                         handleOpenTipsModal,
                         handleOpenSendTipModal,
                         tipsRef,
+                        setPostMediaAttachmentHandler,
+                        postMediaAttachmentsRef,
                     }}
                 />
             </div>
@@ -949,9 +954,9 @@ function App() {
                     onRequestClose={() => setModalOpen('')}
                     style={customModalStyles}
                 >
-                    {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
-                    {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
-                    {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} tipsBalance={tipsBalance} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
                     <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
                 </Modal>
             </div>

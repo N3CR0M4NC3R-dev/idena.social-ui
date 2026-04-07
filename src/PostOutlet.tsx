@@ -1,12 +1,11 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
-import type { Post, Poster, Tip } from "./logic/asyncUtils";
+import type { Post, Tip } from "./logic/asyncUtils";
 import PostComponent from "./components/PostComponent";
 import { type MouseEventLocal, type PostDomSettingsCollection } from "./App.exports";
 
 type PostOutletProps = {
     orderedPostIds: string[],
     postsRef: React.RefObject<Record<string, Post>>,
-    postersRef: React.RefObject<Record<string, Poster>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     discussPrefix: string,
@@ -22,6 +21,8 @@ type PostOutletProps = {
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
+    setPostMediaAttachmentHandler: (location: string, file?: File | undefined) => Promise<void>,
+    postMediaAttachmentsRef: React.RefObject<any>,
 };
 
 function PostOutlet() {
@@ -30,7 +31,6 @@ function PostOutlet() {
 
     const {
         postsRef,
-        postersRef,
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
         discussPrefix,
@@ -46,6 +46,8 @@ function PostOutlet() {
         handleOpenTipsModal,
         handleOpenSendTipModal,
         tipsRef,
+        setPostMediaAttachmentHandler,
+        postMediaAttachmentsRef,
     } = useOutletContext() as PostOutletProps;
 
     const handleGoBack = () => {
@@ -57,7 +59,6 @@ function PostOutlet() {
         <PostComponent
             postId={postId!}
             postsRef={postsRef}
-            postersRef={postersRef}
             replyPostsTreeRef={replyPostsTreeRef}
             deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
             discussPrefix={discussPrefix}
@@ -73,6 +74,8 @@ function PostOutlet() {
             handleOpenTipsModal={handleOpenTipsModal}
             handleOpenSendTipModal={handleOpenSendTipModal}
             tipsRef={tipsRef}
+            setPostMediaAttachmentHandler={setPostMediaAttachmentHandler}
+            postMediaAttachmentsRef={postMediaAttachmentsRef}
             isPostOutlet={true}
         />
     </>);

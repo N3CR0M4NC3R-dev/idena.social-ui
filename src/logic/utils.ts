@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
-import { hexToUint8Array, stripHexPrefix } from "idena-sdk-js-lite";
+import { hexToUint8Array, toHexString } from "idena-sdk-js-lite";
 
-const dnaBase = 1e18;
+export const dnaBase = 1e18;
 
 export function getDisplayAddress(address: string) {
     return `${address.slice(0, 7)}...${address.slice(-5)}`;
@@ -23,8 +23,12 @@ export function getDisplayDateTime(timestamp: number) {
     return { displayDate, displayTime };
 }
 
-export function getMessageLines(message: string, calculateViewMoreIndex = false, maxLines = 10) {
+export function getMessageLines(message?: string, calculateViewMoreIndex = false, maxLines = 10) {
     const limit = 30;
+
+    if (!message) {
+        return { messageLines: [''] };
+    }
 
     let messageLines = message.split(/\r\n/g, limit);
     if (messageLines.length === 1) {
@@ -35,7 +39,7 @@ export function getMessageLines(message: string, calculateViewMoreIndex = false,
         return { messageLines };
     }
 
-    const charsPerLine = 55;
+    const charsPerLine = 65;
     let accLines = 0;
     let index = 0;
     let textOverflows = false;
@@ -57,13 +61,7 @@ export function getMessageLines(message: string, calculateViewMoreIndex = false,
             const lastLineLength = messageLineItem.length - overflowChars;
             let lastLine = overflowChars === 0 ? messageLineItem : messageLineItem.slice(0, lastLineLength);
             
-            if (
-                overflowChars !== 0 &&
-                messageLineItem.charAt(lastLineLength - 1) !== '.' &&
-                messageLineItem.charAt(lastLineLength - 1) !== ' ' &&
-                messageLineItem.charAt(lastLineLength) !== '.' &&
-                messageLineItem.charAt(lastLineLength) !== ' '
-            ) {
+            if (overflowChars !== 0 && messageLineItem.charAt(lastLineLength - 1) !== ' ' && messageLineItem.charAt(lastLineLength) !== ' ') {
                 lastLine += '...';
             }
 
@@ -78,15 +76,20 @@ export function getMessageLines(message: string, calculateViewMoreIndex = false,
 
 export function calculateMaxFee(maxFeeResult: string, inputPostLength: number) {
     const perCharMaxFeeDivisor = 200;
+    const maxFeeResultMultiplier = 2;
     const totalMaxFeeMultiplier = 10;
 
-    const maxFeeDecimal = new Decimal(maxFeeResult).div(new Decimal(dnaBase));
+    const maxFeeDecimal = new Decimal(maxFeeResult).mul(maxFeeResultMultiplier).div(new Decimal(dnaBase));
     const additionalPerCharFee = maxFeeDecimal.div(perCharMaxFeeDivisor).mul(inputPostLength);
     const maxFeeCalculated = maxFeeDecimal.add(additionalPerCharFee).mul(totalMaxFeeMultiplier);
     const maxFeeCalculatedDna = maxFeeCalculated.mul(new Decimal(dnaBase));
 
     return { maxFeeDecimal: maxFeeCalculated.toString(), maxFeeDna: maxFeeCalculatedDna.toString() };
 }
+
+export const calculateNonce = (savedNonce: number, nonce: number) => {
+    return nonce === 0 ? 1 : nonce >= savedNonce ? nonce + 1 : savedNonce + 1;
+};
 
 export function dna2numStr(dna: string | number) {
     return (new Decimal(dna).div(new Decimal(dnaBase))).toString();
@@ -98,6 +101,10 @@ export function numStr2dnaStr(num: string) {
 
 export function hex2str(hex: string) {
     return new TextDecoder().decode(hexToUint8Array(hex));
+}
+
+export function str2bytes(str: string) {
+    return new TextEncoder().encode(str);
 }
 
 export function sanitizeStr(str: string) {
@@ -122,25 +129,17 @@ function bytesToDecimalNum(bytes: Uint8Array) {
     return num;
 }
 
-function hexToBytes(str: string) {
-    const hex = stripHexPrefix(str);
-    if (hex.length % 2 !== 0) throw new Error('hex characters not even length');
-
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < hex.length; i += 2) {
-        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
-    }
-
-    return bytes;
-};
-
 export function hexToDecimal(hex: string) {
     if (!hex) return hex;
 
-    const bytes = hexToBytes(hex);
+    const bytes = hexToUint8Array(hex);
     const decimalVal = bytesToDecimalNum(bytes);
 
     return decimalVal.toString();
+}
+
+export function decimalToHex(dec: string, uint8ArrayLength: number) {
+    return toHexString(numToUint8Array(Number(dec), uint8ArrayLength));
 }
 
 export function isObjectEmpty(obj: object) {
@@ -179,5 +178,16 @@ export function getShortDisplayTipAmount(amount: number) {
     }
 
     return display;
+}
 
+export function getIdentityStatus(state: string) {
+    return state === 'Undefined' ? 'Not validated' : state;
+}
+
+export function getBase64FromDataUrl(dataUrl: string) {
+    const dataUrlSplit = dataUrl.split(',');
+    const base64Media = dataUrlSplit[1];
+    const base64MediaType = dataUrlSplit[0].split(';')[0].split(':')[1];
+
+    return { base64Media, base64MediaType };
 }

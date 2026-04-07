@@ -1,14 +1,14 @@
-import { type Post, type Poster, type Tip } from './logic/asyncUtils';
+import { supportedImageTypes, type Post, type Tip } from './logic/asyncUtils';
 import { useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
 import { type MouseEventLocal, type PostDomSettingsCollection } from './App.exports';
+import { useReducer } from 'react';
 
 type LatestPostsProps = {
     currentBlockCaptured: number,
     nodeAvailable: boolean,
     orderedPostIds: string[],
     postsRef: React.RefObject<Record<string, Post>>,
-    postersRef: React.RefObject<Record<string, Poster>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     discussPrefix: string,
@@ -28,6 +28,8 @@ type LatestPostsProps = {
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
+    setPostMediaAttachmentHandler: (location: string, file?: File | undefined) => Promise<void>,
+    postMediaAttachmentsRef: React.RefObject<any>,
 };
 
 function LatestPosts() {
@@ -36,7 +38,6 @@ function LatestPosts() {
         nodeAvailable,
         orderedPostIds,
         postsRef,
-        postersRef,
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
         discussPrefix,
@@ -56,7 +57,28 @@ function LatestPosts() {
         handleOpenTipsModal,
         handleOpenSendTipModal,
         tipsRef,
+        setPostMediaAttachmentHandler,
+        postMediaAttachmentsRef,
     } = useOutletContext() as LatestPostsProps;
+
+    const [, forceUpdate] = useReducer(x => x + 1, 0);
+
+    const mainPostMediaAttachment = postMediaAttachmentsRef.current['main'];
+
+
+    const addMediaHandler = async (e: React.ChangeEvent<HTMLInputElement>, location: string) => {
+        e?.stopPropagation();
+
+        await setPostMediaAttachmentHandler(location, e.currentTarget.files?.[0])
+        forceUpdate();
+    };
+
+    const removeMediaHandler = (e: MouseEventLocal, location: string) => {
+        e?.stopPropagation();
+
+        postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [location]: undefined };
+        forceUpdate();
+    };
 
     return (<>
         <div>
@@ -67,9 +89,28 @@ function LatestPosts() {
                 placeholder="Write your post here..."
                 disabled={inputPostDisabled}
             />
+            {mainPostMediaAttachment && <div className="mx-4 my-1">
+                <img className="max-h-120 max-w-100 size-auto rounded-sm" src={mainPostMediaAttachment.dataUrl} />
+            </div>}
             <div className="flex flex-row gap-2">
+                <div className="flex-1 -mt-1.5">
+                    {mainPostMediaAttachment ? <>
+                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, 'main')}>Remove image</p>
+                    </> : <>
+                        <label htmlFor="post-input-media-main" className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => e.stopPropagation()}>Add image</label>
+                        <input
+                            id="post-input-media-main"
+                            type="file"
+                            accept={supportedImageTypes.join(',')}
+                            className="hidden"
+                            disabled={inputPostDisabled}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => addMediaHandler(e, 'main')}
+                        />
+                    </>}
+                </div>
+                <p className="text-right w-50 mt-0.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
                 <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
-                <p className="mt-1.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
             </div>
         </div>
         <div className="text-center my-3">
@@ -82,7 +123,6 @@ function LatestPosts() {
                     <PostComponent
                         postId={postId}
                         postsRef={postsRef}
-                        postersRef={postersRef}
                         replyPostsTreeRef={replyPostsTreeRef}
                         deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
                         discussPrefix={discussPrefix}
@@ -98,6 +138,8 @@ function LatestPosts() {
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}
                         tipsRef={tipsRef}
+                        setPostMediaAttachmentHandler={setPostMediaAttachmentHandler}
+                        postMediaAttachmentsRef={postMediaAttachmentsRef}
                     />
                 </li>
             ))}

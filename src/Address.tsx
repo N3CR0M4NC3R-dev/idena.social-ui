@@ -1,6 +1,6 @@
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
-import { getDisplayAddress } from "./logic/utils";
+import { getDisplayAddress, getIdentityStatus } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
 import { type PostDomSettingsCollection } from "./App.exports";
 
@@ -25,6 +25,8 @@ type AddressProps = {
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
+    setPostMediaAttachmentHandler: (location: string, file?: File | undefined) => Promise<void>,
+    postMediaAttachmentsRef: React.RefObject<any>,
 };
 
 function Address() {
@@ -51,10 +53,12 @@ function Address() {
         handleOpenTipsModal,
         handleOpenSendTipModal,
         tipsRef,
+        setPostMediaAttachmentHandler,
+        postMediaAttachmentsRef,
     } = useOutletContext() as AddressProps;
 
     const poster = postersRef.current[address!];
-    const displayAddress = getDisplayAddress(poster.address);
+    const posterDisplayAddress = getDisplayAddress(poster.address);
 
     const filteredOrderedPosts = orderedPostIds.filter(postId => {
         const post = postsRef.current[postId];
@@ -80,9 +84,9 @@ function Address() {
             </div>
             <div className="flex-1 overflow-hidden">
                 <div className="flex flex-col">
-                    <div><a className="text-[24px] font-[600]" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noreferrer">{displayAddress}</a></div>
+                    <div><a className="text-[24px] font-[600]" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noreferrer">{posterDisplayAddress}</a></div>
                     <div><p className="text-[16px]">{`Age: ${poster.age}`}</p></div>
-                    <div><p className="text-[16px]">{`State: ${poster.state}`}</p></div>
+                    <div><p className="text-[16px]">{`Status: ${getIdentityStatus(poster.state)}`}</p></div>
                     <div><p className="text-[16px]">{`Stake: ${parseInt(poster.stake)}`}</p></div>
                 </div>
             </div>
@@ -96,7 +100,6 @@ function Address() {
                     <PostComponent
                         postId={postId}
                         postsRef={postsRef}
-                        postersRef={postersRef}
                         replyPostsTreeRef={replyPostsTreeRef}
                         deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
                         discussPrefix={discussPrefix}
@@ -112,6 +115,8 @@ function Address() {
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}
                         tipsRef={tipsRef}
+                        setPostMediaAttachmentHandler={setPostMediaAttachmentHandler}
+                        postMediaAttachmentsRef={postMediaAttachmentsRef}
                     />
                 </li>
             ))}
