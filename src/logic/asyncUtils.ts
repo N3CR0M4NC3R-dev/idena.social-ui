@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { calculateMaxFee, calculateNonce, dnaBase, hex2str, hexToDecimal, sanitizeStr } from "./utils";
+import { calculateMaxFee, calculateNonce, dna2num, dnaBase, hex2str, hexToDecimal, sanitizeStr } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
 
@@ -212,7 +212,7 @@ export const getNewPosterAndPost = async (
     }
 
     const posterDetails_atTimeOfPost = !preV9 ? {
-        stake: eventArgs2nd[1] === '0x' ? 0 : parseInt(eventArgs2nd[1], 16),
+        stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
         state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
         age: Number(hexToDecimal(eventArgs2nd[3])),
     } : {
@@ -358,7 +358,7 @@ export const processTip = async (
     const amount = parseInt(eventArgs[3], 16);
 
     const tipperDetails_atTimeOfTip = !preV9 ? {
-        stake: eventArgs2nd[1] === '0x' ? 0 : parseInt(eventArgs2nd[1], 16),
+        stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
         state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
         age: Number(hexToDecimal(eventArgs2nd[3])),
     } : {
@@ -635,7 +635,6 @@ export const storeFileToIpfs = async (rpcClient: RpcClient, bytes: Uint8Array, a
     const { result: cid } = await rpcClient('ipfs_add', [fileHexData, true], true);
 
     if (!cid) {
-        
         return;
     };
 

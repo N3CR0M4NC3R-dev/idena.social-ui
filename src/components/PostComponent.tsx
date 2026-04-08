@@ -279,10 +279,10 @@ function PostComponent(props: PostComponentProps) {
                     </div>
                 </div>
             </div>
-            <div id={`post-text-${post.postId}`} className="flex-1 px-4 pt-2 pb-3 text-[17px] text-wrap leading-5">
+            <div id={`post-text-${post.postId}`} className="flex-1 px-4 py-2 text-[17px] text-wrap leading-5">
                 <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(post, e)}>view more</a></span>}</p>
             </div>
-            {post.image && <div className="mx-4 my-1">
+            {post.image && <div className="mx-4 my-2">
                 <img className="max-h-120 max-w-100 size-auto rounded-sm" src={post.image} />
             </div>}
             <div className="flex flex-row ml-2 mr-3 mb-1.5 text-[12px]">

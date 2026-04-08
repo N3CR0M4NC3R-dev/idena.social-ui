@@ -91,8 +91,8 @@ export const calculateNonce = (savedNonce: number, nonce: number) => {
     return nonce === 0 ? 1 : nonce >= savedNonce ? nonce + 1 : savedNonce + 1;
 };
 
-export function dna2numStr(dna: string | number) {
-    return (new Decimal(dna).div(new Decimal(dnaBase))).toString();
+export function dna2num(dna: string | number) {
+    return Number((new Decimal(dna).div(new Decimal(dnaBase))).toString());
 }
 
 export function numStr2dnaStr(num: string) {
@@ -149,12 +149,12 @@ export function isObjectEmpty(obj: object) {
 }
 
 export function getDisplayTipAmount(amount: number) {
-    const numStr = dna2numStr(amount);
-    return (Number(Number(numStr).toFixed(2)) || '0.00').toString();
+    const num = dna2num(amount);
+    return (Number(num.toFixed(2)) || '0.00').toString();
 }
 
 export function getShortDisplayTipAmount(amount: number) {
-    const num = Number(dna2numStr(amount));
+    const num = dna2num(amount);
 
     let display;
 
