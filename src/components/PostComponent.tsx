@@ -318,7 +318,7 @@ function PostComponent(props: PostComponentProps) {
                             <textarea
                                 id={`post-input-${post.postId}`}
                                 rows={1}
-                                className="w-full field-sizing-content min-h-[29px] max-h-[520px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[14px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
+                                className="w-full field-sizing-content max-w-[408px] min-h-[29px] max-h-[520px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[14px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
                                 placeholder="Reply here..."
                                 disabled={inputPostDisabled}
                                 onFocus={replyInputOnFocusHandler}
@@ -410,7 +410,7 @@ function PostComponent(props: PostComponentProps) {
                                 <div id={`post-text-${replyPost.postId}`} className="flex-1 pl-12 pr-4 pt-2 text-[14px] text-wrap leading-5">
                                     <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-[12px] text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>view more</a></span>}</p>
                                 </div>
-                                {replyPost.image && <div className="ml-11 mr-4 my-1">
+                                {replyPost.image && <div className="ml-12 mr-4 my-1">
                                     <img className="max-h-100 max-w-92 size-auto rounded-sm" src={replyPost.image} />
                                 </div>}
                                 <div className="w-full pt-2 px-4 flex flex-row text-[12px]">
@@ -487,7 +487,7 @@ function PostComponent(props: PostComponentProps) {
                                                                 <div id={`post-text-${discussionPost.postId}`} className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
                                                                     <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                                 </div>
-                                                                {discussionPost.image && <div className="my-1">
+                                                                {discussionPost.image && <div className="my-1 mx-1">
                                                                     <img className="max-h-80 max-w-74 size-auto rounded-sm" src={discussionPost.image} />
                                                                 </div>}
                                                             </div>
@@ -523,7 +523,7 @@ function PostComponent(props: PostComponentProps) {
                                                     <textarea
                                                         id={`post-input-${replyPost.postId}`}
                                                         rows={2}
-                                                        className="w-full field-sizing-content min-h-[26px] max-h-[312px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
+                                                        className="w-full field-sizing-content max-w-[385px] min-h-[26px] max-h-[312px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
                                                         placeholder="Comment here..."
                                                         disabled={inputPostDisabled}
                                                     />
