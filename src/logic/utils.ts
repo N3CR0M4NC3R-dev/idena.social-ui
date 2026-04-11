@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
-import { hexToUint8Array, toHexString } from "idena-sdk-js-lite";
+import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType } from "idena-sdk-js-lite";
+import type { PostMediaAttachment } from "../App.exports";
 
 export const dnaBase = 1e18;
 
@@ -190,4 +191,51 @@ export function getBase64FromDataUrl(dataUrl: string) {
     const base64MediaType = dataUrlSplit[0].split(';')[0].split(':')[1];
 
     return { base64Media, base64MediaType };
+}
+
+export function getTextAndMediaForPost(postTextareaElement: HTMLTextAreaElement, postMediaAttachment?: PostMediaAttachment) {
+    let inputText = postTextareaElement.value ?? '';
+
+    const { base64Media, base64MediaType } = postMediaAttachment ? getBase64FromDataUrl(postMediaAttachment.dataUrl) : {};
+
+    let media = base64Media ? [base64Media] : [];
+    let mediaType = base64MediaType ? [base64MediaType] : [];
+
+    return { inputText, media, mediaType };
+}
+
+export function getMakePostTransactionPayload(makePostMethod: string, inputPost: string, replyToPostId: string | null, channelId: string | null, media: string[], mediaType: string[]) {
+    const txAmount = new Decimal(0.00001);
+    const args = [
+        {
+            format: contractArgumentFormat.String,
+            index: 0,
+            value: JSON.stringify({
+                message: inputPost,
+                ...(replyToPostId && { replyToPostId }),
+                ...(channelId && { channelId }),
+                ...(media.length && { media }),
+                ...(mediaType.length && { mediaType }),
+            }),
+        }
+    ];
+
+    const payload = new CallContractAttachment();
+    payload.setArgs(args);
+    payload.method = makePostMethod;
+
+    return { txAmount, args, payload };
+}
+
+export function getCallTransaction(to: string, txAmount: Decimal, nonce: number, epoch: number, maxFeeDna: string, payload: CallContractAttachment) {
+    const tx = new Transaction();
+    tx.type = transactionType.CallContractTx;
+    tx.to = hexToUint8Array(to);
+    tx.amount = txAmount.mul(dnaBase).toString();
+    tx.nonce = nonce;
+    tx.epoch = epoch;
+    tx.maxFee = maxFeeDna;
+    tx.payload = payload.toBytes();
+
+    return tx.toHex();;
 }

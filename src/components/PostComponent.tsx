@@ -20,6 +20,7 @@ type PostComponentProps = {
     discussPrefix: string,
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
+    copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
@@ -48,6 +49,7 @@ function PostComponent(props: PostComponentProps) {
         discussPrefix,
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
+        copyPostTxHandler,
         submitPostHandler,
         submitLikeHandler,
         submittingPost,
@@ -213,6 +215,17 @@ function PostComponent(props: PostComponentProps) {
         forceUpdate();
     };
 
+    const localCopyPostTxHandler = async (location: string, e?: MouseEventLocal) => {
+        e?.stopPropagation();
+
+        if (inputPostDisabled || isBreakingChangeDisabled) {
+            return;
+        }
+
+        copyPostTxHandler(location);
+    }
+
+
     const localSubmitPostHandler = async (location: string, replyToPostId?: string, e?: MouseEventLocal, channelId?: string) => {
         e?.stopPropagation();
 
@@ -348,6 +361,7 @@ function PostComponent(props: PostComponentProps) {
                                 onChange={(e) => addMediaHandler(e, post.postId)}
                             />
                         </>}
+                        <p id={`post-copytx-${post.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(post.postId, e)}>Copy tx</p>
                     </div>
                 </div>
             </>}
@@ -551,6 +565,7 @@ function PostComponent(props: PostComponentProps) {
                                                     onChange={(e) => addMediaHandler(e, replyPost.postId)}
                                                 />
                                             </>}
+                                            <p id={`post-copytx-${replyPost.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(replyPost.postId, e)}>Copy tx</p>
                                         </div>
                                     </>}
                                 </div>}

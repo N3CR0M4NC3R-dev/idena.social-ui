@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { calculateMaxFee, calculateNonce, dna2num, dnaBase, hex2str, hexToDecimal, sanitizeStr } from "./utils";
+import { calculateMaxFee, calculateNonce, dna2num, getCallTransaction, getMakePostTransactionPayload, hex2str, hexToDecimal, sanitizeStr } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
 
@@ -478,6 +478,33 @@ export const getBlockHeightFromTxHash = async (txHash: string, rpcClient: RpcCli
     return getBlockByHashResult.height;
 };
 
+export const copyPostTx = async (
+    postersAddress: string,
+    contractAddress: string,
+    makePostMethod: string,
+    inputPost: string,
+    media: string[],
+    mediaType: string[],
+    replyToPostId: string | null,
+    channelId: string | null,
+    rpcClient: RpcClient,
+) => {
+    const { txAmount, payload } = getMakePostTransactionPayload(makePostMethod, inputPost, replyToPostId, channelId, media, mediaType);
+    const inputPostLength = inputPost.length + JSON.stringify(media).length;
+    const maxFeeResult = await getMaxFee(rpcClient, { from: postersAddress, to: contractAddress, type: transactionType.CallContractTx, amount: txAmount.toNumber(), payload });
+    const { maxFeeDna } = calculateMaxFee(maxFeeResult, inputPostLength);
+    const { nonce, epoch } = await getNonceAndEpoch(rpcClient, postersAddress);
+    const txHex = getCallTransaction(contractAddress, txAmount, nonce, epoch, maxFeeDna, payload);
+
+    try {
+        await navigator.clipboard.writeText(txHex);
+        return { success: true };
+    } catch (err) {
+        console.error('Failed to copy: ', err);
+        return { success: false };
+    }
+};
+
 export const submitPost = async (
     postersAddress: string,
     contractAddress: string,
@@ -491,24 +518,8 @@ export const submitPost = async (
     rpcClient: RpcClient,
     callbackUrl: string,
 ) => {
-    const txAmount = new Decimal(0.00001);
-    const args = [
-        {
-            format: contractArgumentFormat.String,
-            index: 0,
-            value: JSON.stringify({
-                message: inputPost,
-                ...(replyToPostId && { replyToPostId }),
-                ...(channelId && { channelId }),
-                ...(media.length && { media }),
-                ...(mediaType.length && { mediaType }),
-            }),
-        }
-    ];
-
-    const payload = new CallContractAttachment();
-    payload.setArgs(args);
-    payload.method = makePostMethod;
+    const { txAmount, args, payload } = getMakePostTransactionPayload(makePostMethod, inputPost, replyToPostId, channelId, media, mediaType);
+    const inputPostLength = inputPost.length + JSON.stringify(media).length;
 
     await makeCallTransaction(
         postersAddress,
@@ -520,7 +531,7 @@ export const submitPost = async (
         txAmount,
         args,
         payload,
-        inputPost.length + JSON.stringify(media).length,
+        inputPostLength,
     );
 };
 
@@ -602,15 +613,7 @@ export const makeCallTransaction = async (
     if (inputSendingTxs === 'idena-app') {
         const { nonce, epoch } = await getNonceAndEpoch(rpcClient, from);
 
-        const tx = new Transaction();
-        tx.type = transactionType.CallContractTx;
-        tx.to = hexToUint8Array(to);
-        tx.amount = txAmount.mul(dnaBase).toString();
-        tx.nonce = nonce;
-        tx.epoch = epoch;
-        tx.maxFee = maxFeeDna;
-        tx.payload = payload.toBytes();
-        const txHex = tx.toHex();
+        const txHex = getCallTransaction(to, txAmount, nonce, epoch, maxFeeDna, payload);
 
         const dnaLink = `https://app.idena.io/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${method}`;
         window.open(dnaLink, '_blank');
@@ -626,7 +629,7 @@ export const getNonceAndEpoch = async (rpcClient: RpcClient, address: string) =>
 
     savedNonce = calculateNonce(savedNonce, getBalanceResult.nonce);
 
-    return { nonce: savedNonce, epoch: epochResult.epoch };
+    return { nonce: savedNonce, epoch: epochResult.epoch as number };
 }
 
 export const storeFileToIpfs = async (rpcClient: RpcClient, bytes: Uint8Array, address: string) => {

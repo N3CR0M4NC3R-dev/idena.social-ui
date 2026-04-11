@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient } from './logic/asyncUtils';
-import { getBase64FromDataUrl, getDisplayAddress, isObjectEmpty, str2bytes } from './logic/utils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx } from './logic/asyncUtils';
+import { getDisplayAddress, getTextAndMediaForPost, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import { Link, Outlet } from 'react-router';
-import type { MouseEventLocal, PostDomSettingsCollection } from './App.exports';
+import type { MouseEventLocal, PostDomSettingsCollection, PostMediaAttachment } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 
@@ -129,7 +129,8 @@ function App() {
     const modalSendTipRef = useRef<Post>(undefined);
     const tipsRef = useRef<Record<string, { totalAmount: number, tips: Tip[] }>>({});
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
-    const postMediaAttachmentsRef = useRef<any>({});
+    const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
+    const copyTxHandlerEnabledRef = useRef<boolean>(true);
 
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
@@ -703,6 +704,57 @@ function App() {
         }
     };
 
+    const copyPostTxHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
+        if (!nodeAvailable) {
+            alert('Node unavailable, cannot copy!');
+            return;
+        }
+
+        const copyTxTextElement = document.getElementById(`post-copytx-${location}`) as HTMLElement;
+        const savedInnerText = copyTxTextElement!.innerText;
+
+        if (copyTxHandlerEnabledRef.current) {
+            copyTxHandlerEnabledRef.current = false;
+            copyTxTextElement!.innerText = 'Copying';
+
+            const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
+            const postMediaAttachment = postMediaAttachmentsRef.current[location];
+
+            let { inputText, media, mediaType } = getTextAndMediaForPost(postTextareaElement, postMediaAttachment);
+
+            if (!inputText && !postMediaAttachment) {
+                alert('No text or media provided!');
+                copyTxTextElement!.innerText = savedInnerText;
+                copyTxHandlerEnabledRef.current = true;
+                return;
+            }
+
+            copyPostTx(
+                postersAddress,
+                contractAddressCurrent,
+                makePostMethod,
+                inputText,
+                media,
+                mediaType,
+                replyToPostId ?? null,
+                channelId ?? null,
+                rpcClientRef.current!,
+            ).then((res) => {
+
+                if (res?.success) {
+                    copyTxTextElement!.innerText = 'Copied ✅';
+                } else {
+                    copyTxTextElement!.innerText = 'Copied ❌';
+                }
+
+                setTimeout(() => {
+                    copyTxTextElement!.innerText = savedInnerText;
+                    copyTxHandlerEnabledRef.current = true;
+                }, 1000);
+            });
+        }
+    }
+
     const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot post!');
@@ -710,18 +762,14 @@ function App() {
         }
 
         const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
-        let inputText = postTextareaElement.value ?? '';
-
         const postMediaAttachment = postMediaAttachmentsRef.current[location];
 
+        let { inputText, media, mediaType } = getTextAndMediaForPost(postTextareaElement, postMediaAttachment);
+
         if (!inputText && !postMediaAttachment) {
+            alert('No text or media provided!');
             return;
         }
-
-        const { base64Media, base64MediaType } = postMediaAttachment ? getBase64FromDataUrl(postMediaAttachment.dataUrl) : {};
-
-        let media = base64Media ? [base64Media] : [];
-        let mediaType = base64MediaType ? [base64MediaType] : [];
 
         if (inputSendingTxs === 'rpc') {
             if (inputText.length > 100) {
@@ -912,6 +960,7 @@ function App() {
                         pastBlockCaptured,
                         SET_NEW_POSTS_ADDED_DELAY,
                         inputPostDisabled,
+                        copyPostTxHandler,
                         submitPostHandler,
                         submitLikeHandler,
                         submittingPost,

@@ -15,6 +15,7 @@ type AddressProps = {
     discussPrefix: string,
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
+    copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
@@ -46,6 +47,7 @@ function Address() {
         submittingTip,
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
+        copyPostTxHandler,
         submitPostHandler,
         submitLikeHandler,
         browserStateHistoryRef,
@@ -105,6 +107,7 @@ function Address() {
                         discussPrefix={discussPrefix}
                         SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
                         inputPostDisabled={inputPostDisabled}
+                        copyPostTxHandler={copyPostTxHandler}
                         submitPostHandler={submitPostHandler}
                         submitLikeHandler={submitLikeHandler}
                         submittingPost={submittingPost}
