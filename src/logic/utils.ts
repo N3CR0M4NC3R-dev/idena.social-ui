@@ -88,7 +88,7 @@ export function calculateMaxFee(maxFeeResult: string, inputPostLength: number) {
     return { maxFeeDecimal: maxFeeCalculated.toString(), maxFeeDna: maxFeeCalculatedDna.toString() };
 }
 
-export const calculateNonce = (savedNonce: number, nonce: number) => {
+export const calculateNextNonce = (savedNonce: number, nonce: number) => {
     return nonce === 0 ? 1 : nonce >= savedNonce ? nonce + 1 : savedNonce + 1;
 };
 

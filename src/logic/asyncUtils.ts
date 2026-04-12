@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { calculateMaxFee, calculateNonce, dna2num, getCallTransaction, getMakePostTransactionPayload, hex2str, hexToDecimal, sanitizeStr } from "./utils";
+import { calculateMaxFee, calculateNextNonce, dna2num, getCallTransaction, getMakePostTransactionPayload, hex2str, hexToDecimal, sanitizeStr } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
 
@@ -7,6 +7,7 @@ export const breakingChanges = {
     v3: { timestamp: 1767578641 },
     v5: { timestamp: 1767946325, block: 10219188, postIdPrefix: 'preV5:' },
     v9: { timestamp: 1775551992, block: 10604687, postIdPrefix: 'preV9:' },
+    v10: { timestamp: 1775992052, block: 10627018, postIdPrefix: 'preV10:' },
 };
 
 export const supportedImageTypes = ['image/apng', 'image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/svg+xml', 'image/webp'];
@@ -173,8 +174,9 @@ export const getNewPosterAndPost = async (
     const preV3 = timestamp < breakingChanges.v3.timestamp;
     const preV5 = timestamp < breakingChanges.v5.timestamp;
     const preV9 = timestamp < breakingChanges.v9.timestamp;
+    const preV10 = timestamp < breakingChanges.v10.timestamp;
 
-    if (!preV9 && !eventArgs2nd?.length) {
+    if (!preV10 && !eventArgs2nd?.length) {
         return { continued: true };
     }
 
@@ -193,14 +195,36 @@ export const getNewPosterAndPost = async (
     }
 
     const postIdRaw = hexToDecimal(eventArgs[1]);
-    const postId = preV5 ? breakingChanges.v5.postIdPrefix + postIdRaw : preV9 ? breakingChanges.v9.postIdPrefix + postIdRaw : postIdRaw;
 
+    let postId = postIdRaw;
+
+    if (preV5) {
+        postId = breakingChanges.v5.postIdPrefix + postId;
+    } else if (preV9) {
+        postId = breakingChanges.v9.postIdPrefix + postId;
+    } else if (preV10) {
+        postId = breakingChanges.v10.postIdPrefix + postId;
+    }
+    
     if (postsRef.current[postId]) {
         return { continued: true };
     }
 
     const replyToPostIdRaw = preV3 ? hexToDecimal(hex2str(eventArgs[4])) : hex2str(eventArgs[4]);
-    const replyToPostId = !replyToPostIdRaw ? '' : (preV5 ? breakingChanges.v5.postIdPrefix + replyToPostIdRaw : preV9 ? breakingChanges.v9.postIdPrefix + replyToPostIdRaw : replyToPostIdRaw);
+
+    let replyToPostId = '';
+
+    if (replyToPostIdRaw) {
+        replyToPostId = replyToPostIdRaw;
+
+        if (preV5) {
+            replyToPostId = breakingChanges.v5.postIdPrefix + replyToPostId;
+        } else if (preV9) {
+            replyToPostId = breakingChanges.v9.postIdPrefix + replyToPostId;
+        } else if (preV10) {
+            replyToPostId = breakingChanges.v10.postIdPrefix + replyToPostId;
+        }
+    }
 
     if (replyToPostId) {
         const replyToPost = postsRef.current[replyToPostId];
@@ -350,10 +374,11 @@ export const processTip = async (
     const { txHash, eventArgs, eventArgs2nd, timestamp } = transaction;
 
     const preV9 = timestamp < breakingChanges.v9.timestamp;
+    const preV10 = timestamp < breakingChanges.v10.timestamp;
 
     const tipper = eventArgs[0];
     const postIdRaw = hexToDecimal(eventArgs[2]);
-    const postId = preV9 ? breakingChanges.v9.postIdPrefix + postIdRaw : postIdRaw;
+    const postId = preV10 ? breakingChanges.v10.postIdPrefix + postIdRaw : postIdRaw;
 
     const amount = parseInt(eventArgs[3], 16);
 
@@ -488,12 +513,13 @@ export const copyPostTx = async (
     replyToPostId: string | null,
     channelId: string | null,
     rpcClient: RpcClient,
+    lastUsedNonceSavedRef: React.RefObject<number>,
 ) => {
     const { txAmount, payload } = getMakePostTransactionPayload(makePostMethod, inputPost, replyToPostId, channelId, media, mediaType);
     const inputPostLength = inputPost.length + JSON.stringify(media).length;
     const maxFeeResult = await getMaxFee(rpcClient, { from: postersAddress, to: contractAddress, type: transactionType.CallContractTx, amount: txAmount.toNumber(), payload });
     const { maxFeeDna } = calculateMaxFee(maxFeeResult, inputPostLength);
-    const { nonce, epoch } = await getNonceAndEpoch(rpcClient, postersAddress);
+    const { nonce, epoch } = await getNonceAndEpoch(rpcClient, lastUsedNonceSavedRef, postersAddress, false);
     const txHex = getCallTransaction(contractAddress, txAmount, nonce, epoch, maxFeeDna, payload);
 
     try {
@@ -516,6 +542,7 @@ export const submitPost = async (
     channelId: string | null,
     inputSendingTxs: string,
     rpcClient: RpcClient,
+    lastUsedNonceSavedRef: React.RefObject<number>,
     callbackUrl: string,
 ) => {
     const { txAmount, args, payload } = getMakePostTransactionPayload(makePostMethod, inputPost, replyToPostId, channelId, media, mediaType);
@@ -527,6 +554,7 @@ export const submitPost = async (
         makePostMethod,
         inputSendingTxs,
         rpcClient,
+        lastUsedNonceSavedRef,
         callbackUrl,
         txAmount,
         args,
@@ -543,6 +571,7 @@ export const submitSendTip = async (
     amount: string,
     inputSendingTxs: string,
     rpcClient: RpcClient,
+    lastUsedNonceSavedRef: React.RefObject<number>,
     callbackUrl: string,
 ) => {
     const txAmount = new Decimal(amount);
@@ -563,6 +592,7 @@ export const submitSendTip = async (
         sendTipMethod,
         inputSendingTxs,
         rpcClient,
+        lastUsedNonceSavedRef,
         callbackUrl,
         txAmount,
         args,
@@ -581,6 +611,7 @@ export const makeCallTransaction = async (
     method: string,
     inputSendingTxs: string,
     rpcClient: RpcClient,
+    lastUsedNonceSavedRef: React.RefObject<number>,
     callbackUrl: string,
     txAmount: Decimal,
     args: CallContractArg[],
@@ -611,7 +642,7 @@ export const makeCallTransaction = async (
     }
 
     if (inputSendingTxs === 'idena-app') {
-        const { nonce, epoch } = await getNonceAndEpoch(rpcClient, from);
+        const { nonce, epoch } = await getNonceAndEpoch(rpcClient, lastUsedNonceSavedRef, from, true);
 
         const txHex = getCallTransaction(to, txAmount, nonce, epoch, maxFeeDna, payload);
 
@@ -620,19 +651,22 @@ export const makeCallTransaction = async (
     }
 };
 
-let savedNonce = 0;
-export const getNonceAndEpoch = async (rpcClient: RpcClient, address: string) => {
+export const getNonceAndEpoch = async (rpcClient: RpcClient, lastUsedNonceSavedRef: React.RefObject<number>, address: string, save?: boolean) => {
     const responses = await Promise.all([rpcClient('dna_getBalance', [address]), await rpcClient('dna_epoch', [])]);
 
     const { result: getBalanceResult } = responses[0];
     const { result: epochResult } = responses[1];
 
-    savedNonce = calculateNonce(savedNonce, getBalanceResult.nonce);
+    const calculatedNextNonce = calculateNextNonce(lastUsedNonceSavedRef.current, getBalanceResult.nonce);
 
-    return { nonce: savedNonce, epoch: epochResult.epoch as number };
+    if (save) {
+        lastUsedNonceSavedRef.current = calculatedNextNonce;
+    }
+
+    return { nonce: calculatedNextNonce, epoch: epochResult.epoch as number };
 }
 
-export const storeFileToIpfs = async (rpcClient: RpcClient, bytes: Uint8Array, address: string) => {
+export const storeFileToIpfs = async (rpcClient: RpcClient, lastUsedNonceSavedRef: React.RefObject<number>, bytes: Uint8Array, address: string) => {
     const fileHexData = toHexString(bytes);
 
     const { result: cid } = await rpcClient('ipfs_add', [fileHexData, true], true);
@@ -641,7 +675,7 @@ export const storeFileToIpfs = async (rpcClient: RpcClient, bytes: Uint8Array, a
         return;
     };
 
-    const { nonce, epoch } = await getNonceAndEpoch(rpcClient, address);
+    const { nonce, epoch } = await getNonceAndEpoch(rpcClient, lastUsedNonceSavedRef, address, true);
     const { result: storeToIpfsResult } = await rpcClient('dna_storeToIpfs', [{ cid, nonce, epoch }]);
 
     if (!storeToIpfsResult) return;

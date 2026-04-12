@@ -115,7 +115,7 @@ function PostComponent(props: PostComponentProps) {
     const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
     const showReplies = !postDomSettingsItem.repliesHidden;
     const showReplyInput = !postDomSettingsItem.replyInputHidden;
-    const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v9.timestamp;
+    const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v10.timestamp;
 
     const replyPosts = repliesToThisPost.map(replyPostId => postsRef.current[replyPostId]);
     const replyLikes = replyPosts.filter(replyPost => replyPost.message === likeEmoji);

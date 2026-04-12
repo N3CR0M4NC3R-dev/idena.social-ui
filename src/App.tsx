@@ -12,7 +12,8 @@ import ModalSendTipComponent from './components/ModalSendTipComponent';
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
 const initIndexerApiUrl = 'https://api.idena.io';
-const contractAddressCurrent = '0xc0324f3Cf8158D6E27dc0A07c221636056174718';
+const contractAddressCurrent = '0xa1c5c1A8c6a1Af596078A5c9653F24c216fE1cb2';
+const contractAddress3 = '0xc0324f3Cf8158D6E27dc0A07c221636056174718';
 const contractAddress2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9';
 const contractAddress1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
 const firstBlock = 10135627;
@@ -131,6 +132,7 @@ function App() {
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
     const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
     const copyTxHandlerEnabledRef = useRef<boolean>(true);
+    const lastUsedNonceSavedRef = useRef<number>(0);
 
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
@@ -406,6 +408,8 @@ function App() {
                                 pastContractAddressRef!.current = contractAddress1;
                             } else if (getBlockByHeightResult.timestamp < breakingChanges.v9.timestamp) {
                                 pastContractAddressRef!.current = contractAddress2;
+                            } else if (getBlockByHeightResult.timestamp < breakingChanges.v10.timestamp) {
+                                pastContractAddressRef!.current = contractAddress3;
                             }
                         }
                         throw 'no transactions';
@@ -431,6 +435,9 @@ function App() {
                         continuationTokenRef!.current = continuationToken;
                     } else {
                         if (pastContractAddressRef!.current === contractAddressCurrent) {
+                            pastContractAddressRef!.current = contractAddress3;
+                            continuationTokenRef!.current = undefined;
+                        } else if (pastContractAddressRef!.current === contractAddress3) {
                             pastContractAddressRef!.current = contractAddress2;
                             continuationTokenRef!.current = undefined;
                         } else if (pastContractAddressRef!.current === contractAddress2) {
@@ -510,9 +517,9 @@ function App() {
                     const updatedPosts: Record<string, Post> = {};
 
                     if (postChannelRegex.test(newPost!.channelId)) {
-                        const preV9 = newPost!.timestamp < breakingChanges.v9.timestamp;
+                        const preV10 = newPost!.timestamp < breakingChanges.v10.timestamp;
                         const discussionPostIdRaw = newPost!.channelId.split(discussPrefix)[1];
-                        const discussionPostId = preV9 ? breakingChanges.v9.postIdPrefix + discussionPostIdRaw : discussionPostIdRaw;
+                        const discussionPostId = preV10 ? breakingChanges.v10.postIdPrefix + discussionPostIdRaw : discussionPostIdRaw;
                         const discussionPost = postsRef.current[discussionPostId];
                         const orphaned = !discussionPost || discussionPost.orphaned;
 
@@ -739,6 +746,7 @@ function App() {
                 replyToPostId ?? null,
                 channelId ?? null,
                 rpcClientRef.current!,
+                lastUsedNonceSavedRef,
             ).then((res) => {
 
                 if (res?.success) {
@@ -774,7 +782,7 @@ function App() {
         if (inputSendingTxs === 'rpc') {
             if (inputText.length > 100) {
                 const fileBytes = str2bytes(inputText);
-                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, fileBytes, postersAddressRef.current);
+                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, lastUsedNonceSavedRef, fileBytes, postersAddressRef.current);
 
                 if (!cidAddress) {
                     alert('Something went wrong. Probably you have insufficient iDNA.');
@@ -786,7 +794,7 @@ function App() {
             if (postMediaAttachment) {
                 const fileBytes = new Uint8Array(await postMediaAttachment.file.arrayBuffer());
 
-                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, fileBytes, postersAddressRef.current);
+                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, lastUsedNonceSavedRef, fileBytes, postersAddressRef.current);
 
                 if (!cidAddress) {
                     alert('Something went wrong. Probably you have insufficient iDNA.');
@@ -802,7 +810,7 @@ function App() {
 
         setSubmittingPost(location);
 
-        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
     };
 
     const submitLikeHandler = async (emoji: string, location: string, replyToPostId?: string, channelId?: string) => {
@@ -813,7 +821,7 @@ function App() {
 
         setSubmittingLike(location);
 
-        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
     };
 
     const submitSendTipHandler = async (location: string, tipToPostId: string, tipAmount: string) => {
@@ -824,7 +832,7 @@ function App() {
 
         setSubmittingTip(location);
 
-        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, inputSendingTxs, rpcClientRef.current!, callbackUrl);
+        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, inputSendingTxs, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
     };
 
     const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
@@ -842,7 +850,7 @@ function App() {
     const handleOpenSendTipModal = (e: MouseEventLocal, tipToPost: Post) => {
         e.stopPropagation();
 
-        const isBreakingChangeDisabled = tipToPost.timestamp <= breakingChanges.v9.timestamp;
+        const isBreakingChangeDisabled = tipToPost.timestamp <= breakingChanges.v10.timestamp;
 
         if (inputPostDisabled || isBreakingChangeDisabled) {
             return;
