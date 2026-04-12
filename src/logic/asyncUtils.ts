@@ -377,10 +377,13 @@ export const processTip = async (
     const preV10 = timestamp < breakingChanges.v10.timestamp;
 
     const tipper = eventArgs[0];
-    const postIdRaw = hexToDecimal(eventArgs[2]);
+
+    const postIdEventArg = preV9 ? eventArgs[1] : eventArgs[2];
+    const postIdRaw = hexToDecimal(postIdEventArg);
     const postId = preV9 ? breakingChanges.v9.postIdPrefix + postIdRaw : preV10 ? breakingChanges.v10.postIdPrefix + postIdRaw : postIdRaw;
 
-    const amount = parseInt(eventArgs[3], 16);
+    const amountEventArg = preV9 ? eventArgs[2] : eventArgs[3];
+    const amount = parseInt(amountEventArg, 16);
 
     const tipperDetails_atTimeOfTip = !preV9 ? {
         stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
