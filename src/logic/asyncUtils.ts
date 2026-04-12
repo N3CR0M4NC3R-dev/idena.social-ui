@@ -176,7 +176,7 @@ export const getNewPosterAndPost = async (
     const preV9 = timestamp < breakingChanges.v9.timestamp;
     const preV10 = timestamp < breakingChanges.v10.timestamp;
 
-    if (!preV10 && !eventArgs2nd?.length) {
+    if (!preV9 && !eventArgs2nd?.length) {
         return { continued: true };
     }
 
@@ -378,7 +378,7 @@ export const processTip = async (
 
     const tipper = eventArgs[0];
     const postIdRaw = hexToDecimal(eventArgs[2]);
-    const postId = preV10 ? breakingChanges.v10.postIdPrefix + postIdRaw : postIdRaw;
+    const postId = preV9 ? breakingChanges.v9.postIdPrefix + postIdRaw : preV10 ? breakingChanges.v10.postIdPrefix + postIdRaw : postIdRaw;
 
     const amount = parseInt(eventArgs[3], 16);
 

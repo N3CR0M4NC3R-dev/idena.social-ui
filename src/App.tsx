@@ -517,9 +517,10 @@ function App() {
                     const updatedPosts: Record<string, Post> = {};
 
                     if (postChannelRegex.test(newPost!.channelId)) {
+                        const preV9 = newPost!.timestamp < breakingChanges.v9.timestamp;
                         const preV10 = newPost!.timestamp < breakingChanges.v10.timestamp;
                         const discussionPostIdRaw = newPost!.channelId.split(discussPrefix)[1];
-                        const discussionPostId = preV10 ? breakingChanges.v10.postIdPrefix + discussionPostIdRaw : discussionPostIdRaw;
+                        const discussionPostId = preV9 ? breakingChanges.v9.postIdPrefix + discussionPostIdRaw : preV10 ? breakingChanges.v10.postIdPrefix + discussionPostIdRaw: discussionPostIdRaw;
                         const discussionPost = postsRef.current[discussionPostId];
                         const orphaned = !discussionPost || discussionPost.orphaned;
 
