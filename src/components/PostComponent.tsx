@@ -215,14 +215,14 @@ function PostComponent(props: PostComponentProps) {
         forceUpdate();
     };
 
-    const localCopyPostTxHandler = async (location: string, e?: MouseEventLocal) => {
+    const localCopyPostTxHandler = async (location: string, replyToPostId?: string, e?: MouseEventLocal, channelId?: string) => {
         e?.stopPropagation();
 
         if (inputPostDisabled || isBreakingChangeDisabled) {
             return;
         }
 
-        copyPostTxHandler(location);
+        copyPostTxHandler(location, replyToPostId, channelId);
     }
 
 
@@ -361,7 +361,7 @@ function PostComponent(props: PostComponentProps) {
                                 onChange={(e) => addMediaHandler(e, post.postId)}
                             />
                         </>}
-                        <p id={`post-copytx-${post.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(post.postId, e)}>Copy tx</p>
+                        <p id={`post-copytx-${post.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(post.postId, post.postId, e)}>Copy tx</p>
                     </div>
                 </div>
             </>}
@@ -565,7 +565,7 @@ function PostComponent(props: PostComponentProps) {
                                                     onChange={(e) => addMediaHandler(e, replyPost.postId)}
                                                 />
                                             </>}
-                                            <p id={`post-copytx-${replyPost.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(replyPost.postId, e)}>Copy tx</p>
+                                            <p id={`post-copytx-${replyPost.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => localCopyPostTxHandler(replyPost.postId, discussReplyToPostId, undefined, discussParentId)}>Copy tx</p>
                                         </div>
                                     </>}
                                 </div>}
