@@ -543,7 +543,7 @@ export const submitPost = async (
     mediaType: string[],
     replyToPostId: string | null,
     channelId: string | null,
-    inputSendingTxs: string,
+    makePostsWith: string,
     rpcClient: RpcClient,
     lastUsedNonceSavedRef: React.RefObject<number>,
     callbackUrl: string,
@@ -555,7 +555,7 @@ export const submitPost = async (
         postersAddress,
         contractAddress,
         makePostMethod,
-        inputSendingTxs,
+        makePostsWith,
         rpcClient,
         lastUsedNonceSavedRef,
         callbackUrl,
@@ -572,7 +572,7 @@ export const submitSendTip = async (
     sendTipMethod: string,
     postId: string,
     amount: string,
-    inputSendingTxs: string,
+    makePostsWith: string,
     rpcClient: RpcClient,
     lastUsedNonceSavedRef: React.RefObject<number>,
     callbackUrl: string,
@@ -593,7 +593,7 @@ export const submitSendTip = async (
         postersAddress,
         contractAddress,
         sendTipMethod,
-        inputSendingTxs,
+        makePostsWith,
         rpcClient,
         lastUsedNonceSavedRef,
         callbackUrl,
@@ -612,7 +612,7 @@ export const makeCallTransaction = async (
     from: string,
     to: string,
     method: string,
-    inputSendingTxs: string,
+    makePostsWith: string,
     rpcClient: RpcClient,
     lastUsedNonceSavedRef: React.RefObject<number>,
     callbackUrl: string,
@@ -631,7 +631,7 @@ export const makeCallTransaction = async (
 
     const { maxFeeDecimal, maxFeeDna } = calculateMaxFee(maxFeeResult, inputPostLength);
 
-    if (inputSendingTxs === 'rpc') {
+    if (makePostsWith === 'rpc') {
         await rpcClient('contract_call', [
             {
                 from,
@@ -644,7 +644,7 @@ export const makeCallTransaction = async (
         ]);
     }
 
-    if (inputSendingTxs === 'idena-app') {
+    if (makePostsWith === 'idena-app') {
         const { nonce, epoch } = await getNonceAndEpoch(rpcClient, lastUsedNonceSavedRef, from, true);
 
         const txHex = getCallTransaction(to, txAmount, nonce, epoch, maxFeeDna, payload);

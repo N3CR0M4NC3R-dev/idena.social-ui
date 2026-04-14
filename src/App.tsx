@@ -12,10 +12,10 @@ import ModalSendTipComponent from './components/ModalSendTipComponent';
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
 const initIndexerApiUrl = 'https://api.idena.io';
-const contractAddressCurrent = '0xa1c5c1A8c6a1Af596078A5c9653F24c216fE1cb2';
-const contractAddress3 = '0xc0324f3Cf8158D6E27dc0A07c221636056174718';
-const contractAddress2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9';
-const contractAddress1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae';
+const contractAddressCurrent = '0xa1c5c1A8c6a1Af596078A5c9653F24c216fE1cb2'; // idena.social-ui v10
+const contractAddress3 = '0xc0324f3Cf8158D6E27dc0A07c221636056174718'; // idena.social-ui v9
+const contractAddress2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9'; // idena.social-ui v5
+const contractAddress1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae'; // idena.social-ui v1
 const firstBlock = 10135627;
 const makePostMethod = 'makePost';
 const sendTipMethod = 'sendTip';
@@ -45,6 +45,14 @@ const SUBMITTING_POST_INTERVAL = 2000;
 const MAX_POST_MEDIA_BYTES = 1024 * 1024;
 const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
 
+const initSettings = {
+    nodeUrl: localStorage.getItem('nodeUrl') ?? defaultNodeUrl,
+    nodeKey: localStorage.getItem('nodeKey') ?? defaultNodeApiKey,
+    makePostsWith: localStorage.getItem('makePostsWith') ?? 'idena-app',
+    postersAddress: localStorage.getItem('postersAddress') ?? zeroAddress,
+    findPastPostsWith: localStorage.getItem('findPastPostsWith') ?? 'indexer-api',
+    indexerApiUrl: localStorage.getItem('indexerApiUrl') ?? initIndexerApiUrl,
+};
 
 const DEBUG = false;
 
@@ -76,23 +84,41 @@ const customModalStyles = {
 Modal.setAppElement('#root');
 
 function App() {
+
+    // inputs for settings
+    const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
+    const [inputPostersAddress, setInputPostersAddress] = useState<string>(initSettings.postersAddress);
+    const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState<boolean>(true);
+    const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
+    const postersAddressInvalidRef = useRef<boolean>(postersAddressInvalid);
+    const [inputIdenaIndexerApiUrl, setInputIdenaIndexerApiUrl] = useState<string>(initSettings.indexerApiUrl);
+    const [inputIdenaIndexerApiUrlApplied, setInputIdenaIndexerApiUrlApplied] = useState<boolean>(true);
+    const [indexerApiUrlInvalid, setIdenaIndexerApiUrlInvalid] = useState<boolean>(false);
+    const indexerApiUrlInvalidRef = useRef(indexerApiUrlInvalid);
+
+    // settings
+    const [nodeUrl, setNodeUrl] = useState<string>(initSettings.nodeUrl);
+    const [nodeKey, setNodeKey] = useState<string>(initSettings.nodeKey);
+    const [makePostsWith, setMakePostsWith] = useState<string>(initSettings.makePostsWith);
+    const [postersAddress, setPostersAddress] = useState<string>(initSettings.postersAddress);
+    const postersAddressRef = useRef<string>(postersAddress);
+    const [findPastPostsWith, setFindPastPostsWith] = useState<string>(initSettings.findPastPostsWith);
+    const findPastPostsWithRef = useRef(findPastPostsWith);
+    const [indexerApiUrl, setIndexerApiUrl] = useState<string>(initSettings.indexerApiUrl);
+    const indexerApiUrlRef = useRef(indexerApiUrl);
+
+    // node
     const [nodeAvailable, setNodeAvailable] = useState<boolean>(true);
     const nodeAvailableRef = useRef(nodeAvailable);
     const rpcClientRef = useRef(undefined as undefined | RpcClient);
     const [viewOnlyNode, setViewOnlyNode] = useState<boolean>(false);
-    const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
-    const [inputPostersAddress, setInputPostersAddress] = useState<string>(zeroAddress);
-    const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState<boolean>(true);
-    const [inputNodeUrl, setInputNodeUrl] = useState<string>(defaultNodeUrl);
-    const [inputNodeKey, setInputNodeKey] = useState<string>(defaultNodeApiKey);
-    const [postersAddress, setPostersAddress] = useState<string>(zeroAddress);
-    const postersAddressRef = useRef<string>(postersAddress);
-    const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
-    const postersAddressInvalidRef = useRef<boolean>(postersAddressInvalid);
-    const [inputSendingTxs, setInputSendingTxs] = useState<string>('idena-app');
-    const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
-    const postsRef = useRef({} as Record<string, Post>);
-    const postersRef = useRef({} as Record<string, Poster>);
+
+    // ads
+    const [ads, setAds] = useState<ApprovedAd[]>([]);
+    const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
+    const currentAdRef = useRef(currentAd);
+
+    // blocks
     const [initialBlock, setInitialBlock] = useState<number>(0);
     const [pastBlockCaptured, setPastBlockCaptured] = useState<number>(0);
     const pastBlockCapturedRef = useRef(pastBlockCaptured);
@@ -101,18 +127,12 @@ function App() {
     const currentBlockCapturedRef = useRef(currentBlockCaptured);
     const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(false);
     const scanningPastBlocksRef = useRef(scanningPastBlocks);
-    const [ads, setAds] = useState<ApprovedAd[]>([]);
-    const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
-    const currentAdRef = useRef(currentAd);
-    const [inputFindingPastPosts, setInputFindingPastPosts] = useState<string>('indexer-api');
-    const inputFindingPastPostsRef = useRef(inputFindingPastPosts);
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
-    const [indexerApiUrl, setIdenaIndexerApiUrl] = useState<string>(initIndexerApiUrl);
-    const indexerApiUrlRef = useRef(indexerApiUrl);
-    const [indexerApiUrlInvalid, setIdenaIndexerApiUrlInvalid] = useState<boolean>(false);
-    const indexerApiUrlInvalidRef = useRef(indexerApiUrlInvalid);
-    const [inputIdenaIndexerApiUrl, setInputIdenaIndexerApiUrl] = useState<string>(initIndexerApiUrl);
-    const [inputIdenaIndexerApiUrlApplied, setInputIdenaIndexerApiUrlApplied] = useState<boolean>(true);
+
+    // posts, posters, tips
+    const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
+    const postsRef = useRef({} as Record<string, Post>);
+    const postersRef = useRef({} as Record<string, Poster>);
     const replyPostsTreeRef = useRef({} as Record<string, string>);
     const deOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
     const forwardOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
@@ -124,15 +144,17 @@ function App() {
     const [submittingTip, setSubmittingTip] = useState<string>('');
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
     const browserStateHistoryRef = useRef<Record<string, PostDomSettingsCollection>>({});
+    const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
+    const copyTxHandlerEnabledRef = useRef<boolean>(true);
+    const lastUsedNonceSavedRef = useRef<number>(0);
+    const tipsRef = useRef<Record<string, { totalAmount: number, tips: Tip[] }>>({});
+    const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
+
+    // modals
     const [modalOpen, setModalOpen] = useState<string>('');
     const modalLikePostsRef = useRef<Post[]>([]);
     const modalTipsRef = useRef<Tip[]>([]);
     const modalSendTipRef = useRef<Post>(undefined);
-    const tipsRef = useRef<Record<string, { totalAmount: number, tips: Tip[] }>>({});
-    const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
-    const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
-    const copyTxHandlerEnabledRef = useRef<boolean>(true);
-    const lastUsedNonceSavedRef = useRef<number>(0);
 
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
@@ -150,6 +172,9 @@ function App() {
                 return;
             }
 
+            localStorage.setItem('nodeUrl', idenaNodeUrl);
+            localStorage.setItem('nodeKey', idenaNodeApiKey);
+
             if (!initialBlock) {
                 const { result: getLastBlockResult } = await rpcClientRef.current!('bcn_lastBlock', []);
                 setInitialBlock(getLastBlockResult?.height ?? 0);
@@ -166,7 +191,7 @@ function App() {
                 setViewOnlyNode(true);
             }
 
-            const adsClient = new IdenaApprovedAds({ idenaNodeUrl: inputNodeUrl, idenaNodeApiKey: inputNodeKey });
+            const adsClient = new IdenaApprovedAds({ idenaNodeUrl, idenaNodeApiKey });
 
             try {
                 const ads = await adsClient.getApprovedAds();
@@ -181,13 +206,14 @@ function App() {
 
     useEffect(() => {
         if (inputNodeApplied) {
-            setRpcClient(inputNodeUrl, inputNodeKey, setNodeAvailable);
+            setRpcClient(nodeUrl, nodeKey, setNodeAvailable);
         }
     }, [inputNodeApplied]);
 
     useEffect(() => {
-        if (inputPostersAddressApplied && inputSendingTxs === 'idena-app') {
+        if (inputPostersAddressApplied && makePostsWith === 'idena-app') {
             setPostersAddress(inputPostersAddress);
+            localStorage.setItem('postersAddress', inputPostersAddress);
 
             if (inputPostersAddress === zeroAddress) {
                 setPostersAddressInvalid(true);
@@ -210,8 +236,9 @@ function App() {
     }, [inputPostersAddressApplied]);
 
     useEffect(() => {
-        if (inputIdenaIndexerApiUrlApplied && inputFindingPastPosts === 'indexer-api') {
-            setIdenaIndexerApiUrl(inputIdenaIndexerApiUrl);
+        if (inputIdenaIndexerApiUrlApplied && findPastPostsWith === 'indexer-api') {
+            setIndexerApiUrl(inputIdenaIndexerApiUrl);
+            localStorage.setItem('indexerApiUrl', inputIdenaIndexerApiUrl);
 
             (async function() {
                 const { result, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddressCurrent, 1);
@@ -267,8 +294,8 @@ function App() {
     }, [currentAd]);
 
     useEffect(() => {
-        inputFindingPastPostsRef.current = inputFindingPastPosts;
-    }, [inputFindingPastPosts]);
+        findPastPostsWithRef.current = findPastPostsWith;
+    }, [findPastPostsWith]);
 
     useEffect(() => {
         indexerApiUrlRef.current = indexerApiUrl;
@@ -313,7 +340,7 @@ function App() {
 
             (async function recurseBackward(time: number) {
                 if (scanningPastBlocksRef.current && nodeAvailableRef.current && time < ttl) {
-                    const recurseMethod = inputFindingPastPostsRef.current === 'rpc' ? 'recurseBackwardWithRpcOnly' : 'recurseBackwardWithIndexerApi';
+                    const recurseMethod = findPastPostsWithRef.current === 'rpc' ? 'recurseBackwardWithRpcOnly' : 'recurseBackwardWithIndexerApi';
                     const contractAddress = pastContractAddressRef!.current;
                     // pendingBlock only relevant if recurseBackwardWithRpcOnly
                     const pendingBlock = pastBlockCapturedRef.current ? (partialPastBlockCapturedRef.current ? partialPastBlockCapturedRef.current : pastBlockCapturedRef.current - 1) : initialBlock - 1;
@@ -327,19 +354,22 @@ function App() {
         }
     }, [scanningPastBlocks, initialBlock, nodeAvailable]);
 
-    const handleInputSendingTxsToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setInputSendingTxs(event.target.value);
+    const handleMakePostsWithToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setMakePostsWith(event.target.value);
+
+        localStorage.setItem('makePostsWith', event.target.value);
 
         if (event.target.value === 'rpc') {
             setInputPostersAddress('');
             setPostersAddressInvalid(false);
-            setRpcClient(inputNodeUrl, inputNodeKey, setNodeAvailable);
+            setRpcClient(nodeUrl, nodeKey, setNodeAvailable);
         }
-        
+
         if (event.target.value === 'idena-app') {
             if (postersAddress) {
                 setInputPostersAddress(postersAddress);
                 setPostersAddressInvalid(false);
+                localStorage.setItem('postersAddress', postersAddress);
             } else {
                 setInputPostersAddress(zeroAddress);
                 setPostersAddress(zeroAddress);
@@ -348,21 +378,23 @@ function App() {
         }
     };
 
-    const handleInputFindingPastPostsToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setInputFindingPastPosts(event.target.value);
+    const handleInputFindPastPostsWithToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFindPastPostsWith(event.target.value);
+        localStorage.setItem('findPastPostsWith', event.target.value);
 
         if (event.target.value === 'rpc') {
-            setIdenaIndexerApiUrl('');
+            setIndexerApiUrl('');
             setIdenaIndexerApiUrlInvalid(false);
         }
 
         if (event.target.value === 'indexer-api') {
             if (indexerApiUrl) {
-                setIdenaIndexerApiUrl(indexerApiUrl);
+                setIndexerApiUrl(indexerApiUrl);
                 setPostersAddressInvalid(false);
+                localStorage.setItem('indexerApiUrl', indexerApiUrl);
             } else {
                 setInputIdenaIndexerApiUrl(initIndexerApiUrl);
-                setIdenaIndexerApiUrl(initIndexerApiUrl);
+                setIndexerApiUrl(initIndexerApiUrl);
             }
         }
     };
@@ -431,16 +463,29 @@ function App() {
                         .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: Math.floor((new Date(balanceUpdate.timestamp)).getTime() / 1000 ) }))
                     ?? [];
 
+                    const isCurrentContract = pastContractAddressRef!.current === contractAddressCurrent;
+                    const isContractAddress3 = pastContractAddressRef!.current === contractAddress3;
+                    const isContractAddress2 = pastContractAddressRef!.current === contractAddress2;
+                    const isContractAddress1 = pastContractAddressRef!.current === contractAddress1;
+
+                    if (isContractAddress3) {
+                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v10.timestamp);
+                    } else if (isContractAddress2) {
+                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v9.timestamp);
+                    } else if (isContractAddress1) {
+                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v5.timestamp);
+                    }
+
                     if (continuationToken) {
                         continuationTokenRef!.current = continuationToken;
                     } else {
-                        if (pastContractAddressRef!.current === contractAddressCurrent) {
+                        if (isCurrentContract) {
                             pastContractAddressRef!.current = contractAddress3;
                             continuationTokenRef!.current = undefined;
-                        } else if (pastContractAddressRef!.current === contractAddress3) {
+                        } else if (isContractAddress3) {
                             pastContractAddressRef!.current = contractAddress2;
                             continuationTokenRef!.current = undefined;
-                        } else if (pastContractAddressRef!.current === contractAddress2) {
+                        } else if (isContractAddress2) {
                             pastContractAddressRef!.current = contractAddress1;
                             continuationTokenRef!.current = undefined;
                         } else {
@@ -677,8 +722,8 @@ function App() {
     }, [submittingPost, submittingLike, submittingTip]);
 
     useEffect(() => {
-        setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || (inputSendingTxs === 'rpc' && viewOnlyNode) || postersAddressInvalid);
-    }, [submittingPost, submittingLike, submittingTip, inputSendingTxs, viewOnlyNode, postersAddressInvalid]);
+        setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || (makePostsWith === 'rpc' && viewOnlyNode) || postersAddressInvalid);
+    }, [submittingPost, submittingLike, submittingTip, makePostsWith, viewOnlyNode, postersAddressInvalid]);
 
     const setPostMediaAttachmentHandler = async (location: string, file: File) => {
         if (!supportedImageTypes.includes(file.type)) {
@@ -686,12 +731,12 @@ function App() {
             return;
         }
 
-        if (inputSendingTxs === 'rpc' && file.size > MAX_POST_MEDIA_BYTES) {
+        if (makePostsWith === 'rpc' && file.size > MAX_POST_MEDIA_BYTES) {
             alert('1MB is the maximum size. This image is too large.');
             return;
         }
 
-        if (inputSendingTxs === 'idena-app' && file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
+        if (makePostsWith === 'idena-app' && file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
             alert('5KB is the maximum size when using the Idena App. This image is too large.');
             return;
         }
@@ -780,7 +825,7 @@ function App() {
             return;
         }
 
-        if (inputSendingTxs === 'rpc') {
+        if (makePostsWith === 'rpc') {
             if (inputText.length > 100) {
                 const fileBytes = str2bytes(inputText);
                 const cidAddress = await storeFileToIpfs(rpcClientRef.current!, lastUsedNonceSavedRef, fileBytes, postersAddressRef.current);
@@ -811,7 +856,7 @@ function App() {
 
         setSubmittingPost(location);
 
-        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
     };
 
     const submitLikeHandler = async (emoji: string, location: string, replyToPostId?: string, channelId?: string) => {
@@ -822,7 +867,7 @@ function App() {
 
         setSubmittingLike(location);
 
-        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, inputSendingTxs, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
     };
 
     const submitSendTipHandler = async (location: string, tipToPostId: string, tipAmount: string) => {
@@ -833,7 +878,7 @@ function App() {
 
         setSubmittingTip(location);
 
-        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, inputSendingTxs, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
+        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, makePostsWith, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
     };
 
     const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
@@ -880,11 +925,11 @@ function App() {
                         <div className="flex flex-col">
                             <div className="flex flex-row mb-2 gap-1">
                                 <p className="w-13 flex-none text-right">Rpc url:</p>
-                                <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeUrl} onChange={e => setInputNodeUrl(e.target.value)} />
+                                <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={nodeUrl} onChange={e => setNodeUrl(e.target.value)} />
                             </div>
                             <div className="flex flex-row mb-1 gap-1">
                                 <p className="w-13 flex-none text-right">Api key:</p>
-                                <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={inputNodeKey} onChange={e => setInputNodeKey(e.target.value)} />
+                                <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={nodeKey} onChange={e => setNodeKey(e.target.value)} />
                             </div>
                             {!nodeAvailable && <p className="ml-14 text-[11px] text-red-400">Node Unavailable. Please try again.</p>}
                         </div>
@@ -895,17 +940,17 @@ function App() {
                     </div>
                     <hr className="mb-3 text-gray-500" />
                     <div className="flex flex-col mb-6">
-                        <p>For sending transactions:</p>
+                        <p>Make posts with:</p>
                         <div className="flex flex-row gap-2">
-                            <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={inputSendingTxs === 'rpc'} onChange={handleInputSendingTxsToggle} />
+                            <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={handleMakePostsWithToggle} />
                             <label htmlFor="useRpc" className="flex-none text-right">Use RPC</label>
                         </div>
-                        {inputSendingTxs === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Use Idena App for transactions. (Posting, liking, tipping is disabled)</p>}
+                        {makePostsWith === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Use Idena App for transactions. (Posting, liking, tipping is disabled)</p>}
                         <div className="flex flex-row gap-2">
-                            <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={inputSendingTxs === 'idena-app'} onChange={handleInputSendingTxsToggle} />
+                            <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={handleMakePostsWithToggle} />
                             <label htmlFor="notUseRpc" className="flex-none text-right">Use Idena App</label>
                         </div>
-                        {inputSendingTxs === 'idena-app' && (
+                        {makePostsWith === 'idena-app' && (
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <p className="mb-1">Your Idena Address:</p>
                                 <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
@@ -919,16 +964,16 @@ function App() {
                     </div>
                     <hr className="mb-3 text-gray-500" />
                     <div className="flex flex-col mb-6">
-                        <p>For finding past posts:</p>
+                        <p>Find past posts with:</p>
                         <div className="flex flex-row gap-2">
-                            <input id="inputFindingPastPosts" type="radio" name="inputFindingPastPosts" value="rpc" checked={inputFindingPastPosts === 'rpc'} onChange={handleInputFindingPastPostsToggle} />
-                            <label htmlFor="inputFindingPastPosts" className="flex-none text-right">Use RPC</label>
+                            <input id="findPastPostsWith" type="radio" name="findPastPostsWith" value="rpc" checked={findPastPostsWith === 'rpc'} onChange={handleInputFindPastPostsWithToggle} />
+                            <label htmlFor="findPastPostsWith" className="flex-none text-right">Use RPC</label>
                         </div>
                         <div className="flex flex-row gap-2">
-                            <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="inputFindingPastPosts" value="indexer-api" checked={inputFindingPastPosts === 'indexer-api'} onChange={handleInputFindingPastPostsToggle} />
+                            <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPastPostsWith" value="indexer-api" checked={findPastPostsWith === 'indexer-api'} onChange={handleInputFindPastPostsWithToggle} />
                             <label htmlFor="notUseFindPastBlocksWithTxsApi" className="flex-none text-right">Use Indexer Api</label>
                         </div>
-                        {inputFindingPastPosts === 'indexer-api' && (
+                        {findPastPostsWith === 'indexer-api' && (
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <div className="flex flex-row gap-1">
                                     <p className="mb-1 w-13 flex-none text-right">Api Url:</p>
