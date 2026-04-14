@@ -655,7 +655,7 @@ export const makeCallTransaction = async (
 };
 
 export const getNonceAndEpoch = async (rpcClient: RpcClient, lastUsedNonceSavedRef: React.RefObject<number>, address: string, save?: boolean) => {
-    const responses = await Promise.all([rpcClient('dna_getBalance', [address]), await rpcClient('dna_epoch', [])]);
+    const responses = await Promise.all([rpcClient('dna_getBalance', [address]), rpcClient('dna_epoch', [])]);
 
     const { result: getBalanceResult } = responses[0];
     const { result: epochResult } = responses[1];

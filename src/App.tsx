@@ -46,12 +46,12 @@ const MAX_POST_MEDIA_BYTES = 1024 * 1024;
 const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
 
 const initSettings = {
-    nodeUrl: localStorage.getItem('nodeUrl') ?? defaultNodeUrl,
-    nodeKey: localStorage.getItem('nodeKey') ?? defaultNodeApiKey,
-    makePostsWith: localStorage.getItem('makePostsWith') ?? 'idena-app',
-    postersAddress: localStorage.getItem('postersAddress') ?? zeroAddress,
-    findPastPostsWith: localStorage.getItem('findPastPostsWith') ?? 'indexer-api',
-    indexerApiUrl: localStorage.getItem('indexerApiUrl') ?? initIndexerApiUrl,
+    nodeUrl: localStorage.getItem('nodeUrl') || defaultNodeUrl,
+    nodeKey: localStorage.getItem('nodeKey') || defaultNodeApiKey,
+    makePostsWith: localStorage.getItem('makePostsWith') || 'idena-app',
+    postersAddress: localStorage.getItem('postersAddress') || zeroAddress,
+    findPastPostsWith: localStorage.getItem('findPastPostsWith') || 'indexer-api',
+    indexerApiUrl: localStorage.getItem('indexerApiUrl') || initIndexerApiUrl,
 };
 
 const DEBUG = false;
@@ -184,11 +184,13 @@ function App() {
             const { result: getCoinbaseAddrResult } = await rpcClientRef.current!('dna_getCoinbaseAddr', [], true);
 
             if (getCoinbaseAddrResult) {
-                setPostersAddress(getCoinbaseAddrResult);
                 setViewOnlyNode(false);
             } else {
-                setPostersAddress('');
                 setViewOnlyNode(true);
+            }
+
+            if (makePostsWith === 'rpc') {
+                setPostersAddress(getCoinbaseAddrResult || '');
             }
 
             const adsClient = new IdenaApprovedAds({ idenaNodeUrl, idenaNodeApiKey });
