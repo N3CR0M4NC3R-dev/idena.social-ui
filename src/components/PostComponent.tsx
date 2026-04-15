@@ -321,7 +321,7 @@ function PostComponent(props: PostComponentProps) {
                     }
                 </div>
                 <div className="w-35">
-                    <div className="text-right text-[11px]/6 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
+                    <div className="text-right text-[11px]/6 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
                 </div>
             </div>
             {!isBreakingChangeDisabled && showReplyInput && <>
@@ -450,7 +450,7 @@ function PostComponent(props: PostComponentProps) {
                                         }
                                     </div>
                                     <div>
-                                        <p className="text-[10px]/5 text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                        <p className="text-[10px]/5 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
                                 </div>
                                 {showDiscussion && <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
@@ -495,7 +495,7 @@ function PostComponent(props: PostComponentProps) {
                                                                         <span className="ml-1 text-[9px] align-[2px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                                                     </div>
                                                                     <div>
-                                                                        <p className="mx-1 text-[10px] text-stone-500 font-[700]"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                                                        <p className="mx-1 text-[10px] text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                                                     </div>
                                                                 </div>
                                                                 <div id={`post-text-${discussionPost.postId}`} className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
