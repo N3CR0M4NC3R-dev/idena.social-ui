@@ -286,7 +286,7 @@ function PostComponent(props: PostComponentProps) {
                 </div>
                 <div className="mr-3 flex-1 flex flex-col overflow-hidden">
                     <div className="flex-none flex flex-col gap-x-3 items-start">
-                        <p className="text-[18px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${post.poster}`)}>{posterDisplayAddress}</p>
+                        <p className="text-[18px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${post.poster}`)}>{posterDisplayAddress}</p>
                         <div><p className="text-[11px]/4">{`Age: ${posterAge}, Status: ${getIdentityStatus(posterState)}, Stake: ${posterStake}`}</p></div>
                         <div className="flex-1"></div>
                     </div>
@@ -414,7 +414,7 @@ function PostComponent(props: PostComponentProps) {
                                     <div className="ml-1 mr-3 flex-1 flex flex-col overflow-hidden">
                                         <div className="flex-none flex flex-col gap-x-3">
                                             <div className="flex flex-row items-center">
-                                                <p className="text-[16px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${replyPost.poster}`)}>{posterDisplayAddress}</p>
+                                                <p className="text-[16px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${replyPost.poster}`)}>{posterDisplayAddress}</p>
                                                 <span className="ml-2 text-[11px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                             </div>
                                             <div className="flex-1"></div>
@@ -491,11 +491,11 @@ function PostComponent(props: PostComponentProps) {
                                                             <div className="flex-1 flex flex-col">
                                                                 <div className="mx-1 flex flex-row items-center overflow-hidden">
                                                                     <div className="flex-1">
-                                                                        <span className="text-[14px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${discussionPost.poster}`)}>{posterDisplayAddress}</span>
+                                                                        <span className="text-[14px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${discussionPost.poster}`)}>{posterDisplayAddress}</span>
                                                                         <span className="ml-1 text-[9px] align-[2px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                                                     </div>
                                                                     <div>
-                                                                        <p className="mx-1 text-[10px] text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                                                        <p className="mx-1 text-[10px] text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${discussionPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
                                                                     </div>
                                                                 </div>
                                                                 <div id={`post-text-${discussionPost.postId}`} className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">

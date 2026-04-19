@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity } from './logic/asyncUtils';
 import { getDisplayAddress, getTextAndMediaForPost, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import { Link, Outlet } from 'react-router';
@@ -38,7 +38,7 @@ const defaultAd = {
 const POLLING_INTERVAL = 10000;
 const SCANNING_INTERVAL = 10;
 const ADS_INTERVAL = 10000;
-const SCAN_POSTS_TTL = 1 * 60;
+const SCAN_PAST_POSTS_TTL = 1 * 60;
 const INDEXER_API_ITEMS_LIMIT = 20;
 const SET_NEW_POSTS_ADDED_DELAY = 20;
 const SUBMITTING_POST_INTERVAL = 2000;
@@ -120,6 +120,7 @@ function App() {
 
     // blocks
     const [initialBlock, setInitialBlock] = useState<number>(0);
+    const [initialBlockTimestamp, setInitialBlockTimestamp] = useState<number>(0);
     const [pastBlockCaptured, setPastBlockCaptured] = useState<number>(0);
     const pastBlockCapturedRef = useRef(pastBlockCaptured);
     const partialPastBlockCapturedRef = useRef(0);
@@ -130,7 +131,8 @@ function App() {
     const [noMorePastBlocks, setNoMorePastBlocks] = useState<boolean>(false);
 
     // posts, posters, tips
-    const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
+    const [latestPosts, setLatestPosts] = useState<string[]>([]);
+    const [latestActivity, setLatestActivity] = useState<string[]>([]);
     const postsRef = useRef({} as Record<string, Post>);
     const postersRef = useRef({} as Record<string, Poster>);
     const replyPostsTreeRef = useRef({} as Record<string, string>);
@@ -149,6 +151,8 @@ function App() {
     const lastUsedNonceSavedRef = useRef<number>(0);
     const tipsRef = useRef<Record<string, { totalAmount: number, tips: Tip[] }>>({});
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
+    const postLatestActivityRef = useRef({} as Record<string, number>);
+
 
     // modals
     const [modalOpen, setModalOpen] = useState<string>('');
@@ -178,6 +182,7 @@ function App() {
             if (!initialBlock) {
                 const { result: getLastBlockResult } = await rpcClientRef.current!('bcn_lastBlock', []);
                 setInitialBlock(getLastBlockResult?.height ?? 0);
+                setInitialBlockTimestamp(getLastBlockResult?.timestamp ?? 0);
                 setScanningPastBlocks(true);
             }
 
@@ -338,7 +343,7 @@ function App() {
             let recurseBackwardIntervalId: NodeJS.Timeout;
 
             const timeNow = Math.floor(Date.now() / 1000);
-            const ttl = timeNow + SCAN_POSTS_TTL;
+            const ttl = timeNow + SCAN_PAST_POSTS_TTL;
 
             (async function recurseBackward(time: number) {
                 if (scanningPastBlocksRef.current && nodeAvailableRef.current && time < ttl) {
@@ -465,6 +470,10 @@ function App() {
                         .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: Math.floor((new Date(balanceUpdate.timestamp)).getTime() / 1000 ) }))
                     ?? [];
 
+                    if (!continuationTokenRef!.current) {
+                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < initialBlockTimestamp);
+                    }
+
                     const isCurrentContract = pastContractAddressRef!.current === contractAddressCurrent;
                     const isContractAddress3 = pastContractAddressRef!.current === contractAddress3;
                     const isContractAddress2 = pastContractAddressRef!.current === contractAddress2;
@@ -503,7 +512,7 @@ function App() {
 
                 let lastValidTransaction;
 
-                const newOrderedPostIds: string[] = [];
+                const newLatestPosts: string[] = [];
 
                 let newReplyPostsCollection = {};
 
@@ -515,12 +524,30 @@ function App() {
                     const transaction = transactionsWithDetails[index];
 
                     if ([sendTipMethod].includes(transaction.method)) {
-                        const { postId, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef);
+                        const { postId, newTip, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, isRecurseForward);
                         tipsRef.current = { ...tipsRef.current, [postId]: updatedPostTips };
 
                         posterPromise && posterPromises.push(posterPromise);
 
                         lastValidTransaction = transaction;
+
+                        // transient Post representation of a Tip
+                        const newPost = {
+                            postId: newTip.txHash,
+                            replyToPostId: postId,
+                            timestamp: newTip.timestamp,
+                        } as Post;
+
+                        const newPostLatestActivity = getNewPostLatestActivity(
+                            isRecurseForward,
+                            newPost!,
+                            postsRef,
+                            postLatestActivityRef,
+                            postChannelRegex,
+                            discussPrefix,
+                        );
+
+                        postLatestActivityRef.current = { ...postLatestActivityRef.current, ...newPostLatestActivity };
 
                         continue;
                     }
@@ -550,9 +577,22 @@ function App() {
                     messagePromise && messagePromises.push(messagePromise);
                     mediaPromise && mediaPromises.push(mediaPromise);
 
-                    if (!newPost!.replyToPostId && newPost!.channelId === thisChannelId) {
-                        newOrderedPostIds.push(newPost!.postId);
+                    const isTopLevelPost = !newPost!.replyToPostId && newPost!.channelId === thisChannelId;
+
+                    if (isTopLevelPost) {
+                        newLatestPosts.push(newPost!.postId);
                     }
+
+                    const newPostLatestActivity = getNewPostLatestActivity(
+                        isRecurseForward,
+                        newPost!,
+                        postsRef,
+                        postLatestActivityRef,
+                        postChannelRegex,
+                        discussPrefix,
+                    );
+
+                    postLatestActivityRef.current = { ...postLatestActivityRef.current, ...newPostLatestActivity };
 
                     const newPosts = { [newPost!.postId]: newPost as Post };
 
@@ -564,10 +604,7 @@ function App() {
                     const updatedPosts: Record<string, Post> = {};
 
                     if (postChannelRegex.test(newPost!.channelId)) {
-                        const preV9 = newPost!.timestamp < breakingChanges.v9.timestamp;
-                        const preV10 = newPost!.timestamp < breakingChanges.v10.timestamp;
-                        const discussionPostIdRaw = newPost!.channelId.split(discussPrefix)[1];
-                        const discussionPostId = preV9 ? breakingChanges.v9.postIdPrefix + discussionPostIdRaw : preV10 ? breakingChanges.v10.postIdPrefix + discussionPostIdRaw: discussionPostIdRaw;
+                        const discussionPostId = getPostIdFromChannelId(newPost!.timestamp, newPost!.channelId, discussPrefix);
                         const discussionPost = postsRef.current[discussionPostId];
                         const orphaned = !discussionPost || discussionPost.orphaned;
 
@@ -666,7 +703,20 @@ function App() {
                     postsRef.current = { ...postsRef.current, [mediaProps!.postId]: updatedPost };
                 }
 
-                setOrderedPostIds((currentOrderedPostIds) => isRecurseForward ? [...newOrderedPostIds!, ...currentOrderedPostIds] : [...currentOrderedPostIds, ...newOrderedPostIds!]);
+                setLatestPosts((currentLatestPosts) => {
+                    const latestPostsUpdated = isRecurseForward ? [...newLatestPosts!, ...currentLatestPosts] : [...currentLatestPosts, ...newLatestPosts!];
+
+                    setLatestActivity(() => {
+                        const latestActivityUpdated = latestPostsUpdated
+                            .map((postId) => ({ postId, timestamp: postLatestActivityRef.current[postId] }))
+                            .sort((a, b) => b.timestamp - a.timestamp)
+                            .map((post) => post.postId);
+
+                        return latestActivityUpdated;
+                    });
+
+                    return latestPostsUpdated;
+                });
 
                 let lastBlockHeight;
 
@@ -1004,7 +1054,8 @@ function App() {
                     context={{
                         currentBlockCaptured,
                         nodeAvailable,
-                        orderedPostIds,
+                        latestPosts,
+                        latestActivity,
                         postsRef,
                         postersRef,
                         replyPostsTreeRef,

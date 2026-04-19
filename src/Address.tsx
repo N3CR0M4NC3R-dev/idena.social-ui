@@ -3,11 +3,14 @@ import type { Post, Poster, Tip } from "./logic/asyncUtils";
 import { getDisplayAddress, getIdentityStatus } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
 import { type PostDomSettingsCollection } from "./App.exports";
+import { useState } from "react";
+import SortPostsByComponent from "./components/SortPostsByComponent";
 
 type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
 
 type AddressProps = {
-    orderedPostIds: string[],
+    latestPosts: string[],
+    latestActivity: string[],
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
@@ -36,7 +39,8 @@ function Address() {
     const location = useLocation();
 
     const {
-        orderedPostIds,
+        latestPosts,
+        latestActivity,
         postsRef,
         postersRef,
         replyPostsTreeRef,
@@ -59,10 +63,12 @@ function Address() {
         postMediaAttachmentsRef,
     } = useOutletContext() as AddressProps;
 
+    const [sortPostsBy, setSortPostsBy] = useState<string>('latest-posts');
+
     const poster = postersRef.current[address!];
     const posterDisplayAddress = getDisplayAddress(poster.address);
 
-    const filteredOrderedPosts = orderedPostIds.filter(postId => {
+    const filteredOrderedPosts = (sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).filter(postId => {
         const post = postsRef.current[postId];
         return post.poster === address;
     });
@@ -79,7 +85,7 @@ function Address() {
     };
 
     return (<>
-        <button className="text-[13px] hover:cursor-pointer" onClick={handleGoBack}>&lt; Back</button>
+        <button className="text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
         <div className="flex flex-row p-3">
             <div className="w-35 flex justify-end">
                 <div className="-mt-1"><img className="w-27" src={`https://robohash.org/${poster.address}?set=set1`} /></div>
@@ -96,6 +102,7 @@ function Address() {
         <div className="h-8 mb-5 flex border-b-1 border-gray-500 gap-3">
             <p className={location.pathname === `/address/${poster.address}` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>Posts</p>
         </div>
+        <SortPostsByComponent sortPostsBy={sortPostsBy} setSortPostsBy={setSortPostsBy} />
         <ul>
             {filteredOrderedPosts.map((postId) => (
                 <li key={postId}>

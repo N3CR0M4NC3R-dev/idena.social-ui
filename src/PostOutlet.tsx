@@ -4,7 +4,8 @@ import PostComponent from "./components/PostComponent";
 import { type MouseEventLocal, type PostDomSettingsCollection } from "./App.exports";
 
 type PostOutletProps = {
-    orderedPostIds: string[],
+    latestPosts: string[],
+    latestActivity: string[],
     postsRef: React.RefObject<Record<string, Post>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
@@ -57,7 +58,7 @@ function PostOutlet() {
     };
 
     return (<>
-        <button className="mb-3 text-[13px] hover:cursor-pointer" onClick={handleGoBack}>&lt; Back</button>
+        <button className="mb-3 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
         <PostComponent
             postId={postId!}
             postsRef={postsRef}

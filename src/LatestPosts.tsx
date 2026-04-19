@@ -2,12 +2,14 @@ import { supportedImageTypes, type Post, type Tip } from './logic/asyncUtils';
 import { useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
 import { type MouseEventLocal, type PostDomSettingsCollection } from './App.exports';
-import { useReducer } from 'react';
+import { useReducer, useState } from 'react';
+import SortPostsByComponent from './components/SortPostsByComponent';
 
 type LatestPostsProps = {
     currentBlockCaptured: number,
     nodeAvailable: boolean,
-    orderedPostIds: string[],
+    latestPosts: string[],
+    latestActivity: string[],
     postsRef: React.RefObject<Record<string, Post>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
@@ -37,7 +39,8 @@ function LatestPosts() {
     const {
         currentBlockCaptured,
         nodeAvailable,
-        orderedPostIds,
+        latestPosts,
+        latestActivity,
         postsRef,
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
@@ -63,6 +66,7 @@ function LatestPosts() {
         postMediaAttachmentsRef,
     } = useOutletContext() as LatestPostsProps;
 
+    const [sortPostsBy, setSortPostsBy] = useState<string>('latest-posts');
     const [, forceUpdate] = useReducer(x => x + 1, 0);
 
     const mainPostMediaAttachment = postMediaAttachmentsRef.current['main'];
@@ -120,8 +124,9 @@ function LatestPosts() {
             <p>Current Block: #{currentBlockCaptured ? currentBlockCaptured : (nodeAvailable ? 'Loading...' : '')}</p>
             {!nodeAvailable && <p className="text-[11px] text-red-400">Blocks are not being captured. Please update your node.</p>}
         </div>
+        <SortPostsByComponent sortPostsBy={sortPostsBy} setSortPostsBy={setSortPostsBy} />
         <ul>
-            {orderedPostIds.map((postId) => (
+            {(sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).map((postId) => (
                 <li key={postId}>
                     <PostComponent
                         postId={postId}

@@ -370,6 +370,7 @@ export const processTip = async (
     rpcClient: RpcClient,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
     postersRef: React.RefObject<Record<string, Poster>>,
+    isRecurseForward: boolean,
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = transaction;
 
@@ -406,7 +407,7 @@ export const processTip = async (
 
     const updatedPostTips = {
         totalAmount: (tipsRef.current[postId]?.totalAmount ?? 0) + amount,
-        tips: [ ...(tipsRef.current[postId]?.tips ?? []), newTip ],
+        tips: isRecurseForward ? [ newTip, ...(tipsRef.current[postId]?.tips ?? []) ] : [ ...(tipsRef.current[postId]?.tips ?? []), newTip ],
     }
 
     let posterPromise: Promise<Poster> | undefined;
@@ -415,7 +416,7 @@ export const processTip = async (
         posterPromise = getPoster(rpcClient, tipper);
     }
 
-    return { postId, updatedPostTips, posterPromise };
+    return { postId, newTip, updatedPostTips, posterPromise };
 }
 
 export const getPoster = async (rpcClient: RpcClient, posterAddress: string) => {
@@ -685,3 +686,62 @@ export const storeFileToIpfs = async (rpcClient: RpcClient, lastUsedNonceSavedRe
 
     return `ipfs://${cid}`;
 };
+
+export const getPostIdFromChannelId = (timestamp: number, channelId: string, discussPrefix: string) => {
+    const preV9 = timestamp < breakingChanges.v9.timestamp;
+    const preV10 = timestamp < breakingChanges.v10.timestamp;
+    const discussionPostIdRaw = channelId.split(discussPrefix)[1];
+    const discussionPostId = preV9 ? breakingChanges.v9.postIdPrefix + discussionPostIdRaw : preV10 ? breakingChanges.v10.postIdPrefix + discussionPostIdRaw: discussionPostIdRaw;
+    
+    return discussionPostId;
+}
+
+export const getNewPostLatestActivity = (
+    isRecurseForward: boolean,
+    newPost: Post,
+    postsRef: React.RefObject<Record<string, Post>>,
+    postLatestActivityRef: React.RefObject<Record<string, number>>,
+    postChannelRegex: RegExp,
+    discussPrefix: string,
+) => {
+    const newPostLatestActivity: Record<string, number> = {};
+
+    if (isRecurseForward) {
+        let loopPost: Post | undefined = newPost;
+
+        while (loopPost) {
+            newPostLatestActivity[loopPost!.postId] = newPost!.timestamp;
+
+            const replyToPostId: string = loopPost!.replyToPostId;
+            const channelId = loopPost!.channelId;
+            const timestamp = loopPost!.timestamp;
+
+            if (replyToPostId) {
+                loopPost = postsRef.current[replyToPostId];
+            } else if (postChannelRegex.test(channelId)) {
+                const discussionPostId = getPostIdFromChannelId(timestamp, channelId, discussPrefix);
+                loopPost = postsRef.current[discussionPostId];
+            } else {
+                loopPost = undefined;
+            }
+        }
+    } else {
+        let newTimestamp = postLatestActivityRef.current[newPost!.postId] ?? newPost!.timestamp;
+        postLatestActivityRef.current[newPost!.postId] = newTimestamp;
+
+        const replyToPostId = newPost!.replyToPostId;
+        const channelId = newPost!.channelId;
+        const timestamp = newPost!.timestamp;
+
+        if (replyToPostId) {
+            newTimestamp = (postLatestActivityRef.current[replyToPostId] ?? 0) > newTimestamp ? postLatestActivityRef.current[replyToPostId] : newTimestamp;
+            newPostLatestActivity[replyToPostId] = newTimestamp;
+        } else if (postChannelRegex.test(channelId)) {
+            const discussionPostId = getPostIdFromChannelId(timestamp, channelId, discussPrefix);
+            newTimestamp = (postLatestActivityRef.current[discussionPostId] ?? 0) > newTimestamp ? postLatestActivityRef.current[discussionPostId] : newTimestamp;
+            newPostLatestActivity[discussionPostId] = newTimestamp;
+        }
+    }
+
+    return newPostLatestActivity;
+}

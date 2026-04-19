@@ -54,7 +54,7 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                             </div>
                             <div className="mr-2 flex flex-col justify-center overflow-hidden">
                                 <div className="flex flex-row items-center">
-                                    <p className="text-[14px] font-[600] hover:cursor-pointer" onClick={(e) => handleClickAddress(e, `/address/${address}`)}>{posterDisplayAddress}</p>
+                                    <p className="text-[14px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${address}`)}>{posterDisplayAddress}</p>
                                     <span className="ml-2 text-[10px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                 </div>
                             </div>
