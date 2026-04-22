@@ -5,6 +5,7 @@ import './index.css';
 import App from './App.tsx';
 import LatestPosts from './LatestPosts.tsx';
 import Address from './Address.tsx';
+import Messages from './Messages.tsx';
 import ScrollToTop from './components/ScrollToTop.tsx';
 import PostOutlet from './PostOutlet.tsx';
 
@@ -15,6 +16,7 @@ createRoot(document.getElementById('root')!).render(
             <Routes>
                 <Route  path="/" element={<App />}>
                     <Route index element={<LatestPosts />} />
+                    <Route path="/messages" element={<Messages />} />
                     <Route path="/address/:address" element={<Address />} />
                     <Route path="/post/:postId" element={<PostOutlet />} />
                 </Route>

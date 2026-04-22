@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getNewDirectMessage, submitSendMessage, getPoster } from './logic/asyncUtils';
+import { clearMessageKey, decryptDirectMessage, encryptDirectMessage, getConversationKey, getMessageKeyStateLocked, type DirectMessage, type MessageKeyState, unlockMessageKey } from './logic/messages';
 import { getDisplayAddress, getTextAndMediaForPost, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
-import { Link, Outlet } from 'react-router';
+import { Link, Outlet, useLocation } from 'react-router';
 import type { MouseEventLocal, PostDomSettingsCollection, PostMediaAttachment } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
@@ -19,7 +20,8 @@ const contractAddress1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae'; // idena.
 const firstBlock = 10135627;
 const makePostMethod = 'makePost';
 const sendTipMethod = 'sendTip';
-const allMethods = [makePostMethod, sendTipMethod];
+const sendMessageMethod = 'sendMessage';
+const allMethods = [makePostMethod, sendTipMethod, sendMessageMethod];
 const thisChannelId = '';
 const discussPrefix = 'discuss:';
 const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
@@ -84,6 +86,7 @@ const customModalStyles = {
 Modal.setAppElement('#root');
 
 function App() {
+    const location = useLocation();
 
     // inputs for settings
     const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
@@ -144,12 +147,18 @@ function App() {
     const [submittingPost, setSubmittingPost] = useState<string>('');
     const [submittingLike, setSubmittingLike] = useState<string>('');
     const [submittingTip, setSubmittingTip] = useState<string>('');
+    const [submittingMessage, setSubmittingMessage] = useState<string>('');
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
     const browserStateHistoryRef = useRef<Record<string, PostDomSettingsCollection>>({});
     const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
     const copyTxHandlerEnabledRef = useRef<boolean>(true);
     const lastUsedNonceSavedRef = useRef<number>(0);
     const tipsRef = useRef<Record<string, { totalAmount: number, tips: Tip[] }>>({});
+    const messagesRef = useRef({} as Record<string, DirectMessage>);
+    const [messagesVersion, setMessagesVersion] = useState<number>(0);
+    const [messageKeyState, setMessageKeyState] = useState<MessageKeyState>(getMessageKeyStateLocked());
+    const messagePrivateKeyRef = useRef<Uint8Array | undefined>(undefined);
+    const messagesRouteInitializedRef = useRef<boolean>(false);
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
     const postLatestActivityRef = useRef({} as Record<string, number>);
 
@@ -160,6 +169,180 @@ function App() {
     const modalTipsRef = useRef<Tip[]>([]);
     const modalSendTipRef = useRef<Post>(undefined);
 
+    const bumpMessagesVersion = () => {
+        setMessagesVersion((currentVersion) => currentVersion + 1);
+    };
+
+    const decryptMessages = async (txHashes?: string[], privateKeyOverride?: Uint8Array) => {
+        const activePrivateKey = privateKeyOverride ?? messagePrivateKeyRef.current;
+
+        if ((!privateKeyOverride && messageKeyState.status !== 'unlocked') || !activePrivateKey) {
+            return;
+        }
+
+        const updatedMessages: Record<string, DirectMessage> = {};
+        const targetHashes = txHashes ?? Object.keys(messagesRef.current);
+
+        for (let index = 0; index < targetHashes.length; index++) {
+            const txHash = targetHashes[index];
+            const message = messagesRef.current[txHash];
+
+            if (!message || !message.encrypted || !message.payloadResolved || !message.envelope || message.invalidReason) {
+                continue;
+            }
+
+            try {
+                const body = await decryptDirectMessage({
+                    activeAddress: postersAddressRef.current,
+                    privateKey: activePrivateKey,
+                    message,
+                    recipientPubkey: postersRef.current[message.recipient]?.pubkey,
+                });
+
+                updatedMessages[txHash] = {
+                    ...message,
+                    body,
+                    decryptError: undefined,
+                };
+            } catch (error) {
+                updatedMessages[txHash] = {
+                    ...message,
+                    body: undefined,
+                    decryptError: error instanceof Error ? error.message : 'Unable to decrypt message',
+                };
+            }
+        }
+
+        if (!isObjectEmpty(updatedMessages)) {
+            messagesRef.current = { ...messagesRef.current, ...updatedMessages };
+            bumpMessagesVersion();
+        }
+    };
+
+    const clearDecryptedMessages = () => {
+        const clearedMessages: Record<string, DirectMessage> = {};
+
+        for (const [txHash, message] of Object.entries(messagesRef.current)) {
+            if (message.body || message.decryptError) {
+                clearedMessages[txHash] = {
+                    ...message,
+                    body: undefined,
+                    decryptError: undefined,
+                };
+            }
+        }
+
+        if (!isObjectEmpty(clearedMessages)) {
+            messagesRef.current = { ...messagesRef.current, ...clearedMessages };
+            bumpMessagesVersion();
+        }
+    };
+
+    const lookupPosterHandler = async (address: string) => {
+        const normalizedAddress = address.toLowerCase();
+        const existingPoster = postersRef.current[normalizedAddress];
+
+        if (existingPoster) {
+            return existingPoster;
+        }
+
+        const poster = await getPoster(rpcClientRef.current!, normalizedAddress);
+        postersRef.current = { ...postersRef.current, [poster.address]: poster };
+        bumpMessagesVersion();
+
+        if (messageKeyState.status === 'unlocked') {
+            await decryptMessages();
+        }
+
+        return poster;
+    };
+
+    const lockMessagesHandler = () => {
+        setMessageKeyState(clearMessageKey(messagePrivateKeyRef.current));
+        messagePrivateKeyRef.current = undefined;
+        clearDecryptedMessages();
+    };
+
+    const unlockMessagesHandler = async (password: string) => {
+        if (!postersAddressRef.current) {
+            setMessageKeyState({ status: 'error', error: 'Active RPC account unavailable' });
+            return;
+        }
+
+        setMessageKeyState({ status: 'unlocking' });
+
+        try {
+            const unlockedKey = await unlockMessageKey(rpcClientRef.current!, password, postersAddressRef.current);
+            messagePrivateKeyRef.current = unlockedKey.privateKey;
+            setMessageKeyState(unlockedKey.state);
+            await decryptMessages(undefined, unlockedKey.privateKey);
+        } catch (error) {
+            messagePrivateKeyRef.current?.fill(0);
+            messagePrivateKeyRef.current = undefined;
+            setMessageKeyState({
+                status: 'error',
+                error: error instanceof Error ? error.message : 'Unable to unlock messages',
+            });
+        }
+    };
+
+    const submitDirectMessageHandler = async (recipient: string, plaintext: string) => {
+        if (!nodeAvailable) {
+            alert('Node unavailable, cannot send message!');
+            return;
+        }
+
+        if (makePostsWith !== 'rpc' || viewOnlyNode) {
+            alert('Direct messages require a writable RPC node.');
+            return;
+        }
+
+        if (messageKeyState.status !== 'unlocked' || !messagePrivateKeyRef.current) {
+            alert('Unlock messages first.');
+            return;
+        }
+
+        const normalizedRecipient = recipient.toLowerCase();
+        const recipientPoster = postersRef.current[normalizedRecipient] ?? await lookupPosterHandler(normalizedRecipient);
+
+        if (!recipientPoster?.pubkey) {
+            alert('Recipient has no public key.');
+            return;
+        }
+
+        const encryptedEnvelope = await encryptDirectMessage({
+            senderPrivateKey: messagePrivateKeyRef.current,
+            senderAddress: postersAddressRef.current,
+            recipientAddress: normalizedRecipient,
+            recipientPubkey: recipientPoster.pubkey,
+            plaintext,
+        });
+
+        const cidAddress = await storeFileToIpfs(
+            rpcClientRef.current!,
+            lastUsedNonceSavedRef,
+            str2bytes(JSON.stringify(encryptedEnvelope)),
+            postersAddressRef.current,
+        );
+
+        if (!cidAddress) {
+            throw new Error('Unable to store the encrypted message in IPFS');
+        }
+
+        setSubmittingMessage(getConversationKey(postersAddressRef.current, normalizedRecipient));
+
+        await submitSendMessage(
+            postersAddressRef.current,
+            contractAddressCurrent,
+            sendMessageMethod,
+            normalizedRecipient,
+            cidAddress,
+            makePostsWith,
+            rpcClientRef.current!,
+            lastUsedNonceSavedRef,
+            callbackUrl,
+        );
+    };
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
@@ -319,6 +502,39 @@ function App() {
     useEffect(() => {
         postersAddressInvalidRef.current = postersAddressInvalid;
     }, [postersAddressInvalid]);
+
+    useEffect(() => {
+        if (
+            messageKeyState.status === 'unlocked' &&
+            (
+                makePostsWith !== 'rpc' ||
+                viewOnlyNode ||
+                !postersAddress ||
+                messageKeyState.unlockedAddress !== postersAddress.toLowerCase()
+            )
+        ) {
+            setMessageKeyState(clearMessageKey(messagePrivateKeyRef.current));
+            messagePrivateKeyRef.current = undefined;
+            clearDecryptedMessages();
+        }
+    }, [makePostsWith, messageKeyState, postersAddress, viewOnlyNode]);
+
+    useEffect(() => {
+        const isMessagesRoute = location.pathname === '/messages';
+
+        if (
+            isMessagesRoute &&
+            !messagesRouteInitializedRef.current &&
+            initialBlock &&
+            nodeAvailable &&
+            !noMorePastBlocks
+        ) {
+            messagesRouteInitializedRef.current = true;
+            if (!scanningPastBlocks) {
+                setScanningPastBlocks(true);
+            }
+        }
+    }, [initialBlock, location.pathname, nodeAvailable, noMorePastBlocks, scanningPastBlocks]);
 
     type RecurseForward = () => Promise<void>;
     useEffect(() => {
@@ -519,6 +735,8 @@ function App() {
                 const posterPromises = [];
                 const messagePromises = [];
                 const mediaPromises = [];
+                const directMessagePayloadPromises = [];
+                const newDirectMessages: Record<string, DirectMessage> = {};
 
                 for (let index = 0; index < transactionsWithDetails.length; index++) {
                     const transaction = transactionsWithDetails[index];
@@ -527,7 +745,9 @@ function App() {
                         const { postId, newTip, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, isRecurseForward);
                         tipsRef.current = { ...tipsRef.current, [postId]: updatedPostTips };
 
-                        posterPromise && posterPromises.push(posterPromise);
+                        if (posterPromise) {
+                            posterPromises.push(posterPromise);
+                        }
 
                         lastValidTransaction = transaction;
 
@@ -548,6 +768,44 @@ function App() {
                         );
 
                         postLatestActivityRef.current = { ...postLatestActivityRef.current, ...newPostLatestActivity };
+
+                        continue;
+                    }
+
+                    if ([sendMessageMethod].includes(transaction.method)) {
+                        const {
+                            newMessage,
+                            senderPromise,
+                            recipientPromise,
+                            payloadPromise,
+                            continued,
+                        } = await getNewDirectMessage(
+                            transaction,
+                            postersAddressRef.current.toLowerCase(),
+                            rpcClientRef.current!,
+                            postersRef,
+                        );
+
+                        if (continued) {
+                            continue;
+                        }
+
+                        lastValidTransaction = transaction;
+
+                        if (messagesRef.current[newMessage!.txHash] || newDirectMessages[newMessage!.txHash]) {
+                            continue;
+                        }
+
+                        newDirectMessages[newMessage!.txHash] = newMessage!;
+                        if (senderPromise) {
+                            posterPromises.push(senderPromise);
+                        }
+                        if (recipientPromise) {
+                            posterPromises.push(recipientPromise);
+                        }
+                        if (payloadPromise) {
+                            directMessagePayloadPromises.push(payloadPromise);
+                        }
 
                         continue;
                     }
@@ -573,9 +831,15 @@ function App() {
 
                     lastValidTransaction = transaction;
 
-                    posterPromise && posterPromises.push(posterPromise);
-                    messagePromise && messagePromises.push(messagePromise);
-                    mediaPromise && mediaPromises.push(mediaPromise);
+                    if (posterPromise) {
+                        posterPromises.push(posterPromise);
+                    }
+                    if (messagePromise) {
+                        messagePromises.push(messagePromise);
+                    }
+                    if (mediaPromise) {
+                        mediaPromises.push(mediaPromise);
+                    }
 
                     const isTopLevelPost = !newPost!.replyToPostId && newPost!.channelId === thisChannelId;
 
@@ -689,6 +953,10 @@ function App() {
                 }
                 postersRef.current = { ...postersRef.current, ...newPosters };
 
+                if (!isObjectEmpty(newDirectMessages)) {
+                    messagesRef.current = { ...messagesRef.current, ...newDirectMessages };
+                }
+
                 const messages = await Promise.all(messagePromises);
                 for (let index = 0; index < messages.length; index++) {
                     const messagesProps = messages[index];
@@ -701,6 +969,38 @@ function App() {
                     const mediaProps = media[index];
                     const updatedPost = { ...postsRef.current[mediaProps!.postId], ...mediaProps };
                     postsRef.current = { ...postsRef.current, [mediaProps!.postId]: updatedPost };
+                }
+
+                const directMessagePayloads = await Promise.all(directMessagePayloadPromises);
+                const updatedDirectMessages: Record<string, DirectMessage> = {};
+
+                for (let index = 0; index < directMessagePayloads.length; index++) {
+                    const directMessagePayload = directMessagePayloads[index];
+                    const existingMessage = messagesRef.current[directMessagePayload.txHash];
+
+                    if (!existingMessage) {
+                        continue;
+                    }
+
+                    updatedDirectMessages[directMessagePayload.txHash] = {
+                        ...existingMessage,
+                        payloadResolved: true,
+                        envelopeText: directMessagePayload.envelopeText,
+                        envelope: directMessagePayload.envelope,
+                        invalidReason: directMessagePayload.invalidReason,
+                    };
+                }
+
+                if (!isObjectEmpty(updatedDirectMessages)) {
+                    messagesRef.current = { ...messagesRef.current, ...updatedDirectMessages };
+                }
+
+                if (!isObjectEmpty(newDirectMessages) || !isObjectEmpty(updatedDirectMessages)) {
+                    bumpMessagesVersion();
+
+                    if (messageKeyState.status === 'unlocked') {
+                        await decryptMessages(Object.keys({ ...newDirectMessages, ...updatedDirectMessages }));
+                    }
                 }
 
                 setLatestPosts((currentLatestPosts) => {
@@ -763,19 +1063,20 @@ function App() {
 
     useEffect(() => {
         let intervalSubmittingPost: NodeJS.Timeout;
-        if (submittingPost || submittingLike || submittingTip) {
+        if (submittingPost || submittingLike || submittingTip || submittingMessage) {
             intervalSubmittingPost = setTimeout(() => {
                 setSubmittingPost('');
                 setSubmittingLike('');
                 setSubmittingTip('');
+                setSubmittingMessage('');
             }, SUBMITTING_POST_INTERVAL);
         }
         return () => clearInterval(intervalSubmittingPost);
-    }, [submittingPost, submittingLike, submittingTip]);
+    }, [submittingPost, submittingLike, submittingTip, submittingMessage]);
 
     useEffect(() => {
-        setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || (makePostsWith === 'rpc' && viewOnlyNode) || postersAddressInvalid);
-    }, [submittingPost, submittingLike, submittingTip, makePostsWith, viewOnlyNode, postersAddressInvalid]);
+        setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || !!submittingMessage || (makePostsWith === 'rpc' && viewOnlyNode) || postersAddressInvalid);
+    }, [submittingPost, submittingLike, submittingTip, submittingMessage, makePostsWith, viewOnlyNode, postersAddressInvalid]);
 
     const setPostMediaAttachmentHandler = async (location: string, file: File) => {
         if (!supportedImageTypes.includes(file.type)) {
@@ -973,6 +1274,10 @@ function App() {
                     <div className="text-[28px] mb-3">
                         <Link to="/">idena.social</Link>
                     </div>
+                    <div className="mb-4 flex gap-3 text-[13px]">
+                        <Link className={`${location.pathname === '/' ? 'text-white' : 'text-gray-400'} hover:underline`} to="/">Feed</Link>
+                        <Link className={`${location.pathname === '/messages' ? 'text-white' : 'text-gray-400'} hover:underline`} to="/messages">Messages</Link>
+                    </div>
                     <div className="mb-4 text-[14px]">
                         <div className="flex flex-col">
                             <div className="flex flex-row mb-2 gap-1">
@@ -1080,6 +1385,19 @@ function App() {
                         tipsRef,
                         setPostMediaAttachmentHandler,
                         postMediaAttachmentsRef,
+                        makePostsWith,
+                        viewOnlyNode,
+                        postersAddress,
+                        posters: postersRef.current,
+                        messagesRef,
+                        messages: messagesRef.current,
+                        messagesVersion,
+                        messageKeyState,
+                        unlockMessagesHandler,
+                        lockMessagesHandler,
+                        submitDirectMessageHandler,
+                        lookupPosterHandler,
+                        submittingMessage,
                     }}
                 />
             </div>

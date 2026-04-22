@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { calculateMaxFee, calculateNextNonce, dna2num, getCallTransaction, getMakePostTransactionPayload, hex2str, hexToDecimal, sanitizeStr } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
+import { getSendMessageTransactionPayload, parseSendMessageEvent, resolveDirectMessagePayload } from "./messages";
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
 
 export const breakingChanges = {
@@ -419,6 +420,40 @@ export const processTip = async (
     return { postId, newTip, updatedPostTips, posterPromise };
 }
 
+export const getNewDirectMessage = async (
+    transaction: { txHash: string, eventArgs: string[], timestamp: number },
+    activeAddress: string,
+    rpcClient: RpcClient,
+    postersRef: React.RefObject<Record<string, Poster>>,
+) => {
+    const parsedMessage = parseSendMessageEvent(transaction, activeAddress);
+
+    if ('continued' in parsedMessage && parsedMessage.continued) {
+        return { continued: true };
+    }
+
+    const { newMessage } = parsedMessage;
+    let senderPromise: Promise<Poster> | undefined;
+    let recipientPromise: Promise<Poster> | undefined;
+
+    if (!postersRef.current[newMessage.sender]) {
+        senderPromise = getPoster(rpcClient, newMessage.sender);
+    }
+
+    if (!postersRef.current[newMessage.recipient]) {
+        recipientPromise = getPoster(rpcClient, newMessage.recipient);
+    }
+
+    const payloadPromise = resolveDirectMessagePayload(newMessage.txHash, newMessage.sender, newMessage.messageRef, rpcClient);
+
+    return {
+        newMessage,
+        senderPromise,
+        recipientPromise,
+        payloadPromise,
+    };
+};
+
 export const getPoster = async (rpcClient: RpcClient, posterAddress: string) => {
     const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClient('dna_identity', [posterAddress]);
 
@@ -594,6 +629,33 @@ export const submitSendTip = async (
         postersAddress,
         contractAddress,
         sendTipMethod,
+        makePostsWith,
+        rpcClient,
+        lastUsedNonceSavedRef,
+        callbackUrl,
+        txAmount,
+        args,
+        payload,
+    );
+};
+
+export const submitSendMessage = async (
+    postersAddress: string,
+    contractAddress: string,
+    sendMessageMethod: string,
+    recipient: string,
+    message: string,
+    makePostsWith: string,
+    rpcClient: RpcClient,
+    lastUsedNonceSavedRef: React.RefObject<number>,
+    callbackUrl: string,
+) => {
+    const { txAmount, args, payload } = getSendMessageTransactionPayload(sendMessageMethod, recipient, message);
+
+    await makeCallTransaction(
+        postersAddress,
+        contractAddress,
+        sendMessageMethod,
         makePostsWith,
         rpcClient,
         lastUsedNonceSavedRef,
