@@ -2,8 +2,7 @@ import { useLocation, useNavigate, useOutletContext, useParams } from "react-rou
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
 import { getDisplayAddress, getIdentityStatus } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
-import { type PostDomSettingsCollection } from "./App.exports";
-import { useState } from "react";
+import { type BrowserStateHistorySettings } from "./App.exports";
 import SortPostsByComponent from "./components/SortPostsByComponent";
 
 type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
@@ -24,7 +23,8 @@ type AddressProps = {
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
-    browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
+    browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
+    setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
@@ -37,6 +37,8 @@ function Address() {
     const { address } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+
+    const { key: locationKey } = location;
 
     const {
         latestPosts,
@@ -55,6 +57,7 @@ function Address() {
         submitPostHandler,
         submitLikeHandler,
         browserStateHistoryRef,
+        setBrowserStateHistorySettings,
         handleOpenLikesModal,
         handleOpenTipsModal,
         handleOpenSendTipModal,
@@ -63,7 +66,11 @@ function Address() {
         postMediaAttachmentsRef,
     } = useOutletContext() as AddressProps;
 
-    const [sortPostsBy, setSortPostsBy] = useState<string>('latest-posts');
+    if (!browserStateHistoryRef.current[locationKey]?.sortPostsBy) {
+        setBrowserStateHistorySettings({ sortPostsBy: 'latest-posts' });
+    }
+
+    const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
 
     const poster = postersRef.current[address!];
     const posterDisplayAddress = getDisplayAddress(poster.address);
@@ -102,7 +109,7 @@ function Address() {
         <div className="h-8 mb-5 flex border-b-1 border-gray-500 gap-3">
             <p className={location.pathname === `/address/${poster.address}` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>Posts</p>
         </div>
-        <SortPostsByComponent sortPostsBy={sortPostsBy} setSortPostsBy={setSortPostsBy} />
+        <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
         <ul>
             {filteredOrderedPosts.map((postId) => (
                 <li key={postId}>
@@ -121,6 +128,7 @@ function Address() {
                         submittingLike={submittingLike}
                         submittingTip={submittingTip}
                         browserStateHistoryRef={browserStateHistoryRef}
+                        setBrowserStateHistorySettings={setBrowserStateHistorySettings}
                         handleOpenLikesModal={handleOpenLikesModal}
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}

@@ -1,7 +1,7 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Tip } from "./logic/asyncUtils";
 import PostComponent from "./components/PostComponent";
-import { type MouseEventLocal, type PostDomSettingsCollection } from "./App.exports";
+import { type BrowserStateHistorySettings, type MouseEventLocal } from "./App.exports";
 
 type PostOutletProps = {
     latestPosts: string[],
@@ -18,7 +18,8 @@ type PostOutletProps = {
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
-    browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
+    browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
+    setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
@@ -45,6 +46,7 @@ function PostOutlet() {
         submitPostHandler,
         submitLikeHandler,
         browserStateHistoryRef,
+        setBrowserStateHistorySettings,
         handleOpenLikesModal,
         handleOpenTipsModal,
         handleOpenSendTipModal,
@@ -74,6 +76,7 @@ function PostOutlet() {
             submittingLike={submittingLike}
             submittingTip={submittingTip}
             browserStateHistoryRef={browserStateHistoryRef}
+            setBrowserStateHistorySettings={setBrowserStateHistorySettings}
             handleOpenLikesModal={handleOpenLikesModal}
             handleOpenTipsModal={handleOpenTipsModal}
             handleOpenSendTipModal={handleOpenSendTipModal}

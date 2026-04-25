@@ -1,8 +1,8 @@
 import { supportedImageTypes, type Post, type Tip } from './logic/asyncUtils';
-import { useOutletContext } from 'react-router';
+import { useLocation, useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
-import { type MouseEventLocal, type PostDomSettingsCollection } from './App.exports';
-import { useReducer, useState } from 'react';
+import { type BrowserStateHistorySettings, type MouseEventLocal } from './App.exports';
+import { useReducer } from 'react';
 import SortPostsByComponent from './components/SortPostsByComponent';
 
 type LatestPostsProps = {
@@ -26,7 +26,8 @@ type LatestPostsProps = {
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
-    browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
+    browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
+    setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
@@ -36,6 +37,10 @@ type LatestPostsProps = {
 };
 
 function LatestPosts() {
+    const location = useLocation();
+
+    const { key: locationKey } = location;
+
     const {
         currentBlockCaptured,
         nodeAvailable,
@@ -58,6 +63,7 @@ function LatestPosts() {
         submittingLike,
         submittingTip,
         browserStateHistoryRef,
+        setBrowserStateHistorySettings,
         handleOpenLikesModal,
         handleOpenTipsModal,
         handleOpenSendTipModal,
@@ -66,11 +72,15 @@ function LatestPosts() {
         postMediaAttachmentsRef,
     } = useOutletContext() as LatestPostsProps;
 
-    const [sortPostsBy, setSortPostsBy] = useState<string>('latest-posts');
     const [, forceUpdate] = useReducer(x => x + 1, 0);
 
-    const mainPostMediaAttachment = postMediaAttachmentsRef.current['main'];
+    if (!browserStateHistoryRef.current[locationKey]?.sortPostsBy) {
+        setBrowserStateHistorySettings({ sortPostsBy: 'latest-posts' });
+    }
 
+    const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
+
+    const mainPostMediaAttachment = postMediaAttachmentsRef.current['main'];
 
     const addMediaHandler = async (e: React.ChangeEvent<HTMLInputElement>, location: string) => {
         e?.stopPropagation();
@@ -124,7 +134,7 @@ function LatestPosts() {
             <p>Current Block: #{currentBlockCaptured ? currentBlockCaptured : (nodeAvailable ? 'Loading...' : '')}</p>
             {!nodeAvailable && <p className="text-[11px] text-red-400">Blocks are not being captured. Please update your node.</p>}
         </div>
-        <SortPostsByComponent sortPostsBy={sortPostsBy} setSortPostsBy={setSortPostsBy} />
+        <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
         <ul>
             {(sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).map((postId) => (
                 <li key={postId}>
@@ -143,6 +153,7 @@ function LatestPosts() {
                         submittingLike={submittingLike}
                         submittingTip={submittingTip}
                         browserStateHistoryRef={browserStateHistoryRef}
+                        setBrowserStateHistorySettings={setBrowserStateHistorySettings}
                         handleOpenLikesModal={handleOpenLikesModal}
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}

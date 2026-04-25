@@ -1,7 +1,7 @@
 import { useReducer, type FocusEventHandler } from 'react';
 import { getChildPostIds, breakingChanges, type Post, type Tip, supportedImageTypes } from '../logic/asyncUtils';
 import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus, getMessageLines, getShortDisplayTipAmount } from '../logic/utils';
-import { initDomSettings, isPostOutletDomSettings, type MouseEventLocal, type PostDomSettings, type PostDomSettingsCollection } from '../App.exports';
+import { initDomSettings, isPostOutletDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings } from '../App.exports';
 import { useLocation, useNavigate } from 'react-router';
 import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
 import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
@@ -26,7 +26,8 @@ type PostComponentProps = {
     submittingPost: string,
     submittingLike: string,
     submittingTip: string,
-    browserStateHistoryRef: React.RefObject<Record<string, PostDomSettingsCollection>>,
+    browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
+    setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
@@ -56,6 +57,7 @@ function PostComponent(props: PostComponentProps) {
         submittingLike,
         submittingTip,
         browserStateHistoryRef,
+        setBrowserStateHistorySettings,
         handleOpenLikesModal,
         handleOpenTipsModal,
         handleOpenSendTipModal,
@@ -70,26 +72,23 @@ function PostComponent(props: PostComponentProps) {
     const { key: locationKey } = location;
 
     const setPostDomSettings = (childPostId: string, postDomSettings: Partial<PostDomSettings>, rerender?: boolean) => {
-        browserStateHistoryRef.current = {
-            ...browserStateHistoryRef.current,
-            [locationKey]: {
-                ...browserStateHistoryRef.current[locationKey],
-                [postId]: {
-                    ...browserStateHistoryRef.current[locationKey]?.[postId],
-                    [childPostId]: {
-                        ...(browserStateHistoryRef.current[locationKey]?.[postId]?.[childPostId] ?? initDomSettings),
-                        ...postDomSettings,
-                    }
+        const postDomSettingsUpdated = {
+            ...browserStateHistoryRef.current[locationKey]?.postDomSettings ?? {},
+            [postId]: {
+                ...browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId] ?? {},
+                [childPostId]: {
+                    ...(browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId]?.[childPostId] ?? initDomSettings),
+                    ...postDomSettings,
                 }
             }
         };
 
-        rerender && forceUpdate();
+        setBrowserStateHistorySettings({ postDomSettings: postDomSettingsUpdated }, rerender);
     }
 
     const mainPostDomSettings = isPostOutlet ? isPostOutletDomSettings : initDomSettings;
 
-    if (!browserStateHistoryRef.current[locationKey]?.[postId]?.[postId]) {
+    if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId]?.[postId]) {
         setPostDomSettings(postId, mainPostDomSettings);
     }
 
@@ -104,7 +103,7 @@ function PostComponent(props: PostComponentProps) {
     
     const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(post.message, true);
 
-    const postDomSettingsItem = browserStateHistoryRef.current[locationKey][postId][postId];
+    const postDomSettingsItem = browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][postId];
 
     const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
 
@@ -135,7 +134,7 @@ function PostComponent(props: PostComponentProps) {
     const toggleShowReplyInputHandler = (e: MouseEventLocal, post: Post) => {
         e?.stopPropagation();
 
-        const newReplyInputHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].replyInputHidden;
+        const newReplyInputHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].replyInputHidden;
         setPostDomSettings(post.postId, { replyInputHidden: newReplyInputHidden }, true);
 
         if (inputPostDisabled || isBreakingChangeDisabled) {
@@ -151,7 +150,7 @@ function PostComponent(props: PostComponentProps) {
     };
 
     const toggleShowRepliesHandler = (e: MouseEventLocal, post: Post, replyPostIds: string[]) => {
-        const newRepliesHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].repliesHidden;
+        const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].repliesHidden;
 
         if (newRepliesHidden || replyPostIds.length < 10 || isPostOutlet) {
             e.stopPropagation();
@@ -160,7 +159,7 @@ function PostComponent(props: PostComponentProps) {
     };
 
     const toggleShowDiscussionHandler = (post: Post) => {
-        const newRepliesHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].repliesHidden;
+        const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].repliesHidden;
         setPostDomSettings(post.postId, { repliesHidden: newRepliesHidden }, true);
     };
 
@@ -197,7 +196,7 @@ function PostComponent(props: PostComponentProps) {
     const toggleViewMoreHandler = (post: Post, e?: MouseEventLocal) => {
         e?.stopPropagation();
 
-        const newTextOverflowHidden = !browserStateHistoryRef.current[locationKey][postId][post.postId].textOverflowHidden;
+        const newTextOverflowHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].textOverflowHidden;
         setPostDomSettings(post.postId, { textOverflowHidden: newTextOverflowHidden }, true);
     };
 
@@ -370,7 +369,7 @@ function PostComponent(props: PostComponentProps) {
             <ul>
                 {replyComments.map((replyPost) => {
 
-                    if (!browserStateHistoryRef.current[locationKey]?.[postId]?.[replyPost.postId]) {
+                    if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId]?.[replyPost.postId]) {
                         setPostDomSettings(replyPost.postId, initDomSettings);
                     }
 
@@ -381,7 +380,7 @@ function PostComponent(props: PostComponentProps) {
                     const posterAge = replyPost.posterDetails_atTimeOfPost.age;
                     const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
                     const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(replyPost.message, true, 3);
-                    const postDomSettingsItem = browserStateHistoryRef.current[locationKey][postId][replyPost.postId];
+                    const postDomSettingsItem = browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][replyPost.postId];
 
                     const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
 

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi } from './logic/asyncUtils';
 import { getDisplayAddress, getTextAndMediaForPost, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
-import { Link, Outlet } from 'react-router';
-import type { MouseEventLocal, PostDomSettingsCollection, PostMediaAttachment } from './App.exports';
+import { Link, Outlet, useLocation } from 'react-router';
+import type { BrowserStateHistorySettings, MouseEventLocal, PostMediaAttachment } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 
@@ -85,6 +85,10 @@ Modal.setAppElement('#root');
 
 function App() {
 
+    const location = useLocation();
+
+    const { key: locationKey } = location;
+
     // inputs for settings
     const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
     const [inputPostersAddress, setInputPostersAddress] = useState<string>(initSettings.postersAddress);
@@ -145,7 +149,7 @@ function App() {
     const [submittingLike, setSubmittingLike] = useState<string>('');
     const [submittingTip, setSubmittingTip] = useState<string>('');
     const [inputPostDisabled, setInputPostDisabled] = useState<boolean>(false);
-    const browserStateHistoryRef = useRef<Record<string, PostDomSettingsCollection>>({});
+    const browserStateHistoryRef = useRef<Record<string, BrowserStateHistorySettings>>({});
     const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
     const copyTxHandlerEnabledRef = useRef<boolean>(true);
     const lastUsedNonceSavedRef = useRef<number>(0);
@@ -160,6 +164,22 @@ function App() {
     const modalTipsRef = useRef<Tip[]>([]);
     const modalSendTipRef = useRef<Post>(undefined);
 
+
+    // miscellaneous
+    const [, forceUpdate] = useReducer(x => x + 1, 0);
+
+
+    const setBrowserStateHistorySettings = (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => {
+        browserStateHistoryRef.current = {
+            ...browserStateHistoryRef.current,
+            [locationKey]: {
+                ...browserStateHistoryRef.current[locationKey] ?? {},
+                ...pageDomSetting,
+            }
+        };
+
+        rerender && forceUpdate();
+    }
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
@@ -466,7 +486,7 @@ function App() {
                     const { result: getBlockByHeightResult, error: getBlockByHeightError } = await getBlockAtWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pendingBlock!);
 
                     if (getBlockByHeightError && getBlockByHeightError?.message !== 'no data found') {
-                        throw 'rpc unavailable';
+                        throw 'indexer api unavailable';
                     }
 
                     if (getBlockByHeightError?.message === 'no data found') {
@@ -784,7 +804,9 @@ function App() {
                     setScanningPastBlocks(false);
                 } else if (error === 'rpc unavailable') {
                     setScanningPastBlocks(false);
+                    setNodeAvailable(false);
                 } else if (error === 'indexer api unavailable') {
+                    setScanningPastBlocks(false);
                     setIdenaIndexerApiUrlInvalid(true);
                 } else {
                     if (isRecurseForward) {
@@ -1110,6 +1132,7 @@ function App() {
                         submittingLike,
                         submittingTip,
                         browserStateHistoryRef,
+                        setBrowserStateHistorySettings,
                         handleOpenLikesModal,
                         handleOpenTipsModal,
                         handleOpenSendTipModal,
