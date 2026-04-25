@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getTransactionDetails, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi } from './logic/asyncUtils';
 import { getDisplayAddress, getTextAndMediaForPost, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import { Link, Outlet } from 'react-router';
@@ -327,9 +327,11 @@ function App() {
 
             (async function recurseForward() {
                 if (nodeAvailableRef.current) {
+                    const recurseDirection = 'forward';
+                    const contentSource = findPastPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
                     const pendingBlock = currentBlockCapturedRef.current ? currentBlockCapturedRef.current + 1 : initialBlock;
                     const contractAddress = contractAddressCurrent;
-                    recurseForwardIntervalId = setTimeout(postScannerFactory('recurseForward', recurseForward, setCurrentBlockCaptured, currentBlockCapturedRef, contractAddress, pendingBlock), POLLING_INTERVAL);
+                    recurseForwardIntervalId = setTimeout(postScannerFactory(recurseDirection, contentSource, recurseForward, setCurrentBlockCaptured, currentBlockCapturedRef, contractAddress, pendingBlock), POLLING_INTERVAL);
                 }
             } as RecurseForward)();
 
@@ -347,11 +349,11 @@ function App() {
 
             (async function recurseBackward(time: number) {
                 if (scanningPastBlocksRef.current && nodeAvailableRef.current && time < ttl) {
-                    const recurseMethod = findPastPostsWithRef.current === 'rpc' ? 'recurseBackwardWithRpcOnly' : 'recurseBackwardWithIndexerApi';
+                    const recurseDirection = 'backward';
+                    const contentSource = findPastPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
                     const contractAddress = pastContractAddressRef!.current;
-                    // pendingBlock only relevant if recurseBackwardWithRpcOnly
                     const pendingBlock = pastBlockCapturedRef.current ? (partialPastBlockCapturedRef.current ? partialPastBlockCapturedRef.current : pastBlockCapturedRef.current - 1) : initialBlock - 1;
-                    recurseBackwardIntervalId = setTimeout(postScannerFactory(recurseMethod, recurseBackward, setPastBlockCaptured, pastBlockCapturedRef, contractAddress, pendingBlock), SCANNING_INTERVAL);
+                    recurseBackwardIntervalId = setTimeout(postScannerFactory(recurseDirection, contentSource, recurseBackward, setPastBlockCaptured, pastBlockCapturedRef, contractAddress, pendingBlock), SCANNING_INTERVAL);
                 } else {
                     setScanningPastBlocks(false);
                 }
@@ -407,7 +409,8 @@ function App() {
     };
 
     const postScannerFactory = (
-        recurseMethod: string,
+        recurseDirection: string,
+        contentSource: string,
         recurse: RecurseForward | RecurseBackward,
         setBlockCaptured: React.Dispatch<React.SetStateAction<number>>,
         blockCapturedRef: React.RefObject<number>,
@@ -415,9 +418,13 @@ function App() {
         pendingBlock?: number,
     ) => {
         return async function postFinder() {
-            const isRecurseForward = recurseMethod === 'recurseForward';
-            const isRecurseBackwardWithRpcOnly = recurseMethod === 'recurseBackwardWithRpcOnly';
-            const isRecurseBackwardWithIndexerApi = recurseMethod === 'recurseBackwardWithIndexerApi';
+            const isRecurseForward = recurseDirection === 'forward';
+            const isContentSourceRpc = contentSource === 'rpc';
+
+            const isRecurseForwardWithRpcOnly = isRecurseForward && isContentSourceRpc;
+            const isRecurseForwardWithIndexerApi = isRecurseForward && !isContentSourceRpc;
+            const isRecurseBackwardWithRpcOnly = !isRecurseForward && isContentSourceRpc;
+            const isRecurseBackwardWithIndexerApi = !isRecurseForward && !isContentSourceRpc;
 
             // The ref is updated for immediate effect, the state is updated for the rerender.
             const setBlockCapturedRefState = (block: number) => {
@@ -428,7 +435,7 @@ function App() {
             try {
                 let transactions = [];
 
-                if (isRecurseForward || isRecurseBackwardWithRpcOnly) {
+                if (isRecurseForwardWithRpcOnly || isRecurseBackwardWithRpcOnly) {
                     const { result: getBlockByHeightResult, error } = await rpcClientRef.current!('bcn_blockAt', [pendingBlock!]);
 
                     if (error) {
@@ -455,6 +462,32 @@ function App() {
                     }
 
                     transactions = getBlockByHeightResult.transactions.map((txHash: string) => ({ txHash, timestamp: getBlockByHeightResult.timestamp, blockHeight: getBlockByHeightResult.height }));
+                } else if (isRecurseForwardWithIndexerApi) {
+                    const { result: getBlockByHeightResult, error: getBlockByHeightError } = await getBlockAtWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pendingBlock!);
+
+                    if (getBlockByHeightError && getBlockByHeightError?.message !== 'no data found') {
+                        throw 'rpc unavailable';
+                    }
+
+                    if (getBlockByHeightError?.message === 'no data found') {
+                        throw 'no block';
+                    }
+
+                    if (getBlockByHeightResult.txCount === 0) {
+                        setBlockCapturedRefState(pendingBlock!);
+                        throw 'no transactions';
+                    }
+
+                    const { result: getblockTxsResult, error: getblockTxsError } = await getblockTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pendingBlock!);
+                    
+                    if (getblockTxsError) {
+                        throw 'indexer api unavailable';
+                    }
+
+                    transactions = getblockTxsResult
+                        ?.filter((transaction: any) => transaction.type === 'CallContract' && allMethods.includes(transaction.txReceipt?.method) && transaction.txReceipt?.success === true)
+                        .map((transaction: any) => ({ txHash: transaction.hash, timestamp: Math.floor((new Date(transaction.timestamp)).getTime() / 1000 ), blockHeight: pendingBlock }))
+                    ?? [];
                 } else if (isRecurseBackwardWithIndexerApi) {
                     if (continuationTokenRef!.current === 'finished processing') {
                         throw 'no more transactions';
@@ -508,7 +541,10 @@ function App() {
                     throw 'this should not happen';
                 }
 
-                const transactionsWithDetails = await getTransactionDetails(transactions, contractAddress, allMethods, rpcClientRef.current!);
+                const transactionsWithDetails = isContentSourceRpc ?
+                    await getTransactionDetailsRpc(transactions, contractAddress, allMethods, rpcClientRef.current!)
+                    :
+                    await getTransactionDetailsIndexerApi(transactions, inputIdenaIndexerApiUrl);
 
                 let lastValidTransaction;
 
@@ -995,12 +1031,12 @@ function App() {
                         <p>Make posts with:</p>
                         <div className="flex flex-row gap-2">
                             <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={handleMakePostsWithToggle} />
-                            <label htmlFor="useRpc" className="flex-none text-right">Use RPC</label>
+                            <label htmlFor="useRpc" className="flex-none text-right">RPC</label>
                         </div>
-                        {makePostsWith === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Use Idena App for transactions. (Posting, liking, tipping is disabled)</p>}
+                        {makePostsWith === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Idena Web App for making posts. (Posting, liking, tipping is disabled)</p>}
                         <div className="flex flex-row gap-2">
                             <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={handleMakePostsWithToggle} />
-                            <label htmlFor="notUseRpc" className="flex-none text-right">Use Idena App</label>
+                            <label htmlFor="notUseRpc" className="flex-none text-right">Idena Web App</label>
                         </div>
                         {makePostsWith === 'idena-app' && (
                             <div className="flex flex-col ml-5 text-[14px]">
@@ -1016,14 +1052,14 @@ function App() {
                     </div>
                     <hr className="mb-3 text-gray-500" />
                     <div className="flex flex-col mb-6">
-                        <p>Find past posts with:</p>
+                        <p>Find posts with:</p>
                         <div className="flex flex-row gap-2">
                             <input id="findPastPostsWith" type="radio" name="findPastPostsWith" value="rpc" checked={findPastPostsWith === 'rpc'} onChange={handleInputFindPastPostsWithToggle} />
-                            <label htmlFor="findPastPostsWith" className="flex-none text-right">Use RPC</label>
+                            <label htmlFor="findPastPostsWith" className="flex-none text-right">RPC</label>
                         </div>
                         <div className="flex flex-row gap-2">
                             <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPastPostsWith" value="indexer-api" checked={findPastPostsWith === 'indexer-api'} onChange={handleInputFindPastPostsWithToggle} />
-                            <label htmlFor="notUseFindPastBlocksWithTxsApi" className="flex-none text-right">Use Indexer Api</label>
+                            <label htmlFor="notUseFindPastBlocksWithTxsApi" className="flex-none text-right">Indexer Api</label>
                         </div>
                         {findPastPostsWith === 'indexer-api' && (
                             <div className="flex flex-col ml-5 text-[14px]">
