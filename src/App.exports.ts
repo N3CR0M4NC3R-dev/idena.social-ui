@@ -1,3 +1,4 @@
+export type BrowserStateHistorySettings = { sortPostsBy: string, postDomSettings: PostDomSettingsCollection };
 export type PostDomSettingsCollection = Record<string, Record<string, PostDomSettings>>;
 export type PostDomSettings = { textOverflowHidden: boolean, repliesHidden: boolean, replyInputHidden: boolean, discussReplyToPostId?: string };
 export type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;

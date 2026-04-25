@@ -239,3 +239,8 @@ export function getCallTransaction(to: string, txAmount: Decimal, nonce: number,
 
     return tx.toHex();;
 }
+
+export function getTimestampFromIndexerApi(indexerApiTimestamp: number) {
+    if (!indexerApiTimestamp) return undefined;
+    return Math.floor((new Date(indexerApiTimestamp)).getTime() / 1000 );
+}

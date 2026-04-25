@@ -101,7 +101,7 @@ export const getMaxFee = async (rpcClient: RpcClient, data: GetMaxFeeData) => {
     }
 };
 
-export const getPastTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: string, contractAddress: string, limit: number, continuationToken?: string) => {
+export const getPastTxsWithIdenaIndexerApi = async (indexerApiUrl: string, contractAddress: string, limit: number, continuationToken?: string) => {
     try {
         const params = new URLSearchParams({
             limit: limit.toString(),
@@ -110,7 +110,104 @@ export const getPastTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: str
 
         const path = `api/Contract/${contractAddress}/BalanceUpdates`;
 
-        const response = await fetch(`${inputIdenaIndexerApiUrl}/${path}?${params}`);
+        const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
+export const getLastBlockWithIdenaIndexerApi = async (indexerApiUrl: string) => {
+    try {
+        const path = `/api/Block/Last`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
+export const getBlockAtWithIdenaIndexerApi = async (indexerApiUrl: string, blockHeight: number) => {
+    try {
+        const path = `api/Block/${blockHeight}`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
+export const getblockTxsWithIdenaIndexerApi = async (indexerApiUrl: string, blockHeight: number) => {
+    try {
+        const limit = 100;
+        let continuationToken = '';
+
+        let transactions: any[] = [];
+
+        do {
+            const params = new URLSearchParams({
+                limit: limit.toString(),
+                ...(continuationToken && { continuationToken }),
+            });
+
+            const path = `api/Block/${blockHeight}/Txs`;
+
+            const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
+
+            if (!response.ok) {
+                throw new Error(`Response status: ${response.status}`);
+            }
+
+            const responseBody = await response.json();
+
+            transactions = responseBody.result ? [ ...transactions, ...responseBody.result ] : transactions;
+
+            continuationToken = responseBody.continuationToken ?? '';
+
+        } while (continuationToken);
+
+        return { result: transactions };
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
+export const getTxEventsWithIdenaIndexerApi = async (indexerApiUrl: string, txHash: string, limit: number) => {
+    try {
+        const params = new URLSearchParams({
+            limit: limit.toString(),
+        });
+
+        const path = `api/Transaction/${txHash}/Events`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
 
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`);
@@ -139,9 +236,9 @@ export const getChildPostIds = (parentId: string, postsTreeRef: Record<string, s
     return childPostIds;
 };
 
-type GetTransactionDetailsInput = { txHash: string, timestamp: number, blockHeight?: number };
-export const getTransactionDetails = async (
-    transactions: GetTransactionDetailsInput[],
+type GetTransactionDetailsRpcInput = { txHash: string, timestamp: number, blockHeight?: number };
+export const getTransactionDetailsRpc = async (
+    transactions: GetTransactionDetailsRpcInput[],
     contractAddress: string,
     methods: string[],
     rpcClient: RpcClient,
@@ -156,8 +253,26 @@ export const getTransactionDetails = async (
         methods.includes(receipt.result.method)
     );
 
-    const reducedTxs = transactions.reduce((acc, curr) => ({ ...acc, [curr.txHash]: curr }), {}) as Record<string, GetTransactionDetailsInput>;
+    const reducedTxs = transactions.reduce((acc, curr) => ({ ...acc, [curr.txHash]: curr }), {}) as Record<string, GetTransactionDetailsRpcInput>;
     const transactionDetails = filteredReceipts.map(receipt => ({ eventArgs: receipt.result.events?.[0]?.args, eventArgs2nd: receipt.result.events?.[1]?.args, method: receipt.result.method, ...reducedTxs[receipt.result.txHash] }));
+
+    return transactionDetails;
+}
+
+type GetTransactionDetailsIndexerApiInput = { txHash: string, timestamp: number, blockHeight?: number };
+export const getTransactionDetailsIndexerApi = async (
+    transactions: GetTransactionDetailsIndexerApiInput[],
+    indexerApiUrl: string,
+) => {
+    const transactionReceipts = await Promise.all(transactions.map((transaction) => getTxEventsWithIdenaIndexerApi(indexerApiUrl, transaction.txHash, 10)));
+
+    const filteredReceipts = transactionReceipts.map((tx, index) => ({ ...tx, txHash: transactions[index].txHash })).filter((receipt) =>
+        (receipt.error && (() => { throw 'indexer api unavailable' })()) ||
+        receipt.result
+    );
+
+    const reducedTxs = transactions.reduce((acc, curr) => ({ ...acc, [curr.txHash]: curr }), {}) as Record<string, GetTransactionDetailsIndexerApiInput>;
+    const transactionDetails = filteredReceipts.map(receipt => ({ eventArgs: receipt.result?.[0]?.data, eventArgs2nd: receipt.result?.[1]?.data, method: receipt.result?.[0]?.eventName, ...reducedTxs[receipt.txHash] }));
 
     return transactionDetails;
 }
@@ -275,7 +390,7 @@ const getMessage = async (postId: string, message: string, rpcClient: RpcClient)
         const { result: getCidResult } = await rpcClient('ipfs_get', [cid], true);
 
         if (!getCidResult) {
-            message = 'Issue getting message from IPFS';
+            message = 'Issue loading message from IPFS';
             return { postId, message };
         }
 
