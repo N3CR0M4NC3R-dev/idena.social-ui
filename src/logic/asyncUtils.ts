@@ -100,7 +100,7 @@ export const getMaxFee = async (rpcClient: RpcClient, data: GetMaxFeeData) => {
     }
 };
 
-export const getPastTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: string, contractAddress: string, limit: number, continuationToken?: string) => {
+export const getPastTxsWithIdenaIndexerApi = async (indexerApiUrl: string, contractAddress: string, limit: number, continuationToken?: string) => {
     try {
         const params = new URLSearchParams({
             limit: limit.toString(),
@@ -109,7 +109,7 @@ export const getPastTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: str
 
         const path = `api/Contract/${contractAddress}/BalanceUpdates`;
 
-        const response = await fetch(`${inputIdenaIndexerApiUrl}/${path}?${params}`);
+        const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
 
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`);
@@ -124,11 +124,30 @@ export const getPastTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: str
     }
 };
 
-export const getBlockAtWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: string, blockHeight: number) => {
+export const getLastBlockWithIdenaIndexerApi = async (indexerApiUrl: string) => {
+    try {
+        const path = `/api/Block/Last`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
+export const getBlockAtWithIdenaIndexerApi = async (indexerApiUrl: string, blockHeight: number) => {
     try {
         const path = `api/Block/${blockHeight}`;
 
-        const response = await fetch(`${inputIdenaIndexerApiUrl}/${path}`);
+        const response = await fetch(`${indexerApiUrl}/${path}`);
 
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`);
@@ -143,7 +162,7 @@ export const getBlockAtWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: str
     }
 };
 
-export const getblockTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: string, blockHeight: number) => {
+export const getblockTxsWithIdenaIndexerApi = async (indexerApiUrl: string, blockHeight: number) => {
     try {
         const limit = 100;
         let continuationToken = '';
@@ -158,7 +177,7 @@ export const getblockTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: st
 
             const path = `api/Block/${blockHeight}/Txs`;
 
-            const response = await fetch(`${inputIdenaIndexerApiUrl}/${path}?${params}`);
+            const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
 
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`);
@@ -179,7 +198,7 @@ export const getblockTxsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: st
     }
 };
 
-export const getTxEventsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: string, txHash: string, limit: number) => {
+export const getTxEventsWithIdenaIndexerApi = async (indexerApiUrl: string, txHash: string, limit: number) => {
     try {
         const params = new URLSearchParams({
             limit: limit.toString(),
@@ -187,7 +206,7 @@ export const getTxEventsWithIdenaIndexerApi = async (inputIdenaIndexerApiUrl: st
 
         const path = `api/Transaction/${txHash}/Events`;
 
-        const response = await fetch(`${inputIdenaIndexerApiUrl}/${path}?${params}`);
+        const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
 
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`);
@@ -242,9 +261,9 @@ export const getTransactionDetailsRpc = async (
 type GetTransactionDetailsIndexerApiInput = { txHash: string, timestamp: number, blockHeight?: number };
 export const getTransactionDetailsIndexerApi = async (
     transactions: GetTransactionDetailsIndexerApiInput[],
-    inputIdenaIndexerApiUrl: string,
+    indexerApiUrl: string,
 ) => {
-    const transactionReceipts = await Promise.all(transactions.map((transaction) => getTxEventsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, transaction.txHash, 10)));
+    const transactionReceipts = await Promise.all(transactions.map((transaction) => getTxEventsWithIdenaIndexerApi(indexerApiUrl, transaction.txHash, 10)));
 
     const filteredReceipts = transactionReceipts.map((tx, index) => ({ ...tx, txHash: transactions[index].txHash })).filter((receipt) =>
         (receipt.error && (() => { throw 'indexer api unavailable' })()) ||

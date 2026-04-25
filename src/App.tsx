@@ -1,8 +1,8 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi } from './logic/asyncUtils';
-import { getDisplayAddress, getTextAndMediaForPost, isObjectEmpty, str2bytes } from './logic/utils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi } from './logic/asyncUtils';
+import { getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import { Link, Outlet, useLocation } from 'react-router';
 import type { BrowserStateHistorySettings, MouseEventLocal, PostMediaAttachment } from './App.exports';
@@ -50,7 +50,7 @@ const initSettings = {
     nodeKey: localStorage.getItem('nodeKey') || defaultNodeApiKey,
     makePostsWith: localStorage.getItem('makePostsWith') || 'idena-app',
     postersAddress: localStorage.getItem('postersAddress') || zeroAddress,
-    findPastPostsWith: localStorage.getItem('findPastPostsWith') || 'indexer-api',
+    findPostsWith: localStorage.getItem('findPostsWith') || 'indexer-api',
     indexerApiUrl: localStorage.getItem('indexerApiUrl') || initIndexerApiUrl,
 };
 
@@ -106,8 +106,8 @@ function App() {
     const [makePostsWith, setMakePostsWith] = useState<string>(initSettings.makePostsWith);
     const [postersAddress, setPostersAddress] = useState<string>(initSettings.postersAddress);
     const postersAddressRef = useRef<string>(postersAddress);
-    const [findPastPostsWith, setFindPastPostsWith] = useState<string>(initSettings.findPastPostsWith);
-    const findPastPostsWithRef = useRef(findPastPostsWith);
+    const [findPostsWith, setFindPostsWith] = useState<string>(initSettings.findPostsWith);
+    const findPostsWithRef = useRef(findPostsWith);
     const [indexerApiUrl, setIndexerApiUrl] = useState<string>(initSettings.indexerApiUrl);
     const indexerApiUrlRef = useRef(indexerApiUrl);
 
@@ -200,9 +200,10 @@ function App() {
             localStorage.setItem('nodeKey', idenaNodeApiKey);
 
             if (!initialBlock) {
-                const { result: getLastBlockResult } = await rpcClientRef.current!('bcn_lastBlock', []);
+                const { result: getLastBlockResult } = findPostsWith === 'indexer-api' ? await getLastBlockWithIdenaIndexerApi(indexerApiUrl) : await rpcClientRef.current!('bcn_lastBlock', []);
                 setInitialBlock(getLastBlockResult?.height ?? 0);
-                setInitialBlockTimestamp(getLastBlockResult?.timestamp ?? 0);
+                const timestamp = findPostsWith === 'indexer-api' ? getTimestampFromIndexerApi(getLastBlockResult?.timestamp) : getLastBlockResult?.timestamp;
+                setInitialBlockTimestamp(timestamp ?? 0);
                 setScanningPastBlocks(true);
             }
 
@@ -263,7 +264,7 @@ function App() {
     }, [inputPostersAddressApplied]);
 
     useEffect(() => {
-        if (inputIdenaIndexerApiUrlApplied && findPastPostsWith === 'indexer-api') {
+        if (inputIdenaIndexerApiUrlApplied && findPostsWith === 'indexer-api') {
             setIndexerApiUrl(inputIdenaIndexerApiUrl);
             localStorage.setItem('indexerApiUrl', inputIdenaIndexerApiUrl);
 
@@ -321,8 +322,8 @@ function App() {
     }, [currentAd]);
 
     useEffect(() => {
-        findPastPostsWithRef.current = findPastPostsWith;
-    }, [findPastPostsWith]);
+        findPostsWithRef.current = findPostsWith;
+    }, [findPostsWith]);
 
     useEffect(() => {
         indexerApiUrlRef.current = indexerApiUrl;
@@ -348,7 +349,7 @@ function App() {
             (async function recurseForward() {
                 if (nodeAvailableRef.current) {
                     const recurseDirection = 'forward';
-                    const contentSource = findPastPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
+                    const contentSource = findPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
                     const pendingBlock = currentBlockCapturedRef.current ? currentBlockCapturedRef.current + 1 : initialBlock;
                     const contractAddress = contractAddressCurrent;
                     recurseForwardIntervalId = setTimeout(postScannerFactory(recurseDirection, contentSource, recurseForward, setCurrentBlockCaptured, currentBlockCapturedRef, contractAddress, pendingBlock), POLLING_INTERVAL);
@@ -370,7 +371,7 @@ function App() {
             (async function recurseBackward(time: number) {
                 if (scanningPastBlocksRef.current && nodeAvailableRef.current && time < ttl) {
                     const recurseDirection = 'backward';
-                    const contentSource = findPastPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
+                    const contentSource = findPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
                     const contractAddress = pastContractAddressRef!.current;
                     const pendingBlock = pastBlockCapturedRef.current ? (partialPastBlockCapturedRef.current ? partialPastBlockCapturedRef.current : pastBlockCapturedRef.current - 1) : initialBlock - 1;
                     recurseBackwardIntervalId = setTimeout(postScannerFactory(recurseDirection, contentSource, recurseBackward, setPastBlockCaptured, pastBlockCapturedRef, contractAddress, pendingBlock), SCANNING_INTERVAL);
@@ -407,9 +408,9 @@ function App() {
         }
     };
 
-    const handleInputFindPastPostsWithToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setFindPastPostsWith(event.target.value);
-        localStorage.setItem('findPastPostsWith', event.target.value);
+    const handleInputFindPostsWithToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFindPostsWith(event.target.value);
+        localStorage.setItem('findPostsWith', event.target.value);
 
         if (event.target.value === 'rpc') {
             setIndexerApiUrl('');
@@ -483,7 +484,7 @@ function App() {
 
                     transactions = getBlockByHeightResult.transactions.map((txHash: string) => ({ txHash, timestamp: getBlockByHeightResult.timestamp, blockHeight: getBlockByHeightResult.height }));
                 } else if (isRecurseForwardWithIndexerApi) {
-                    const { result: getBlockByHeightResult, error: getBlockByHeightError } = await getBlockAtWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pendingBlock!);
+                    const { result: getBlockByHeightResult, error: getBlockByHeightError } = await getBlockAtWithIdenaIndexerApi(indexerApiUrl, pendingBlock!);
 
                     if (getBlockByHeightError && getBlockByHeightError?.message !== 'no data found') {
                         throw 'indexer api unavailable';
@@ -498,7 +499,7 @@ function App() {
                         throw 'no transactions';
                     }
 
-                    const { result: getblockTxsResult, error: getblockTxsError } = await getblockTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pendingBlock!);
+                    const { result: getblockTxsResult, error: getblockTxsError } = await getblockTxsWithIdenaIndexerApi(indexerApiUrl, pendingBlock!);
                     
                     if (getblockTxsError) {
                         throw 'indexer api unavailable';
@@ -506,13 +507,13 @@ function App() {
 
                     transactions = getblockTxsResult
                         ?.filter((transaction: any) => transaction.type === 'CallContract' && allMethods.includes(transaction.txReceipt?.method) && transaction.txReceipt?.success === true)
-                        .map((transaction: any) => ({ txHash: transaction.hash, timestamp: Math.floor((new Date(transaction.timestamp)).getTime() / 1000 ), blockHeight: pendingBlock }))
+                        .map((transaction: any) => ({ txHash: transaction.hash, timestamp: getTimestampFromIndexerApi(transaction.timestamp), blockHeight: pendingBlock }))
                     ?? [];
                 } else if (isRecurseBackwardWithIndexerApi) {
                     if (continuationTokenRef!.current === 'finished processing') {
                         throw 'no more transactions';
                     }
-                    const { result, continuationToken, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, pastContractAddressRef!.current, INDEXER_API_ITEMS_LIMIT, continuationTokenRef!.current);
+                    const { result, continuationToken, error } = await getPastTxsWithIdenaIndexerApi(indexerApiUrl, pastContractAddressRef!.current, INDEXER_API_ITEMS_LIMIT, continuationTokenRef!.current);
                     
                     if (error) {
                         throw 'indexer api unavailable';
@@ -520,7 +521,7 @@ function App() {
 
                     transactions = result
                         ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && allMethods.includes(balanceUpdate.txReceipt.method) && balanceUpdate.from === balanceUpdate.address && balanceUpdate.txReceipt.success === true)
-                        .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: Math.floor((new Date(balanceUpdate.timestamp)).getTime() / 1000 ) }))
+                        .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: getTimestampFromIndexerApi(balanceUpdate.timestamp) }))
                     ?? [];
 
                     if (!continuationTokenRef!.current) {
@@ -564,7 +565,7 @@ function App() {
                 const transactionsWithDetails = isContentSourceRpc ?
                     await getTransactionDetailsRpc(transactions, contractAddress, allMethods, rpcClientRef.current!)
                     :
-                    await getTransactionDetailsIndexerApi(transactions, inputIdenaIndexerApiUrl);
+                    await getTransactionDetailsIndexerApi(transactions, indexerApiUrl);
 
                 let lastValidTransaction;
 
@@ -1076,14 +1077,14 @@ function App() {
                     <div className="flex flex-col mb-6">
                         <p>Find posts with:</p>
                         <div className="flex flex-row gap-2">
-                            <input id="findPastPostsWith" type="radio" name="findPastPostsWith" value="rpc" checked={findPastPostsWith === 'rpc'} onChange={handleInputFindPastPostsWithToggle} />
-                            <label htmlFor="findPastPostsWith" className="flex-none text-right">RPC</label>
+                            <input id="findPostsWith" type="radio" name="findPostsWith" value="rpc" checked={findPostsWith === 'rpc'} onChange={handleInputFindPostsWithToggle} />
+                            <label htmlFor="findPostsWith" className="flex-none text-right">RPC</label>
                         </div>
                         <div className="flex flex-row gap-2">
-                            <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPastPostsWith" value="indexer-api" checked={findPastPostsWith === 'indexer-api'} onChange={handleInputFindPastPostsWithToggle} />
+                            <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPostsWith" value="indexer-api" checked={findPostsWith === 'indexer-api'} onChange={handleInputFindPostsWithToggle} />
                             <label htmlFor="notUseFindPastBlocksWithTxsApi" className="flex-none text-right">Indexer Api</label>
                         </div>
-                        {findPastPostsWith === 'indexer-api' && (
+                        {findPostsWith === 'indexer-api' && (
                             <div className="flex flex-col ml-5 text-[14px]">
                                 <div className="flex flex-row gap-1">
                                     <p className="mb-1 w-13 flex-none text-right">Api Url:</p>
