@@ -370,7 +370,7 @@ const getMessage = async (postId: string, message: string, rpcClient: RpcClient)
         const { result: getCidResult } = await rpcClient('ipfs_get', [cid], true);
 
         if (!getCidResult) {
-            message = 'Issue getting message from IPFS';
+            message = 'Issue loading message from IPFS';
             return { postId, message };
         }
 

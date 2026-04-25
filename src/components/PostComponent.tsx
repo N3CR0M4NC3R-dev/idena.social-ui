@@ -168,8 +168,17 @@ function PostComponent(props: PostComponentProps) {
             return;
         }
 
-        toggleShowDiscussionHandler(post);
-        setDiscussReplyToPostIdHandler(post, post.postId);
+        const postDomSettings = browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId];
+
+        const newRepliesHidden = !postDomSettings.repliesHidden;
+
+        if (postDomSettings.repliesHidden || postDomSettings.discussReplyToPostId) {
+            setPostDomSettings(post.postId, { repliesHidden: newRepliesHidden }, true);
+        }
+
+        if (!newRepliesHidden || (!postDomSettings.repliesHidden && !postDomSettings.discussReplyToPostId)) {
+            setDiscussReplyToPostIdHandler(post, post.postId);
+        }
     };
 
     const replyInputOnFocusHandler: FocusEventHandler<HTMLTextAreaElement> = (e) => {
@@ -196,8 +205,17 @@ function PostComponent(props: PostComponentProps) {
     const toggleViewMoreHandler = (post: Post, e?: MouseEventLocal) => {
         e?.stopPropagation();
 
-        const newTextOverflowHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].textOverflowHidden;
-        setPostDomSettings(post.postId, { textOverflowHidden: newTextOverflowHidden }, true);
+        const topLevelPostId = post.replyToPostId || post.postId;
+
+        if ((post.message?.length ?? 0) > 10000 && !isPostOutlet) {
+            const to = `/post/${topLevelPostId}`;
+            if (to !== location.pathname) {
+                navigate(to);
+            }
+        } else {
+            const newTextOverflowHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].textOverflowHidden;
+            setPostDomSettings(post.postId, { textOverflowHidden: newTextOverflowHidden }, true);
+        }
     };
 
     const addMediaHandler = async (e: React.ChangeEvent<HTMLInputElement>, location: string) => {

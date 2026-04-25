@@ -1,6 +1,6 @@
 {
 	"name": "idena.social-ui",
-	"version": "10.4.1",
+	"version": "10.4.2",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
