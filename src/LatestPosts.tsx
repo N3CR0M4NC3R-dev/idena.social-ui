@@ -1,7 +1,7 @@
-import { supportedImageTypes, type Post, type Tip } from './logic/asyncUtils';
+import { type Post, type Tip } from './logic/asyncUtils';
 import { useLocation, useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
-import { type BrowserStateHistorySettings, type MouseEventLocal } from './App.exports';
+import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from './App.exports';
 import { useReducer } from 'react';
 import SortPostsByComponent from './components/SortPostsByComponent';
 
@@ -21,7 +21,7 @@ type LatestPostsProps = {
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
     copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
-    submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
     submittingLike: string,
@@ -31,9 +31,11 @@ type LatestPostsProps = {
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
+    handleOpenAddMediaModal: (e: MouseEventLocal, location: string) => void,
+    handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
-    setPostMediaAttachmentHandler: (location: string, file?: File | undefined) => Promise<void>,
-    postMediaAttachmentsRef: React.RefObject<any>,
+    postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
+    makePostsWith: string,
 };
 
 function LatestPosts() {
@@ -67,9 +69,11 @@ function LatestPosts() {
         handleOpenLikesModal,
         handleOpenTipsModal,
         handleOpenSendTipModal,
+        handleOpenAddMediaModal,
+        handleOpenRpcMakePostModal,
         tipsRef,
-        setPostMediaAttachmentHandler,
         postMediaAttachmentsRef,
+        makePostsWith,
     } = useOutletContext() as LatestPostsProps;
 
     const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -81,13 +85,6 @@ function LatestPosts() {
     const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
 
     const mainPostMediaAttachment = postMediaAttachmentsRef.current['main'];
-
-    const addMediaHandler = async (e: React.ChangeEvent<HTMLInputElement>, location: string) => {
-        e?.stopPropagation();
-
-        await setPostMediaAttachmentHandler(location, e.currentTarget.files?.[0])
-        forceUpdate();
-    };
 
     const removeMediaHandler = (e: MouseEventLocal, location: string) => {
         e?.stopPropagation();
@@ -113,21 +110,12 @@ function LatestPosts() {
                     {mainPostMediaAttachment ? <>
                         <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, 'main')}>Remove image</p>
                     </> : <>
-                        <label htmlFor="post-input-media-main" className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => e.stopPropagation()}>Add image</label>
-                        <input
-                            id="post-input-media-main"
-                            type="file"
-                            accept={supportedImageTypes.join(',')}
-                            className="hidden"
-                            disabled={inputPostDisabled}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => addMediaHandler(e, 'main')}
-                        />
+                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, 'main')}>Add image</p>
                     </>}
                     <p id={"post-copytx-main"} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => !inputPostDisabled && copyPostTxHandler('main')}>Copy tx</p>
                 </div>
                 <p className="text-right w-50 mt-0.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
-                <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={() => submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
+                <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={(e) => makePostsWith === 'rpc' ? handleOpenRpcMakePostModal(e, 'main') : submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
             </div>
         </div>
         <div className="text-center my-3">
@@ -157,9 +145,11 @@ function LatestPosts() {
                         handleOpenLikesModal={handleOpenLikesModal}
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}
+                        handleOpenAddMediaModal={handleOpenAddMediaModal}
+                        handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
                         tipsRef={tipsRef}
-                        setPostMediaAttachmentHandler={setPostMediaAttachmentHandler}
                         postMediaAttachmentsRef={postMediaAttachmentsRef}
+                        makePostsWith={makePostsWith}
                     />
                 </li>
             ))}

@@ -237,7 +237,7 @@ export function getCallTransaction(to: string, txAmount: Decimal, nonce: number,
     tx.maxFee = maxFeeDna;
     tx.payload = payload.toBytes();
 
-    return tx.toHex();;
+    return tx.toHex();
 }
 
 export function getTimestampFromIndexerApi(indexerApiTimestamp: number) {

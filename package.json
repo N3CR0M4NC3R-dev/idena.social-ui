@@ -1,6 +1,6 @@
 {
 	"name": "idena.social-ui",
-	"version": "10.4.3",
+	"version": "10.5.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
@@ -15,8 +15,10 @@
 		"@tailwindcss/vite": "^4.1.17",
 		"bn.js": "^5.2.2",
 		"decimal.js": "^10.6.0",
-		"idena-approved-ads": "^1.0.0",
-		"idena-sdk-js-lite": "^0.1.0",
+		"idena-approved-ads": "^1.1.0",
+		"idena-sdk-js-lite": "^0.2.0",
+		"image-type": "^6.1.0",
+		"is-svg": "^6.1.0",
 		"js-sha3": "^0.9.3",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",

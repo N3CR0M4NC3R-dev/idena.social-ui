@@ -1,7 +1,7 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
 import type { Post, Tip } from "./logic/asyncUtils";
 import PostComponent from "./components/PostComponent";
-import { type BrowserStateHistorySettings, type MouseEventLocal } from "./App.exports";
+import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from "./App.exports";
 
 type PostOutletProps = {
     latestPosts: string[],
@@ -13,7 +13,7 @@ type PostOutletProps = {
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
     copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
-    submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
     submittingLike: string,
@@ -23,9 +23,11 @@ type PostOutletProps = {
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
+    handleOpenAddMediaModal: (e: MouseEventLocal, location: string) => void,
+    handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
-    setPostMediaAttachmentHandler: (location: string, file?: File | undefined) => Promise<void>,
-    postMediaAttachmentsRef: React.RefObject<any>,
+    postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
+    makePostsWith: string,
 };
 
 function PostOutlet() {
@@ -50,9 +52,11 @@ function PostOutlet() {
         handleOpenLikesModal,
         handleOpenTipsModal,
         handleOpenSendTipModal,
+        handleOpenAddMediaModal,
+        handleOpenRpcMakePostModal,
         tipsRef,
-        setPostMediaAttachmentHandler,
         postMediaAttachmentsRef,
+        makePostsWith,
     } = useOutletContext() as PostOutletProps;
 
     const handleGoBack = () => {
@@ -80,9 +84,11 @@ function PostOutlet() {
             handleOpenLikesModal={handleOpenLikesModal}
             handleOpenTipsModal={handleOpenTipsModal}
             handleOpenSendTipModal={handleOpenSendTipModal}
+            handleOpenAddMediaModal={handleOpenAddMediaModal}
+            handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
             tipsRef={tipsRef}
-            setPostMediaAttachmentHandler={setPostMediaAttachmentHandler}
             postMediaAttachmentsRef={postMediaAttachmentsRef}
+            makePostsWith={makePostsWith}
             isPostOutlet={true}
         />
     </>);

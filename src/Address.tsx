@@ -2,7 +2,7 @@ import { useLocation, useNavigate, useOutletContext, useParams } from "react-rou
 import type { Post, Poster, Tip } from "./logic/asyncUtils";
 import { getDisplayAddress, getIdentityStatus } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
-import { type BrowserStateHistorySettings } from "./App.exports";
+import { type BrowserStateHistorySettings, type PostMediaAttachment } from "./App.exports";
 import SortPostsByComponent from "./components/SortPostsByComponent";
 
 type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
@@ -18,7 +18,7 @@ type AddressProps = {
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
     copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
-    submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
+    submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submittingPost: string,
     submittingLike: string,
@@ -28,9 +28,11 @@ type AddressProps = {
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
+    handleOpenAddMediaModal: (e: MouseEventLocal, location: string) => void,
+    handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
-    setPostMediaAttachmentHandler: (location: string, file?: File | undefined) => Promise<void>,
-    postMediaAttachmentsRef: React.RefObject<any>,
+    postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
+    makePostsWith: string,
 };
 
 function Address() {
@@ -61,9 +63,11 @@ function Address() {
         handleOpenLikesModal,
         handleOpenTipsModal,
         handleOpenSendTipModal,
+        handleOpenAddMediaModal,
+        handleOpenRpcMakePostModal,
         tipsRef,
-        setPostMediaAttachmentHandler,
         postMediaAttachmentsRef,
+        makePostsWith,
     } = useOutletContext() as AddressProps;
 
     if (!browserStateHistoryRef.current[locationKey]?.sortPostsBy) {
@@ -132,9 +136,11 @@ function Address() {
                         handleOpenLikesModal={handleOpenLikesModal}
                         handleOpenTipsModal={handleOpenTipsModal}
                         handleOpenSendTipModal={handleOpenSendTipModal}
+                        handleOpenAddMediaModal={handleOpenAddMediaModal}
+                        handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
                         tipsRef={tipsRef}
-                        setPostMediaAttachmentHandler={setPostMediaAttachmentHandler}
                         postMediaAttachmentsRef={postMediaAttachmentsRef}
+                        makePostsWith={makePostsWith}
                     />
                 </li>
             ))}

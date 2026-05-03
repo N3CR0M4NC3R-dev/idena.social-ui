@@ -8,6 +8,8 @@ import { Link, Outlet, useLocation } from 'react-router';
 import type { BrowserStateHistorySettings, MouseEventLocal, PostMediaAttachment } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
+import ModalAddMediaComponent from './components/ModalAddMediaComponent';
+import ModalRpcMakePostComponent from './components/ModalRpcMakePostComponent';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -163,6 +165,8 @@ function App() {
     const modalLikePostsRef = useRef<Post[]>([]);
     const modalTipsRef = useRef<Tip[]>([]);
     const modalSendTipRef = useRef<Post>(undefined);
+    const modalAddMediaRef = useRef<string>('');
+    const modalRpcMakePostRef = useRef<{ location: string, replyToPostId?: string, channelId?: string }>({ location: '' });
 
 
     // miscellaneous
@@ -836,7 +840,7 @@ function App() {
         setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || (makePostsWith === 'rpc' && viewOnlyNode) || postersAddressInvalid);
     }, [submittingPost, submittingLike, submittingTip, makePostsWith, viewOnlyNode, postersAddressInvalid]);
 
-    const setPostMediaAttachmentHandler = async (location: string, file: File) => {
+    const setPostMediaAttachmentHandler = async (location: string, file: File, ipfsUrl?: string) => {
         if (!supportedImageTypes.includes(file.type)) {
             alert('Media format not supported.');
             return;
@@ -847,8 +851,8 @@ function App() {
             return;
         }
 
-        if (makePostsWith === 'idena-app' && file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
-            alert('5KB is the maximum size when using the Idena App. This image is too large.');
+        if (makePostsWith === 'idena-app' && !ipfsUrl && file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
+            alert('5KB is the maximum size when using the Idena App. Use RPC for images of up to 1MB.');
             return;
         }
 
@@ -860,7 +864,7 @@ function App() {
                 fileReader.readAsDataURL(file);
             });
 
-            const newMedia = { dataUrl: imageDataUrl, file };
+            const newMedia = { dataUrl: imageDataUrl, file, ipfsUrl };
 
             postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [location]: newMedia };
         } catch {
@@ -893,6 +897,11 @@ function App() {
                 return;
             }
 
+            if (postMediaAttachment?.ipfsUrl) {
+                media = [postMediaAttachment.ipfsUrl];
+                mediaType = [postMediaAttachment.file.type];
+            }
+
             copyPostTx(
                 postersAddress,
                 contractAddressCurrent,
@@ -920,7 +929,7 @@ function App() {
         }
     }
 
-    const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
+    const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string, storeTextIpfs?: boolean, storeMediaIpfs?: boolean) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot post!');
             return;
@@ -936,19 +945,24 @@ function App() {
             return;
         }
 
-        if (makePostsWith === 'rpc') {
-            if (inputText.length > 100) {
-                const fileBytes = str2bytes(inputText);
-                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, lastUsedNonceSavedRef, fileBytes, postersAddressRef.current);
+        if (makePostsWith === 'rpc' && storeTextIpfs && inputText) {
+            const fileBytes = str2bytes(inputText);
+            const cidAddress = await storeFileToIpfs(rpcClientRef.current!, lastUsedNonceSavedRef, fileBytes, postersAddressRef.current);
 
-                if (!cidAddress) {
-                    alert('Something went wrong. Probably you have insufficient iDNA.');
-                }
-                
-                inputText = cidAddress!;
+            if (!cidAddress) {
+                alert('Something went wrong. Probably you have insufficient iDNA.');
             }
+            
+            inputText = cidAddress!;
+        }
 
-            if (postMediaAttachment) {
+        if (makePostsWith === 'rpc' && postMediaAttachment && !postMediaAttachment.ipfsUrl) {
+            if (storeMediaIpfs) {
+                if (postMediaAttachment.file.size > MAX_POST_MEDIA_BYTES) {
+                    alert('1MB is the maximum size. This image is too large.');
+                    return;
+                }
+
                 const fileBytes = new Uint8Array(await postMediaAttachment.file.arrayBuffer());
 
                 const cidAddress = await storeFileToIpfs(rpcClientRef.current!, lastUsedNonceSavedRef, fileBytes, postersAddressRef.current);
@@ -959,7 +973,17 @@ function App() {
 
                 media = [cidAddress!];
                 mediaType = [postMediaAttachment.file.type];
+            } else {
+                if (postMediaAttachment.file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
+                    alert('5KB is the maximum size when storing on the blockchain. Store image on IPFS instead.');
+                    return;
+                }
             }
+        }
+
+        if (postMediaAttachment?.ipfsUrl) {
+            media = [postMediaAttachment.ipfsUrl];
+            mediaType = [postMediaAttachment.file.type];
         }
 
         postTextareaElement.value = '';
@@ -1023,6 +1047,46 @@ function App() {
 
         modalSendTipRef.current = { ...tipToPost };
         setModalOpen('sendTip');
+    };
+
+    const handleOpenAddMediaModal = (e: MouseEventLocal, location: string) => {
+        e.stopPropagation();
+
+        const replyToPost = location !== 'main' && postsRef.current[location];
+
+        const isBreakingChangeDisabled = replyToPost && replyToPost.timestamp <= breakingChanges.v10.timestamp;
+
+        if (inputPostDisabled || isBreakingChangeDisabled) {
+            return;
+        }
+
+        modalAddMediaRef.current = location;
+        setModalOpen('addMedia');
+    };
+
+    const handleOpenRpcMakePostModal = (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => {
+        e.stopPropagation();
+
+        if (!nodeAvailable) {
+            alert('Node unavailable, cannot post!');
+            return;
+        }
+
+        const replyToPost = location !== 'main' && postsRef.current[location];
+
+        const isBreakingChangeDisabled = replyToPost && replyToPost.timestamp <= breakingChanges.v10.timestamp;
+
+        if (inputPostDisabled || isBreakingChangeDisabled) {
+            return;
+        }
+
+        modalRpcMakePostRef.current = { location, replyToPostId, channelId };
+        setModalOpen('rpcMakePost');
+    };
+
+    const addMediaHandler = async (location: string, file: File, ipfsUrl?: string) => {
+        await setPostMediaAttachmentHandler(location, file, ipfsUrl);
+        forceUpdate();
     };
 
     return (
@@ -1137,9 +1201,11 @@ function App() {
                         handleOpenLikesModal,
                         handleOpenTipsModal,
                         handleOpenSendTipModal,
+                        handleOpenAddMediaModal,
+                        handleOpenRpcMakePostModal,
                         tipsRef,
-                        setPostMediaAttachmentHandler,
                         postMediaAttachmentsRef,
+                        makePostsWith,
                     }}
                 />
             </div>
@@ -1173,6 +1239,8 @@ function App() {
                     {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'addMedia' && <ModalAddMediaComponent modalAddMediaRef={modalAddMediaRef} addMediaHandler={addMediaHandler} rpcClient={rpcClientRef.current!} lastUsedNonceSavedRef={lastUsedNonceSavedRef} postersAddress={postersAddress} makePostsWith={makePostsWith} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'rpcMakePost' && <ModalRpcMakePostComponent modalRpcMakePostRef={modalRpcMakePostRef} submitPostHandler={submitPostHandler} closeModal={() => setModalOpen('')} />}
                     <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
                 </Modal>
             </div>
