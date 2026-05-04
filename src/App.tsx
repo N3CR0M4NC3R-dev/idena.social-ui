@@ -154,7 +154,6 @@ function App() {
     const browserStateHistoryRef = useRef<Record<string, BrowserStateHistorySettings>>({});
     const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
     const copyTxHandlerEnabledRef = useRef<boolean>(true);
-    const lastUsedNonceSavedRef = useRef<number>(0);
     const tipsRef = useRef<Record<string, { totalAmount: number, tips: Tip[] }>>({});
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
     const postLatestActivityRef = useRef({} as Record<string, number>);
@@ -912,7 +911,6 @@ function App() {
                 replyToPostId ?? null,
                 channelId ?? null,
                 rpcClientRef.current!,
-                lastUsedNonceSavedRef,
             ).then((res) => {
 
                 if (res?.success) {
@@ -947,7 +945,7 @@ function App() {
 
         if (makePostsWith === 'rpc' && storeTextIpfs && inputText) {
             const fileBytes = str2bytes(inputText);
-            const cidAddress = await storeFileToIpfs(rpcClientRef.current!, lastUsedNonceSavedRef, fileBytes, postersAddressRef.current);
+            const cidAddress = await storeFileToIpfs(rpcClientRef.current!, fileBytes, postersAddressRef.current);
 
             if (!cidAddress) {
                 alert('Something went wrong. Probably you have insufficient iDNA.');
@@ -965,7 +963,7 @@ function App() {
 
                 const fileBytes = new Uint8Array(await postMediaAttachment.file.arrayBuffer());
 
-                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, lastUsedNonceSavedRef, fileBytes, postersAddressRef.current);
+                const cidAddress = await storeFileToIpfs(rpcClientRef.current!, fileBytes, postersAddressRef.current);
 
                 if (!cidAddress) {
                     alert('Something went wrong. Probably you have insufficient iDNA.');
@@ -991,7 +989,7 @@ function App() {
 
         setSubmittingPost(location);
 
-        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, callbackUrl);
     };
 
     const submitLikeHandler = async (emoji: string, location: string, replyToPostId?: string, channelId?: string) => {
@@ -1002,7 +1000,7 @@ function App() {
 
         setSubmittingLike(location);
 
-        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, callbackUrl);
     };
 
     const submitSendTipHandler = async (location: string, tipToPostId: string, tipAmount: string) => {
@@ -1013,7 +1011,7 @@ function App() {
 
         setSubmittingTip(location);
 
-        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, makePostsWith, rpcClientRef.current!, lastUsedNonceSavedRef, callbackUrl);
+        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, makePostsWith, rpcClientRef.current!, callbackUrl);
     };
 
     const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
@@ -1239,7 +1237,7 @@ function App() {
                     {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
-                    {modalOpen === 'addMedia' && <ModalAddMediaComponent modalAddMediaRef={modalAddMediaRef} addMediaHandler={addMediaHandler} rpcClient={rpcClientRef.current!} lastUsedNonceSavedRef={lastUsedNonceSavedRef} postersAddress={postersAddress} makePostsWith={makePostsWith} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'addMedia' && <ModalAddMediaComponent modalAddMediaRef={modalAddMediaRef} addMediaHandler={addMediaHandler} rpcClient={rpcClientRef.current!} postersAddress={postersAddress} makePostsWith={makePostsWith} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'rpcMakePost' && <ModalRpcMakePostComponent modalRpcMakePostRef={modalRpcMakePostRef} submitPostHandler={submitPostHandler} closeModal={() => setModalOpen('')} />}
                     <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
                 </Modal>
