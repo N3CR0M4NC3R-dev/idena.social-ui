@@ -33,6 +33,7 @@ type PostComponentProps = {
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
+    handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
@@ -65,6 +66,7 @@ function PostComponent(props: PostComponentProps) {
         handleOpenSendTipModal,
         handleOpenAddMediaModal,
         handleOpenRpcMakePostModal,
+        handleExpandImageModal,
         tipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
@@ -310,7 +312,7 @@ function PostComponent(props: PostComponentProps) {
                 <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(post, e)}>view more</a></span>}</p>
             </div>
             {post.image && <div className="mx-4 my-2">
-                <img className="max-h-120 max-w-100 size-auto rounded-sm" src={post.image} />
+                <img className="max-h-120 max-w-100 size-auto rounded-sm hover:cursor-pointer" src={post.image} onClick={(e) => handleExpandImageModal(e, post.image!, post.cid)} />
             </div>}
             <div className="flex flex-row ml-2 mr-3 mb-1.5 text-[12px]">
                 <div className="w-22">
@@ -335,7 +337,7 @@ function PostComponent(props: PostComponentProps) {
                     }
                 </div>
                 <div className="w-35">
-                    <div className="text-right text-[11px]/6 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
+                    <div className="text-right text-[11px]/6 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
                 </div>
             </div>
             {!isBreakingChangeDisabled && showReplyInput && <>
@@ -430,7 +432,7 @@ function PostComponent(props: PostComponentProps) {
                                     <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-[12px] text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>view more</a></span>}</p>
                                 </div>
                                 {replyPost.image && <div className="ml-12 mr-4 my-1">
-                                    <img className="max-h-100 max-w-92 size-auto rounded-sm" src={replyPost.image} />
+                                    <img className="max-h-100 max-w-92 size-auto rounded-sm hover:cursor-pointer" src={replyPost.image} onClick={(e) => handleExpandImageModal(e, replyPost.image!, replyPost.cid)} />
                                 </div>}
                                 <div className="w-full pt-2 px-4 flex flex-row text-[12px]">
                                     <div className="w-26">
@@ -455,7 +457,7 @@ function PostComponent(props: PostComponentProps) {
                                         }
                                     </div>
                                     <div>
-                                        <p className="text-[10px]/5 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                        <p className="text-[10px]/5 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a></p>
                                     </div>
                                 </div>
                                 {showDiscussion && <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
@@ -500,14 +502,14 @@ function PostComponent(props: PostComponentProps) {
                                                                         <span className="ml-1 text-[9px] align-[2px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                                                     </div>
                                                                     <div>
-                                                                        <p className="mx-1 text-[10px] text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${discussionPost.txHash}`} target="_blank">{`${displayDate}, ${displayTime}`}</a></p>
+                                                                        <p className="mx-1 text-[10px] text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${discussionPost.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a></p>
                                                                     </div>
                                                                 </div>
                                                                 <div id={`post-text-${discussionPost.postId}`} className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
                                                                     <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                                 </div>
                                                                 {discussionPost.image && <div className="my-1 mx-1">
-                                                                    <img className="max-h-80 max-w-74 size-auto rounded-sm" src={discussionPost.image} />
+                                                                    <img className="max-h-80 max-w-74 size-auto rounded-sm hover:cursor-pointer" src={discussionPost.image} onClick={(e) => handleExpandImageModal(e, discussionPost.image!, discussionPost.cid)} />
                                                                 </div>}
                                                             </div>
                                                             <div className="pt-0.5 mr-1 text-[12px] flex flex-col gap-0.5">

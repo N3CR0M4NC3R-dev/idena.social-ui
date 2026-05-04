@@ -30,6 +30,7 @@ type AddressProps = {
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
+    handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
@@ -65,6 +66,7 @@ function Address() {
         handleOpenSendTipModal,
         handleOpenAddMediaModal,
         handleOpenRpcMakePostModal,
+        handleExpandImageModal,
         tipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
@@ -103,7 +105,7 @@ function Address() {
             </div>
             <div className="flex-1 overflow-hidden">
                 <div className="flex flex-col">
-                    <div><a className="text-[24px] font-[600] hover:underline" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noreferrer">{posterDisplayAddress}</a></div>
+                    <div><a className="text-[24px] font-[600] hover:underline" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noopener noreferrer">{posterDisplayAddress}</a></div>
                     <div><p className="text-[16px]">{`Age: ${poster.age}`}</p></div>
                     <div><p className="text-[16px]">{`Status: ${getIdentityStatus(poster.state)}`}</p></div>
                     <div><p className="text-[16px]">{`Stake: ${parseInt(poster.stake)}`}</p></div>
@@ -138,6 +140,7 @@ function Address() {
                         handleOpenSendTipModal={handleOpenSendTipModal}
                         handleOpenAddMediaModal={handleOpenAddMediaModal}
                         handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
+                        handleExpandImageModal={handleExpandImageModal}
                         tipsRef={tipsRef}
                         postMediaAttachmentsRef={postMediaAttachmentsRef}
                         makePostsWith={makePostsWith}

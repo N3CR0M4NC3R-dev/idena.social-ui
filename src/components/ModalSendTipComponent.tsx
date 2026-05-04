@@ -44,7 +44,7 @@ function ModalSendTipComponent(props: ModalSendTipComponentProps) {
     }
 
     return (<>
-        <div className="px-3">
+        <div className="w-[400px] px-3">
             <p className="mb-2 text-center">Send Tip</p>
             <div className="text-[14px]">
                 <div className="mb-3">

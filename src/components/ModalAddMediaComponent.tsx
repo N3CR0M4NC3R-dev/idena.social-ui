@@ -78,7 +78,7 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
     }
 
     return (<>
-        <div className="px-3">
+        <div className="w-[400px] px-3">
             <p className="mb-2 text-center">Add Image</p>
             <div className="text-[14px]">
                 <div className="mt-5 mb-3">

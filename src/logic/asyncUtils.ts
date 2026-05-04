@@ -38,6 +38,7 @@ export type Post = {
     replyToPostId: string,
     image?: string,
     video?: string,
+    cid?: string,
     orphaned: boolean,
 };
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
@@ -405,15 +406,16 @@ export const getMedia = async (postId: string, media: string, rpcClient: RpcClie
     let image = '';
     let video = '';
     let mediaType = '';
+    let cid = '';
     let blob;
 
     if (media.startsWith('ipfs://')) {
-        const cid = media.split('ipfs://')[1];
+        cid = media.split('ipfs://')[1];
         const { result: getCidResult } = await rpcClient('ipfs_get', [cid], true);
 
         if (!getCidResult) {
             image = ErrorLoadingMedia;
-            return { postId, image, video, mediaType, blob };
+            return { postId, image, video, mediaType, blob, cid };
         }
 
         const bytes = hexToUint8Array(getCidResult);
@@ -424,7 +426,7 @@ export const getMedia = async (postId: string, media: string, rpcClient: RpcClie
         ({ image, video, mediaType, blob } = await getMediaFromHex(bytes));
     }
 
-    return { postId, image, video, mediaType, blob };
+    return { postId, image, video, mediaType, blob, cid };
 }
 
 const getMediaFromHex = async (bytes: Uint8Array) => {

@@ -10,6 +10,7 @@ import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 import ModalAddMediaComponent from './components/ModalAddMediaComponent';
 import ModalRpcMakePostComponent from './components/ModalRpcMakePostComponent';
+import ModalExpandImageComponent from './components/ModalExpandImageComponent';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -79,7 +80,6 @@ const customModalStyles = {
         marginRight: '-50%',
         transform: 'translate(-50%, -50%)',
         padding: '5px 0px 5px 0px',
-        width: '500px',
     },
 };
 
@@ -166,7 +166,8 @@ function App() {
     const modalSendTipRef = useRef<Post>(undefined);
     const modalAddMediaRef = useRef<string>('');
     const modalRpcMakePostRef = useRef<{ location: string, replyToPostId?: string, channelId?: string }>({ location: '' });
-
+    const modalExpandImageRef = useRef<{ dataUrl?: string, cid?: string}>({});
+    
 
     // miscellaneous
     const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -758,9 +759,9 @@ function App() {
 
                 const media = await Promise.all(mediaPromises);
                 for (let index = 0; index < media.length; index++) {
-                    const mediaProps = media[index];
-                    const updatedPost = { ...postsRef.current[mediaProps!.postId], ...mediaProps };
-                    postsRef.current = { ...postsRef.current, [mediaProps!.postId]: updatedPost };
+                    const { blob, ...mediaPropsWithoutBlob } = media[index];
+                    const updatedPost = { ...postsRef.current[mediaPropsWithoutBlob!.postId], ...mediaPropsWithoutBlob };
+                    postsRef.current = { ...postsRef.current, [mediaPropsWithoutBlob!.postId]: updatedPost };
                 }
 
                 setLatestPosts((currentLatestPosts) => {
@@ -1082,6 +1083,12 @@ function App() {
         setModalOpen('rpcMakePost');
     };
 
+    const handleExpandImageModal = (e: MouseEventLocal, dataUrl: string, cid?: string) => {
+        e.stopPropagation();
+        modalExpandImageRef.current = { dataUrl, cid };
+        setModalOpen('expandImage');
+    };
+
     const addMediaHandler = async (location: string, file: File, ipfsUrl?: string) => {
         await setPostMediaAttachmentHandler(location, file, ipfsUrl);
         forceUpdate();
@@ -1163,9 +1170,9 @@ function App() {
                     <div className="mb-3 text-gray-500">
                         <hr />
                         <div className="flex flex-row gap-1">
-                            <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank">Terms of Service</a></p>
+                            <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a></p>
                             <p className="text-[14px]/7">|</p>
-                            <p className="my-1 text-[14px]"><a className="hover:underline" href={attributionsUrl} target="_blank">Attributions</a></p>
+                            <p className="my-1 text-[14px]"><a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a></p>
                         </div>
                     </div>
                 </div>
@@ -1201,6 +1208,7 @@ function App() {
                         handleOpenSendTipModal,
                         handleOpenAddMediaModal,
                         handleOpenRpcMakePostModal,
+                        handleExpandImageModal,
                         tipsRef,
                         postMediaAttachmentsRef,
                         makePostsWith,
@@ -1212,13 +1220,13 @@ function App() {
                     <div className="flex flex-col h-[90px] justify-center">
                         <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
                         <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
-                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank">{currentAd?.url ?? defaultAd.url}</a></div>
+                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
                     </div>
-                    <div className="my-3 h-[320px] w-[320px]"><a href={currentAd?.url ?? defaultAd.url} target="_blank"><img className="rounded-md" src={currentAd?.media ?? defaultAd.media} /></a></div>
+                    <div className="my-3 h-[320px] w-[320px]"><a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer"><img className="rounded-md" src={currentAd?.media ?? defaultAd.media} /></a></div>
                     <div className="flex flex-row px-1">
                         <div className="w-16 flex-auto">
                             <div className="font-[600] text-gray-400"><p>Sponsored by</p></div>
-                            <div><a className="flex flex-row items-center" href={`https://scan.idena.io/address/${currentAd?.author}`} target="_blank"><img className="-mt-0.5 -ml-1.5 h-5 w-5" src={`https://robohash.org/${currentAd?.author}?set=set1`} /><span>{getDisplayAddress(currentAd?.author || '')}</span></a></div>
+                            <div><a className="flex flex-row items-center" href={`https://scan.idena.io/address/${currentAd?.author}`} target="_blank" rel="noopener noreferrer"><img className="-mt-0.5 -ml-1.5 h-5 w-5" src={`https://robohash.org/${currentAd?.author}?set=set1`} /><span>{getDisplayAddress(currentAd?.author || '')}</span></a></div>
                         </div>
                         <div className="flex-1" />
                         <div className="w-16 flex-auto">
@@ -1239,6 +1247,7 @@ function App() {
                     {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'addMedia' && <ModalAddMediaComponent modalAddMediaRef={modalAddMediaRef} addMediaHandler={addMediaHandler} rpcClient={rpcClientRef.current!} postersAddress={postersAddress} makePostsWith={makePostsWith} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'rpcMakePost' && <ModalRpcMakePostComponent modalRpcMakePostRef={modalRpcMakePostRef} submitPostHandler={submitPostHandler} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'expandImage' && <ModalExpandImageComponent modalExpandImageRef={modalExpandImageRef} />}
                     <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
                 </Modal>
             </div>
