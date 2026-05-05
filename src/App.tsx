@@ -513,9 +513,8 @@ function App() {
                     }
 
                     transactions = getblockTxsResult
-                        ?.filter((transaction: any) => transaction.type === 'CallContract' && allMethods.includes(transaction.txReceipt?.method) && transaction.txReceipt?.success === true)
+                        ?.filter((transaction: any) => transaction.type === 'CallContract' && allMethods.includes(transaction.txReceipt?.method) && transaction.to === contractAddressCurrent && transaction.txReceipt?.success === true)
                         .map((transaction: any) => ({ txHash: transaction.hash, timestamp: getTimestampFromIndexerApi(transaction.timestamp), blockHeight: pendingBlock }))
-                        .filter((transactionMapped: any) => transactionMapped.timestamp > breakingChanges.v11.timestamp)
                     ?? [];
                 } else if (isRecurseBackwardWithIndexerApi) {
                     if (continuationTokenRef!.current === 'finished processing') {
