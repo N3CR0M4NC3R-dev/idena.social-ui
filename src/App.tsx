@@ -15,7 +15,8 @@ import ModalExpandImageComponent from './components/ModalExpandImageComponent';
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
 const initIndexerApiUrl = 'https://api.idena.io';
-const contractAddressCurrent = '0xa1c5c1A8c6a1Af596078A5c9653F24c216fE1cb2'; // idena.social-ui v10
+const contractAddressCurrent = '0x18b0a55eb99AcA113f50eEBbdeAf6f96E789277f'; // idena.social-ui v11
+const contractAddress4 = '0xa1c5c1A8c6a1Af596078A5c9653F24c216fE1cb2'; // idena.social-ui v10
 const contractAddress3 = '0xc0324f3Cf8158D6E27dc0A07c221636056174718'; // idena.social-ui v9
 const contractAddress2 = '0xC5B35B4Dc4359Cc050D502564E789A374f634fA9'; // idena.social-ui v5
 const contractAddress1 = '0x8d318630eB62A032d2f8073d74f05cbF7c6C87Ae'; // idena.social-ui v1
@@ -481,6 +482,8 @@ function App() {
                                 pastContractAddressRef!.current = contractAddress2;
                             } else if (getBlockByHeightResult.timestamp < breakingChanges.v10.timestamp) {
                                 pastContractAddressRef!.current = contractAddress3;
+                            } else if (getBlockByHeightResult.timestamp < breakingChanges.v11.timestamp) {
+                                pastContractAddressRef!.current = contractAddress4;
                             }
                         }
                         throw 'no transactions';
@@ -533,11 +536,14 @@ function App() {
                     }
 
                     const isCurrentContract = pastContractAddressRef!.current === contractAddressCurrent;
+                    const isContractAddress4 = pastContractAddressRef!.current === contractAddress4;
                     const isContractAddress3 = pastContractAddressRef!.current === contractAddress3;
                     const isContractAddress2 = pastContractAddressRef!.current === contractAddress2;
                     const isContractAddress1 = pastContractAddressRef!.current === contractAddress1;
 
-                    if (isContractAddress3) {
+                    if (isContractAddress4) {
+                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v11.timestamp);
+                    } else if (isContractAddress3) {
                         transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v10.timestamp);
                     } else if (isContractAddress2) {
                         transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v9.timestamp);
@@ -549,6 +555,9 @@ function App() {
                         continuationTokenRef!.current = continuationToken;
                     } else {
                         if (isCurrentContract) {
+                            pastContractAddressRef!.current = contractAddress4;
+                            continuationTokenRef!.current = undefined;
+                        } else if (isContractAddress4) {
                             pastContractAddressRef!.current = contractAddress3;
                             continuationTokenRef!.current = undefined;
                         } else if (isContractAddress3) {
@@ -1030,7 +1039,7 @@ function App() {
     const handleOpenSendTipModal = (e: MouseEventLocal, tipToPost: Post) => {
         e.stopPropagation();
 
-        const isBreakingChangeDisabled = tipToPost.timestamp <= breakingChanges.v10.timestamp;
+        const isBreakingChangeDisabled = tipToPost.timestamp <= breakingChanges.v11.timestamp;
 
         if (inputPostDisabled || isBreakingChangeDisabled) {
             return;
@@ -1053,7 +1062,7 @@ function App() {
 
         const replyToPost = location !== 'main' && postsRef.current[location];
 
-        const isBreakingChangeDisabled = replyToPost && replyToPost.timestamp <= breakingChanges.v10.timestamp;
+        const isBreakingChangeDisabled = replyToPost && replyToPost.timestamp <= breakingChanges.v11.timestamp;
 
         if (inputPostDisabled || isBreakingChangeDisabled) {
             return;
@@ -1073,7 +1082,7 @@ function App() {
 
         const replyToPost = location !== 'main' && postsRef.current[location];
 
-        const isBreakingChangeDisabled = replyToPost && replyToPost.timestamp <= breakingChanges.v10.timestamp;
+        const isBreakingChangeDisabled = replyToPost && replyToPost.timestamp <= breakingChanges.v11.timestamp;
 
         if (inputPostDisabled || isBreakingChangeDisabled) {
             return;

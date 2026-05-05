@@ -10,6 +10,7 @@ export const breakingChanges = {
     v5: { timestamp: 1767946325, block: 10219188, postIdPrefix: 'preV5:' },
     v9: { timestamp: 1775551992, block: 10604687, postIdPrefix: 'preV9:' },
     v10: { timestamp: 1775992052, block: 10627018, postIdPrefix: 'preV10:' },
+    v11: { timestamp: 1777976356, block: 10727655, postIdPrefix: 'preV11:' },
 };
 
 export const supportedImageTypes = ['image/apng', 'image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/svg+xml', 'image/webp'];
@@ -42,7 +43,7 @@ export type Post = {
     orphaned: boolean,
 };
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
-export type Tip = { postId: string, txHash: string, timestamp: number, tipper: string, tipperDetails_atTimeOfTip: { stake: number, state: string, age: number }, amount: number };
+export type Tip = { postId: string, txHash: string, timestamp: number, tipper: string, tipperDetails_atTimeOfTip: { stake: number, state: string, age: number }, amount: number, burnAmount: number };
 export type NodeDetails = { idenaNodeUrl: string, idenaNodeApiKey: string };
 
 export const getRpcClient = (nodeDetails: NodeDetails, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) =>
@@ -293,6 +294,7 @@ export const getNewPosterAndPost = async (
     const preV5 = timestamp < breakingChanges.v5.timestamp;
     const preV9 = timestamp < breakingChanges.v9.timestamp;
     const preV10 = timestamp < breakingChanges.v10.timestamp;
+    const preV11 = timestamp < breakingChanges.v11.timestamp;
 
     if (!preV9 && !eventArgs2nd?.length) {
         return { continued: true };
@@ -322,6 +324,8 @@ export const getNewPosterAndPost = async (
         postId = breakingChanges.v9.postIdPrefix + postId;
     } else if (preV10) {
         postId = breakingChanges.v10.postIdPrefix + postId;
+    } else if (preV11) {
+        postId = breakingChanges.v11.postIdPrefix + postId;
     }
     
     if (postsRef.current[postId]) {
@@ -341,6 +345,8 @@ export const getNewPosterAndPost = async (
             replyToPostId = breakingChanges.v9.postIdPrefix + replyToPostId;
         } else if (preV10) {
             replyToPostId = breakingChanges.v10.postIdPrefix + replyToPostId;
+        } else if (preV11) {
+            replyToPostId = breakingChanges.v11.postIdPrefix + replyToPostId;
         }
     }
 
@@ -519,15 +525,31 @@ export const processTip = async (
 
     const preV9 = timestamp < breakingChanges.v9.timestamp;
     const preV10 = timestamp < breakingChanges.v10.timestamp;
+    const preV11 = timestamp < breakingChanges.v11.timestamp;
 
     const tipper = eventArgs[0];
 
     const postIdEventArg = preV9 ? eventArgs[1] : eventArgs[2];
     const postIdRaw = hexToDecimal(postIdEventArg);
-    const postId = preV9 ? breakingChanges.v9.postIdPrefix + postIdRaw : preV10 ? breakingChanges.v10.postIdPrefix + postIdRaw : postIdRaw;
+    let postId;
 
+    if (preV9) {
+        postId = breakingChanges.v9.postIdPrefix + postIdRaw;
+    } else if (preV10) {
+        postId = breakingChanges.v10.postIdPrefix + postIdRaw;
+    } else if (preV11) {
+        postId = breakingChanges.v11.postIdPrefix + postIdRaw;
+    } else {
+        postId = postIdRaw;
+    }
+    
     const amountEventArg = preV9 ? eventArgs[2] : eventArgs[3];
     const amount = parseInt(amountEventArg, 16);
+
+    const sentAmountEventArg = preV11 ? eventArgs[3] : eventArgs[4];
+    const sentAmount = parseInt(sentAmountEventArg, 16);
+
+    const burnAmount = sentAmount - amount;
 
     const tipperDetails_atTimeOfTip = !preV9 ? {
         stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
@@ -546,6 +568,7 @@ export const processTip = async (
         tipper,
         tipperDetails_atTimeOfTip,
         amount,
+        burnAmount,
     };
 
     const updatedPostTips = {
@@ -722,7 +745,7 @@ export const submitSendTip = async (
         {
             format: contractArgumentFormat.String,
             index: 0,
-            value: JSON.stringify({ postId }),
+            value: JSON.stringify({ postId, tipAmount: amount }),
         }
     ];
     const payload = new CallContractAttachment();
@@ -821,9 +844,21 @@ export const storeFileToIpfs = async (rpcClient: RpcClient, bytes: Uint8Array, a
 export const getPostIdFromChannelId = (timestamp: number, channelId: string, discussPrefix: string) => {
     const preV9 = timestamp < breakingChanges.v9.timestamp;
     const preV10 = timestamp < breakingChanges.v10.timestamp;
+    const preV11 = timestamp < breakingChanges.v11.timestamp;
     const discussionPostIdRaw = channelId.split(discussPrefix)[1];
-    const discussionPostId = preV9 ? breakingChanges.v9.postIdPrefix + discussionPostIdRaw : preV10 ? breakingChanges.v10.postIdPrefix + discussionPostIdRaw: discussionPostIdRaw;
-    
+
+    let discussionPostId;
+
+    if (preV9) {
+        discussionPostId = breakingChanges.v9.postIdPrefix + discussionPostIdRaw;
+    } else if (preV10) {
+        discussionPostId = breakingChanges.v10.postIdPrefix + discussionPostIdRaw;
+    } else if (preV11) {
+        discussionPostId = breakingChanges.v11.postIdPrefix + discussionPostIdRaw;
+    } else {
+        discussionPostId = discussionPostIdRaw;
+    }
+
     return discussionPostId;
 }
 
