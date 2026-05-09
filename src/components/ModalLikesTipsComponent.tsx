@@ -29,7 +29,7 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
     };
 
     return (<>
-        <div className="w-[400px]">
+        <div className="w-full sm:w-[500px]">
             <ul className="max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
                 <li className="text-center">{heading}</li>
                 {modalItemsRef!.current.map((item, index) => {
@@ -46,7 +46,7 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
 
                     return (
                         <li className="pl-2 pr-3">
-                            <div className="h-7 flex flex-row">
+                            <div className="flex flex-row">
                                 <div className="w-6 flex-none flex flex-col">
                                     <div className="flex-none">
                                         <img src={`https://robohash.org/${address}?set=set1`} />

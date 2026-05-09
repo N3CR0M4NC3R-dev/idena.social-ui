@@ -1104,8 +1104,8 @@ function App() {
     };
 
     return (
-        <main className="w-full flex flex-row p-2">
-            <div className="flex-1 flex justify-end">
+        <main className="w-full flex flex-row justify-center p-2">
+            <div className="hidden lg:flex flex-1 justify-end">
                 <div className="w-[200px] min-w-[200px] ml-2 mr-8 flex flex-col">
                     <div className="text-[28px] mb-3">
                         <Link to="/">idena.social</Link>
@@ -1186,7 +1186,7 @@ function App() {
                     </div>
                 </div>
             </div>
-            <div className="flex-none min-w-[500px] max-w-[500px]">
+            <div className="w-full md:w-[500px] flex-none">
                 <Outlet
                     context={{
                         currentBlockCaptured,
@@ -1224,7 +1224,7 @@ function App() {
                     }}
                 />
             </div>
-            <div className="flex-1 flex justify-start">
+            <div className="hidden lg:flex flex-1 justify-start">
                 <div className="w-[288px] min-w-[288px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
                     <div className="flex flex-col h-[90px] justify-center">
                         <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
