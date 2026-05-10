@@ -4,6 +4,8 @@ import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi } from './logic/asyncUtils';
 import { getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
+import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
+import settingsLightGraySvg from './assets/settings-light-gray.svg';
 import { Link, Outlet, useLocation } from 'react-router';
 import type { BrowserStateHistorySettings, MouseEventLocal, PostMediaAttachment } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
@@ -11,6 +13,7 @@ import ModalSendTipComponent from './components/ModalSendTipComponent';
 import ModalAddMediaComponent from './components/ModalAddMediaComponent';
 import ModalRpcMakePostComponent from './components/ModalRpcMakePostComponent';
 import ModalExpandImageComponent from './components/ModalExpandImageComponent';
+import SettingsComponent from './components/SettingsComponent';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -35,7 +38,7 @@ const defaultAd = {
     title: 'IDENA: Proof-of-Person blockchain',
     desc: 'Coordination of individuals',
     url: 'https://idena.io',
-    thumb: '',
+    thumb: WhatIsIdenaThumbPng,
     media: WhatIsIdenaPng,
 };
 
@@ -172,6 +175,7 @@ function App() {
 
     // miscellaneous
     const [, forceUpdate] = useReducer(x => x + 1, 0);
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
 
     const setBrowserStateHistorySettings = (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => {
@@ -1110,75 +1114,33 @@ function App() {
                     <div className="text-[28px] mb-3">
                         <Link to="/">idena.social</Link>
                     </div>
-                    <div className="mb-4 text-[14px]">
-                        <div className="flex flex-col">
-                            <div className="flex flex-row mb-2 gap-1">
-                                <p className="w-13 flex-none text-right">Rpc url:</p>
-                                <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={nodeUrl} onChange={e => setNodeUrl(e.target.value)} />
-                            </div>
-                            <div className="flex flex-row mb-1 gap-1">
-                                <p className="w-13 flex-none text-right">Api key:</p>
-                                <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={nodeKey} onChange={e => setNodeKey(e.target.value)} />
-                            </div>
-                            {!nodeAvailable && <p className="ml-14 text-[11px] text-red-400">Node Unavailable. Please try again.</p>}
-                        </div>
-                        <div className="flex flex-row">
-                            <button className={`h-7 w-16 ml-14 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeApplied(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
-                            {!inputNodeApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
-                        </div>
-                    </div>
-                    <hr className="mb-3 text-gray-500" />
-                    <div className="flex flex-col mb-6">
-                        <p>Make posts with:</p>
-                        <div className="flex flex-row gap-2">
-                            <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={handleMakePostsWithToggle} />
-                            <label htmlFor="useRpc" className="flex-none text-right">RPC</label>
-                        </div>
-                        {makePostsWith === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Idena Web App for making posts. (Posting, liking, tipping is disabled)</p>}
-                        <div className="flex flex-row gap-2">
-                            <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={handleMakePostsWithToggle} />
-                            <label htmlFor="notUseRpc" className="flex-none text-right">Idena Web App</label>
-                        </div>
-                        {makePostsWith === 'idena-app' && (
-                            <div className="flex flex-col ml-5 text-[14px]">
-                                <p className="mb-1">Your Idena Address:</p>
-                                <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
-                                {postersAddressInvalid && <p className="text-[11px] text-red-400">Invalid address. (Posting, liking, tipping is disabled)</p>}
-                                <div className="flex flex-row">
-                                    <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressApplied(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
-                                    {!inputPostersAddressApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    <hr className="mb-3 text-gray-500" />
-                    <div className="flex flex-col mb-6">
-                        <p>Find posts with:</p>
-                        <div className="flex flex-row gap-2">
-                            <input id="findPostsWith" type="radio" name="findPostsWith" value="rpc" checked={findPostsWith === 'rpc'} onChange={handleInputFindPostsWithToggle} />
-                            <label htmlFor="findPostsWith" className="flex-none text-right">RPC</label>
-                        </div>
-                        <div className="flex flex-row gap-2">
-                            <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPostsWith" value="indexer-api" checked={findPostsWith === 'indexer-api'} onChange={handleInputFindPostsWithToggle} />
-                            <label htmlFor="notUseFindPastBlocksWithTxsApi" className="flex-none text-right">Indexer Api</label>
-                        </div>
-                        {findPostsWith === 'indexer-api' && (
-                            <div className="flex flex-col ml-5 text-[14px]">
-                                <div className="flex flex-row gap-1">
-                                    <p className="mb-1 w-13 flex-none text-right">Api Url:</p>
-                                    <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
-                                </div>
-                                {indexerApiUrlInvalid && <p className="ml-14 text-[11px] text-red-400">Invalid Api Url.</p>}
-                                <div className="flex flex-row">
-                                    <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputIdenaIndexerApiUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
-                                    {!inputIdenaIndexerApiUrlApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    <SettingsComponent
+                        inputNodeApplied={inputNodeApplied}
+                        nodeUrl={nodeUrl}
+                        setNodeUrl={setNodeUrl}
+                        nodeAvailable={nodeAvailable}
+                        nodeKey={nodeKey}
+                        setNodeKey={setNodeKey}
+                        setInputNodeApplied={setInputNodeApplied}
+                        makePostsWith={makePostsWith}
+                        handleMakePostsWithToggle={handleMakePostsWithToggle}
+                        viewOnlyNode={viewOnlyNode}
+                        inputPostersAddressApplied={inputPostersAddressApplied}
+                        inputPostersAddress={inputPostersAddress}
+                        setInputPostersAddress={setInputPostersAddress}
+                        postersAddressInvalid={postersAddressInvalid}
+                        setInputPostersAddressApplied={setInputPostersAddressApplied}
+                        findPostsWith={findPostsWith}
+                        handleInputFindPostsWithToggle={handleInputFindPostsWithToggle}
+                        inputIdenaIndexerApiUrlApplied={inputIdenaIndexerApiUrlApplied}
+                        inputIdenaIndexerApiUrl={inputIdenaIndexerApiUrl}
+                        setInputIdenaIndexerApiUrl={setInputIdenaIndexerApiUrl}
+                        indexerApiUrlInvalid={indexerApiUrlInvalid}
+                        setInputIdenaIndexerApiUrlApplied={setInputIdenaIndexerApiUrlApplied}
+                    />
                     <div className="mb-3 text-gray-500">
                         <hr />
-                        <div className="flex flex-row gap-1">
+                        <div className="flex flex-row gap-1 whitespace-nowrap">
                             <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a></p>
                             <p className="text-[14px]/7">|</p>
                             <p className="my-1 text-[14px]"><a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a></p>
@@ -1187,6 +1149,60 @@ function App() {
                 </div>
             </div>
             <div className="w-full md:w-[500px] flex-none">
+                <div className="lg:hidden">
+                    <div className="text-[24px] mb-1">
+                        <Link to="/">idena.social</Link>
+                    </div>
+                    <div className="flex flex-row">
+                        <div className="min-w-7">
+                            <img src={settingsLightGraySvg} className={'h-7 p-[3px] mr-0.5 inline-block rounded-md hover:bg-gray-400/30 hover:cursor-pointer' + (settingsOpen ? ' bg-gray-400/30' : '')} onClick={() => setSettingsOpen(!settingsOpen)} />
+                        </div>
+                        <div className="flex flex-row gap-1 whitespace-nowrap">
+                            <p className="text-[14px]/7">|</p>
+                            <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a></p>
+                            <p className="text-[14px]/7">|</p>
+                            <p className="my-1 text-[14px]"><a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a></p>
+                        </div>
+                    </div>
+                    {settingsOpen && <div className="mt-2">
+                            <SettingsComponent
+                            inputNodeApplied={inputNodeApplied}
+                            nodeUrl={nodeUrl}
+                            setNodeUrl={setNodeUrl}
+                            nodeAvailable={nodeAvailable}
+                            nodeKey={nodeKey}
+                            setNodeKey={setNodeKey}
+                            setInputNodeApplied={setInputNodeApplied}
+                            makePostsWith={makePostsWith}
+                            handleMakePostsWithToggle={handleMakePostsWithToggle}
+                            viewOnlyNode={viewOnlyNode}
+                            inputPostersAddressApplied={inputPostersAddressApplied}
+                            inputPostersAddress={inputPostersAddress}
+                            setInputPostersAddress={setInputPostersAddress}
+                            postersAddressInvalid={postersAddressInvalid}
+                            setInputPostersAddressApplied={setInputPostersAddressApplied}
+                            findPostsWith={findPostsWith}
+                            handleInputFindPostsWithToggle={handleInputFindPostsWithToggle}
+                            inputIdenaIndexerApiUrlApplied={inputIdenaIndexerApiUrlApplied}
+                            inputIdenaIndexerApiUrl={inputIdenaIndexerApiUrl}
+                            setInputIdenaIndexerApiUrl={setInputIdenaIndexerApiUrl}
+                            indexerApiUrlInvalid={indexerApiUrlInvalid}
+                            setInputIdenaIndexerApiUrlApplied={setInputIdenaIndexerApiUrlApplied}
+                        />
+                    </div>}
+                </div>
+                <div className="lg:hidden flex flex-row gap-2 text-[12px]">
+                    <div className="my-3 min-w-[70px]">
+                        <a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
+                            <img className="rounded-md h-[70px] w-[70px]" src={currentAd?.thumb ?? defaultAd.thumb} />
+                        </a>
+                    </div>
+                    <div className="flex flex-col h-[90px] justify-center">
+                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
+                        <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
+                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
+                    </div>
+                </div>
                 <Outlet
                     context={{
                         currentBlockCaptured,
@@ -1225,17 +1241,26 @@ function App() {
                 />
             </div>
             <div className="hidden lg:flex flex-1 justify-start">
-                <div className="w-[288px] min-w-[288px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
+                <div className="min-w-[320px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
                     <div className="flex flex-col h-[90px] justify-center">
                         <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
                         <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
                         <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
                     </div>
-                    <div className="my-3 h-[320px] w-[320px]"><a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer"><img className="rounded-md" src={currentAd?.media ?? defaultAd.media} /></a></div>
+                    <div className="my-3">
+                        <a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
+                            <img className="rounded-md h-[320px] w-[320px]" src={currentAd?.media ?? defaultAd.media} />
+                        </a>
+                    </div>
                     <div className="flex flex-row px-1">
                         <div className="w-16 flex-auto">
                             <div className="font-[600] text-gray-400"><p>Sponsored by</p></div>
-                            <div><a className="flex flex-row items-center" href={`https://scan.idena.io/address/${currentAd?.author}`} target="_blank" rel="noopener noreferrer"><img className="-mt-0.5 -ml-1.5 h-5 w-5" src={`https://robohash.org/${currentAd?.author}?set=set1`} /><span>{getDisplayAddress(currentAd?.author || '')}</span></a></div>
+                            <div>
+                                <a className="flex flex-row items-center" href={`https://scan.idena.io/address/${currentAd?.author}`} target="_blank" rel="noopener noreferrer">
+                                    <img className="-mt-0.5 -ml-1.5 h-5 w-5" src={`https://robohash.org/${currentAd?.author}?set=set1`} />
+                                    <span>{getDisplayAddress(currentAd?.author || '')}</span>
+                                </a>
+                            </div>
                         </div>
                         <div className="flex-1" />
                         <div className="w-16 flex-auto">
