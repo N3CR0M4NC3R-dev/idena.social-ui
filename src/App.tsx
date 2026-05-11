@@ -1149,7 +1149,20 @@ function App() {
                 </div>
             </div>
             <div className="w-full md:w-[500px] flex-none">
-                <div className="lg:hidden">
+                <div className="lg:hidden flex flex-row gap-2 text-[12px] bg-stone-700 rounded-md">
+                    <div className="m-1 min-w-[70px]">
+                        <a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
+                            <img className="rounded-md h-[70px] w-[70px]" src={currentAd?.thumb ?? defaultAd.thumb} />
+                        </a>
+                    </div>
+                    <div className="flex flex-col justify-center">
+                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
+                        <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
+                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
+                    </div>
+                    <div className="flex-1 text-right"><p className="text-[12px] mt-1 mr-2">Ad</p></div>
+                </div>
+                <div className="lg:hidden mt-2">
                     <div className="text-[26px] mb-1">
                         <Link to="/">idena.social</Link>
                     </div>
@@ -1190,18 +1203,6 @@ function App() {
                             setInputIdenaIndexerApiUrlApplied={setInputIdenaIndexerApiUrlApplied}
                         />
                     </div>}
-                </div>
-                <div className="lg:hidden flex flex-row gap-2 text-[12px]">
-                    <div className="my-3 min-w-[70px]">
-                        <a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
-                            <img className="rounded-md h-[70px] w-[70px]" src={currentAd?.thumb ?? defaultAd.thumb} />
-                        </a>
-                    </div>
-                    <div className="flex flex-col h-[90px] justify-center">
-                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
-                        <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
-                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
-                    </div>
                 </div>
                 <Outlet
                     context={{
