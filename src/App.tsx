@@ -1150,7 +1150,7 @@ function App() {
             </div>
             <div className="w-full md:w-[500px] flex-none">
                 <div className="lg:hidden">
-                    <div className="text-[24px] mb-1">
+                    <div className="text-[26px] mb-1">
                         <Link to="/">idena.social</Link>
                     </div>
                     <div className="flex flex-row">

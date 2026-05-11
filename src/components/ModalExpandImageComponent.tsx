@@ -12,7 +12,7 @@ function ModalExpandImageComponent(props: ModalExpandImageComponentProps) {
 
     return (<>
         <div className="px-3">
-            <a href={cid ? `https://ipfs.idena.io/${cid}` : dataUrl} target="_blank" rel="noopener noreferrer">
+            <a href={cid ? `https://ipfs.idena.io/ipfs/${cid}` : dataUrl} target="_blank" rel="noopener noreferrer">
                 <img className="max-h-[95vh] rounded-sm" src={dataUrl} />
             </a>
         </div>
