@@ -1,9 +1,10 @@
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
-import type { Post, Poster, Tip } from "./logic/asyncUtils";
+import { getPoster, type Post, type Poster, type Tip } from "./logic/asyncUtils";
 import { getDisplayAddress, getIdentityStatus } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
 import { type BrowserStateHistorySettings, type PostMediaAttachment } from "./App.exports";
 import SortPostsByComponent from "./components/SortPostsByComponent";
+import LdsSpinnerComponent from "./components/LdsSpinnerComponent";
 
 type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
 
@@ -34,6 +35,7 @@ type AddressProps = {
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
+    rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>)>,
 };
 
 function Address() {
@@ -70,6 +72,7 @@ function Address() {
         tipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
+        rpcClientRef,
     } = useOutletContext() as AddressProps;
 
     if (!browserStateHistoryRef.current[locationKey]?.sortPostsBy) {
@@ -78,8 +81,13 @@ function Address() {
 
     const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
 
-    const poster = postersRef.current[address!];
-    const posterDisplayAddress = getDisplayAddress(poster.address);
+    const poster = postersRef.current[address!] ?? {};
+
+    if (!poster.address) {
+        getPoster(rpcClientRef.current, address!).then((result) => postersRef.current[address!] = result);
+    }
+
+    const posterDisplayAddress = poster.address ? getDisplayAddress(poster.address) : '';
 
     const filteredOrderedPosts = (sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).filter(postId => {
         const post = postsRef.current[postId];
@@ -98,56 +106,59 @@ function Address() {
     };
 
     return (<>
-        <button className="text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
-        <div className="flex flex-row p-3">
-            <div className="w-35 flex justify-end">
-                <div className="-mt-1"><img className="w-27" src={`https://robohash.org/${poster.address}?set=set1`} /></div>
-            </div>
-            <div className="flex-1 overflow-hidden">
-                <div className="flex flex-col">
-                    <div><a className="text-[24px] font-[600] hover:underline" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noopener noreferrer">{posterDisplayAddress}</a></div>
-                    <div><p className="text-[16px]">{`Age: ${poster.age}`}</p></div>
-                    <div><p className="text-[16px]">{`Status: ${getIdentityStatus(poster.state)}`}</p></div>
-                    <div><p className="text-[16px]">{`Stake: ${parseInt(poster.stake)}`}</p></div>
+        <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
+        {!poster.address && <div className="text-center"><LdsSpinnerComponent /></div>}
+        {poster.address && <>
+            <div className="flex flex-row p-3">
+                <div className="w-35 flex justify-end">
+                    <div className="-mt-1"><img className="w-27" src={`https://robohash.org/${poster.address}?set=set1`} /></div>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                    <div className="flex flex-col">
+                        <div><a className="text-[24px] font-[600] hover:underline" href={`https://scan.idena.io/address/${poster.address}`} target="_blank" rel="noopener noreferrer">{posterDisplayAddress}</a></div>
+                        <div><p className="text-[16px]">{`Age: ${poster.age}`}</p></div>
+                        <div><p className="text-[16px]">{`Status: ${getIdentityStatus(poster.state)}`}</p></div>
+                        <div><p className="text-[16px]">{`Stake: ${parseInt(poster.stake)}`}</p></div>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div className="h-8 mb-5 flex border-b-1 border-gray-500 gap-3">
-            <p className={location.pathname === `/address/${poster.address}` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>Posts</p>
-        </div>
-        <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
-        <ul>
-            {filteredOrderedPosts.map((postId) => (
-                <li key={postId}>
-                    <PostComponent
-                        postId={postId}
-                        postsRef={postsRef}
-                        replyPostsTreeRef={replyPostsTreeRef}
-                        deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
-                        discussPrefix={discussPrefix}
-                        SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
-                        inputPostDisabled={inputPostDisabled}
-                        copyPostTxHandler={copyPostTxHandler}
-                        submitPostHandler={submitPostHandler}
-                        submitLikeHandler={submitLikeHandler}
-                        submittingPost={submittingPost}
-                        submittingLike={submittingLike}
-                        submittingTip={submittingTip}
-                        browserStateHistoryRef={browserStateHistoryRef}
-                        setBrowserStateHistorySettings={setBrowserStateHistorySettings}
-                        handleOpenLikesModal={handleOpenLikesModal}
-                        handleOpenTipsModal={handleOpenTipsModal}
-                        handleOpenSendTipModal={handleOpenSendTipModal}
-                        handleOpenAddMediaModal={handleOpenAddMediaModal}
-                        handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
-                        handleExpandImageModal={handleExpandImageModal}
-                        tipsRef={tipsRef}
-                        postMediaAttachmentsRef={postMediaAttachmentsRef}
-                        makePostsWith={makePostsWith}
-                    />
-                </li>
-            ))}
-        </ul>
+            <div className="h-8 mb-5 flex border-b-1 border-gray-500 gap-3">
+                <p className={location.pathname === `/address/${poster.address}` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/address/${poster.address}`)}>Posts</p>
+            </div>
+            <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
+            <ul>
+                {filteredOrderedPosts.map((postId) => (
+                    <li key={postId}>
+                        <PostComponent
+                            postId={postId}
+                            postsRef={postsRef}
+                            replyPostsTreeRef={replyPostsTreeRef}
+                            deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
+                            discussPrefix={discussPrefix}
+                            SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
+                            inputPostDisabled={inputPostDisabled}
+                            copyPostTxHandler={copyPostTxHandler}
+                            submitPostHandler={submitPostHandler}
+                            submitLikeHandler={submitLikeHandler}
+                            submittingPost={submittingPost}
+                            submittingLike={submittingLike}
+                            submittingTip={submittingTip}
+                            browserStateHistoryRef={browserStateHistoryRef}
+                            setBrowserStateHistorySettings={setBrowserStateHistorySettings}
+                            handleOpenLikesModal={handleOpenLikesModal}
+                            handleOpenTipsModal={handleOpenTipsModal}
+                            handleOpenSendTipModal={handleOpenSendTipModal}
+                            handleOpenAddMediaModal={handleOpenAddMediaModal}
+                            handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
+                            handleExpandImageModal={handleExpandImageModal}
+                            tipsRef={tipsRef}
+                            postMediaAttachmentsRef={postMediaAttachmentsRef}
+                            makePostsWith={makePostsWith}
+                        />
+                    </li>
+                ))}
+            </ul>
+        </>}
     </>);
 }
 

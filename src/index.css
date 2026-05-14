@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./assets/lds-spinner.css";
 
 body {
     background-color: rgb(28 25 23); /* Tailwind bg-stone-900 */

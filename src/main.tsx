@@ -7,6 +7,7 @@ import LatestPosts from './LatestPosts.tsx';
 import Address from './Address.tsx';
 import ScrollToTop from './components/ScrollToTop.tsx';
 import PostOutlet from './PostOutlet.tsx';
+import Settings from './Settings.tsx';
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
@@ -15,6 +16,7 @@ createRoot(document.getElementById('root')!).render(
             <Routes>
                 <Route  path="/" element={<App />}>
                     <Route index element={<LatestPosts />} />
+                    <Route path="/settings" element={<Settings />} />
                     <Route path="/address/:address" element={<Address />} />
                     <Route path="/post/:postId" element={<PostOutlet />} />
                 </Route>

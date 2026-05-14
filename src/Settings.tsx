@@ -1,5 +1,6 @@
+import { useNavigate, useOutletContext } from "react-router";
 
-type SettingsComponentProps = {
+type SettingsProps = {
     inputNodeApplied: boolean,
     nodeUrl: string,
     setNodeUrl: React.Dispatch<React.SetStateAction<string>>,
@@ -24,7 +25,8 @@ type SettingsComponentProps = {
     setInputIdenaIndexerApiUrlApplied: React.Dispatch<React.SetStateAction<boolean>>,
 };
 
-function SettingsComponent(props: SettingsComponentProps) {
+function Settings() {
+    const navigate = useNavigate();
 
     const {
         inputNodeApplied,
@@ -49,9 +51,14 @@ function SettingsComponent(props: SettingsComponentProps) {
         setInputIdenaIndexerApiUrl,
         indexerApiUrlInvalid,
         setInputIdenaIndexerApiUrlApplied,
-    } = props;
+    } = useOutletContext() as SettingsProps;
+
+    const handleGoBack = () => {
+        navigate(-1);
+    };
 
     return (<>
+        <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
         <div className="mb-4 text-[14px]">
             <div className="flex flex-col">
                 <div className="flex flex-row mb-2 gap-1">
@@ -121,4 +128,4 @@ function SettingsComponent(props: SettingsComponentProps) {
     </>);
 }
 
-export default SettingsComponent;
+export default Settings;

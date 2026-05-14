@@ -5,7 +5,7 @@ import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost,
 import { getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
-import settingsLightGraySvg from './assets/settings-light-gray.svg';
+import menuWhiteSvg from './assets/menu-8-white.svg';
 import { Link, Outlet, useLocation } from 'react-router';
 import type { BrowserStateHistorySettings, MouseEventLocal, PostMediaAttachment } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
@@ -13,7 +13,7 @@ import ModalSendTipComponent from './components/ModalSendTipComponent';
 import ModalAddMediaComponent from './components/ModalAddMediaComponent';
 import ModalRpcMakePostComponent from './components/ModalRpcMakePostComponent';
 import ModalExpandImageComponent from './components/ModalExpandImageComponent';
-import SettingsComponent from './components/SettingsComponent';
+import MenuComponent from './components/MenuComponent';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -175,7 +175,7 @@ function App() {
 
     // miscellaneous
     const [, forceUpdate] = useReducer(x => x + 1, 0);
-    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
 
     const setBrowserStateHistorySettings = (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => {
@@ -1114,32 +1114,8 @@ function App() {
                     <div className="text-[28px] mb-3">
                         <Link to="/">idena.social</Link>
                     </div>
-                    <SettingsComponent
-                        inputNodeApplied={inputNodeApplied}
-                        nodeUrl={nodeUrl}
-                        setNodeUrl={setNodeUrl}
-                        nodeAvailable={nodeAvailable}
-                        nodeKey={nodeKey}
-                        setNodeKey={setNodeKey}
-                        setInputNodeApplied={setInputNodeApplied}
-                        makePostsWith={makePostsWith}
-                        handleMakePostsWithToggle={handleMakePostsWithToggle}
-                        viewOnlyNode={viewOnlyNode}
-                        inputPostersAddressApplied={inputPostersAddressApplied}
-                        inputPostersAddress={inputPostersAddress}
-                        setInputPostersAddress={setInputPostersAddress}
-                        postersAddressInvalid={postersAddressInvalid}
-                        setInputPostersAddressApplied={setInputPostersAddressApplied}
-                        findPostsWith={findPostsWith}
-                        handleInputFindPostsWithToggle={handleInputFindPostsWithToggle}
-                        inputIdenaIndexerApiUrlApplied={inputIdenaIndexerApiUrlApplied}
-                        inputIdenaIndexerApiUrl={inputIdenaIndexerApiUrl}
-                        setInputIdenaIndexerApiUrl={setInputIdenaIndexerApiUrl}
-                        indexerApiUrlInvalid={indexerApiUrlInvalid}
-                        setInputIdenaIndexerApiUrlApplied={setInputIdenaIndexerApiUrlApplied}
-                    />
+                    <MenuComponent postersAddress={postersAddress} />
                     <div className="mb-3 text-gray-500">
-                        <hr />
                         <div className="flex flex-row gap-1 whitespace-nowrap">
                             <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a></p>
                             <p className="text-[14px]/7">|</p>
@@ -1155,7 +1131,7 @@ function App() {
                             <img className="rounded-md h-[70px] w-[70px]" src={currentAd?.thumb ?? defaultAd.thumb} />
                         </a>
                     </div>
-                    <div className="flex flex-col justify-center">
+                    <div className="flex flex-col justify-center whitespace-nowrap overflow-hidden">
                         <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
                         <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
                         <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
@@ -1166,48 +1142,45 @@ function App() {
                     <div className="text-[26px] mb-1">
                         <Link to="/">idena.social</Link>
                     </div>
-                    <div className="flex flex-row">
-                        <div className="min-w-7">
-                            <img src={settingsLightGraySvg} className={'h-7 p-[3px] mr-0.5 inline-block rounded-md hover:bg-gray-400/30 hover:cursor-pointer' + (settingsOpen ? ' bg-gray-400/30' : '')} onClick={() => setSettingsOpen(!settingsOpen)} />
+                    <div className="flex flex-row gap-3">
+                        <div className="min-w-8">
+                            <img src={menuWhiteSvg} className={'h-8 p-[5px] mr-0.5 inline-block rounded-md hover:bg-gray-400/30 hover:cursor-pointer' + (mobileMenuOpen ? ' bg-gray-400/30' : '')} onClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
                         </div>
                         <div className="flex flex-row gap-1 whitespace-nowrap">
-                            <p className="text-[14px]/7">|</p>
                             <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a></p>
                             <p className="text-[14px]/7">|</p>
                             <p className="my-1 text-[14px]"><a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a></p>
                         </div>
                     </div>
-                    {settingsOpen && <div className="mt-2">
-                            <SettingsComponent
-                            inputNodeApplied={inputNodeApplied}
-                            nodeUrl={nodeUrl}
-                            setNodeUrl={setNodeUrl}
-                            nodeAvailable={nodeAvailable}
-                            nodeKey={nodeKey}
-                            setNodeKey={setNodeKey}
-                            setInputNodeApplied={setInputNodeApplied}
-                            makePostsWith={makePostsWith}
-                            handleMakePostsWithToggle={handleMakePostsWithToggle}
-                            viewOnlyNode={viewOnlyNode}
-                            inputPostersAddressApplied={inputPostersAddressApplied}
-                            inputPostersAddress={inputPostersAddress}
-                            setInputPostersAddress={setInputPostersAddress}
-                            postersAddressInvalid={postersAddressInvalid}
-                            setInputPostersAddressApplied={setInputPostersAddressApplied}
-                            findPostsWith={findPostsWith}
-                            handleInputFindPostsWithToggle={handleInputFindPostsWithToggle}
-                            inputIdenaIndexerApiUrlApplied={inputIdenaIndexerApiUrlApplied}
-                            inputIdenaIndexerApiUrl={inputIdenaIndexerApiUrl}
-                            setInputIdenaIndexerApiUrl={setInputIdenaIndexerApiUrl}
-                            indexerApiUrlInvalid={indexerApiUrlInvalid}
-                            setInputIdenaIndexerApiUrlApplied={setInputIdenaIndexerApiUrlApplied}
-                        />
+                    {mobileMenuOpen && <div className="mt-2 mb-4">
+                        <MenuComponent postersAddress={postersAddress} />
                     </div>}
                 </div>
                 <Outlet
                     context={{
-                        currentBlockCaptured,
+                        inputNodeApplied,
+                        nodeUrl,
+                        setNodeUrl,
                         nodeAvailable,
+                        nodeKey,
+                        setNodeKey,
+                        setInputNodeApplied,
+                        makePostsWith,
+                        handleMakePostsWithToggle,
+                        viewOnlyNode,
+                        inputPostersAddressApplied,
+                        inputPostersAddress,
+                        setInputPostersAddress,
+                        postersAddressInvalid,
+                        setInputPostersAddressApplied,
+                        findPostsWith,
+                        handleInputFindPostsWithToggle,
+                        inputIdenaIndexerApiUrlApplied,
+                        inputIdenaIndexerApiUrl,
+                        setInputIdenaIndexerApiUrl,
+                        indexerApiUrlInvalid,
+                        setInputIdenaIndexerApiUrlApplied,
+                        currentBlockCaptured,
                         latestPosts,
                         latestActivity,
                         postsRef,
@@ -1237,7 +1210,7 @@ function App() {
                         handleExpandImageModal,
                         tipsRef,
                         postMediaAttachmentsRef,
-                        makePostsWith,
+                        rpcClientRef,
                     }}
                 />
             </div>
