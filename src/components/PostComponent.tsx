@@ -9,6 +9,7 @@ import heartGraySvg from '../assets/heart-gray.svg';
 import heartRedSvg from '../assets/heart-red.svg';
 import cashGraySvg from '../assets/cash-gray.svg';
 import cashGreenSvg from '../assets/cash-green.svg';
+import PosterHeaderComponent from './PosterHeaderComponent';
 
 const likeEmoji = '❤️';
 
@@ -31,7 +32,7 @@ type PostComponentProps = {
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
     handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
-    handleOpenAddMediaModal: (e: MouseEventLocal, location: string) => void,
+    handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
@@ -100,7 +101,6 @@ function PostComponent(props: PostComponentProps) {
 
     const post = postsRef.current[postId];
     const postTips = tipsRef.current[postId] ?? { totalAmount: 0, tips: [] };
-    const posterDisplayAddress = getDisplayAddress(post.poster);
     const posterStake = post.posterDetails_atTimeOfPost.stake;
     const posterState = post.posterDetails_atTimeOfPost.state;
     const posterAge = post.posterDetails_atTimeOfPost.age;
@@ -115,12 +115,12 @@ function PostComponent(props: PostComponentProps) {
 
     const messageLinesDisplay = showTruncatedMessageLines ? truncatedMessageLines : messageLines;
 
-    const postMediaAttachment = postMediaAttachmentsRef.current[post.postId];
+    const postMediaAttachment = postMediaAttachmentsRef.current[`post-${post.postId}`];
 
     const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
     const showReplies = !postDomSettingsItem.repliesHidden;
     const showReplyInput = !postDomSettingsItem.replyInputHidden;
-    const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v11.timestamp;
+    const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v12.timestamp;
 
     const replyPosts = repliesToThisPost.map(replyPostId => postsRef.current[replyPostId]);
     const replyLikes = replyPosts.filter(replyPost => replyPost.message === likeEmoji);
@@ -227,7 +227,7 @@ function PostComponent(props: PostComponentProps) {
     const removeMediaHandler = (e: MouseEventLocal, location: string) => {
         e.stopPropagation();
 
-        postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [location]: undefined };
+        postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [`post-${location}`]: undefined };
         forceUpdate();
     };
 
@@ -293,22 +293,8 @@ function PostComponent(props: PostComponentProps) {
 
     return (<>
         <div className={`flex flex-col pt-3 bg-stone-800 ${!isPostOutlet ? 'hover:cursor-pointer' : ''}`} onMouseDown={handlePostMouseDown} onClick={handlePostClick}>
-            <div className="flex flex-row">
-                <div className="w-15 flex-none flex flex-col">
-                    <div className="h-17 flex-none -mt-3">
-                        <img src={`https://robohash.org/${post.poster}?set=set1`} />
-                    </div>
-                    <div className="flex-1"></div>
-                </div>
-                <div className="mr-3 flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-none flex flex-col gap-x-3 items-start">
-                        <p className="text-[18px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${post.poster}`)}>{posterDisplayAddress}</p>
-                        <div><p className="text-[11px]/4">{`Age: ${posterAge}, Status: ${getIdentityStatus(posterState)}, Stake: ${posterStake}`}</p></div>
-                        <div className="flex-1"></div>
-                    </div>
-                </div>
-            </div>
-            <div id={`post-text-${post.postId}`} className="flex-1 px-4 py-2 text-[17px] text-wrap leading-5">
+            <PosterHeaderComponent address={post.poster} age={posterAge} state={posterState} stake={posterStake} />
+            <div className="flex-1 px-4 py-2 text-[17px] text-wrap leading-5">
                 <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(post, e)}>view more</a></span>}</p>
             </div>
             {post.image && <div className="mx-4 my-2">
@@ -336,7 +322,7 @@ function PostComponent(props: PostComponentProps) {
                         <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === post.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, post)} /><p className="block sm:inline align-[-0.5px]">0 idna</p></div>
                     }
                 </div>
-                <div className="w-35">
+                <div className="w-35 flex items-end justify-end">
                     <div className="text-right text-[11px]/6 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
                 </div>
             </div>
@@ -366,7 +352,7 @@ function PostComponent(props: PostComponentProps) {
                         {postMediaAttachment ? <>
                             <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, post.postId)}>Remove image</p>
                         </> : <>
-                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, post.postId)}>Add image</p>
+                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, post.postId, 'post')}>Add image</p>
                         </>}
                         <p id={`post-copytx-${post.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(e, post.postId, post.postId)}>Copy tx</p>
                     </div>
@@ -394,7 +380,7 @@ function PostComponent(props: PostComponentProps) {
 
                     const messageLinesDisplay = showTruncatedMessageLines ? truncatedMessageLines : messageLines;
 
-                    const postMediaAttachment = postMediaAttachmentsRef.current[replyPost.postId];
+                    const postMediaAttachment = postMediaAttachmentsRef.current[`post-${replyPost.postId}`];
 
                     const showDiscussion = !postDomSettingsItem.repliesHidden;
                     const discussParentId = discussPrefix + replyPost.postId;
@@ -428,7 +414,7 @@ function PostComponent(props: PostComponentProps) {
                                         </div>
                                     </div>
                                 </div>
-                                <div id={`post-text-${replyPost.postId}`} className="-mt-7 flex-1 pl-12 pr-4 pt-2 text-[14px] text-wrap leading-5">
+                                <div className="-mt-7 flex-1 pl-12 pr-4 pt-2 text-[14px] text-wrap leading-5">
                                     <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-[12px] text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>view more</a></span>}</p>
                                 </div>
                                 {replyPost.image && <div className="ml-12 mr-4 my-1">
@@ -505,7 +491,7 @@ function PostComponent(props: PostComponentProps) {
                                                                         <p className="mx-1 text-[10px] text-stone-500 font-[700] hover:underline"><a className="break-all" href={`https://scan.idena.io/transaction/${discussionPost.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a></p>
                                                                     </div>
                                                                 </div>
-                                                                <div id={`post-text-${discussionPost.postId}`} className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
+                                                                <div className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
                                                                     <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                                 </div>
                                                                 {discussionPost.image && <div className="my-1 mx-1">
@@ -561,7 +547,7 @@ function PostComponent(props: PostComponentProps) {
                                             {postMediaAttachment ? <>
                                                 <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, replyPost.postId)}>Remove image</p>
                                             </> : <>
-                                                <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, replyPost.postId)}>Add image</p>
+                                                <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, replyPost.postId, 'post')}>Add image</p>
                                             </>}
                                             <p id={`post-copytx-${replyPost.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(e, replyPost.postId, discussReplyToPostId, discussParentId)}>Copy tx</p>
                                         </div>

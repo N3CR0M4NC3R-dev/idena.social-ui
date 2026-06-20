@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType } from "idena-sdk-js-lite";
+import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, privateKeyToPublicKey, publicKeyToAddress, toHexString, Transaction, transactionType } from "idena-sdk-js-lite";
 import type { PostMediaAttachment } from "../App.exports";
 
 export const dnaBase = 1e18;
@@ -223,6 +223,27 @@ export function getMakePostTransactionPayload(makePostMethod: string, inputPost:
     return { txAmount, args, payload };
 }
 
+export function getSendMessageTransactionPayload(sendMessageMethod: string, inputMessage: string[], inputMessageHash: string) {
+    const txAmount = new Decimal(0.00001);
+    const args = [
+        {
+            format: contractArgumentFormat.String,
+            index: 0,
+            value: JSON.stringify({
+                message: inputMessage,
+                messageHash: inputMessageHash,
+                encrypted: true,
+            }),
+        }
+    ];
+
+    const payload = new CallContractAttachment();
+    payload.setArgs(args);
+    payload.method = sendMessageMethod;
+
+    return { txAmount, args, payload };
+}
+
 export function getCallTransaction(to: string, txAmount: Decimal, nonce: number, epoch: number, maxFeeDna: string, payload: CallContractAttachment) {
     const tx = new Transaction();
     tx.type = transactionType.CallContractTx;
@@ -240,3 +261,37 @@ export function getTimestampFromIndexerApi(indexerApiTimestamp: number) {
     if (!indexerApiTimestamp) return undefined;
     return Math.floor((new Date(indexerApiTimestamp)).getTime() / 1000 );
 }
+
+export function extractPubKeyAddressFromPrivateKey(privateKey: string) {
+    const pubKey = privateKeyToPublicKey(privateKey);
+    const address = publicKeyToAddress(pubKey);
+
+    return { pubKey, address };
+}
+
+export async function encryptAESGCM(data: Uint8Array<ArrayBuffer>, rawSecretKey: Uint8Array<ArrayBuffer>) {
+    const secretKey = await crypto.subtle.importKey('raw', rawSecretKey, 'AES-GCM', false, ['encrypt']);
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, secretKey, data);
+    const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(ciphertext), iv.length);
+    return combined;
+}
+
+export async function decryptAESGCM(data: string, keyData: Uint8Array<ArrayBuffer>) {
+    const bytes = hexToUint8Array(data);
+    const iv = bytes.slice(0, 12);
+    const ciphertext = bytes.slice(12);
+    const key = await window.crypto.subtle.importKey('raw', keyData, 'AES-GCM', false, ['decrypt']);
+    const decryptedBuffer = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return toHexString(new Uint8Array(decryptedBuffer));
+}
+
+export function isValidAddress(address: string) {
+    return /^0x[0-9a-fA-F]{40}$/.test(address);
+};
+
+export function isValidLowerCaseAddress(address: string) {
+    return /^0x[0-9a-f]{40}$/.test(address);
+};

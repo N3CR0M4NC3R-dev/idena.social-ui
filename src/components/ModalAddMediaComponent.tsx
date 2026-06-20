@@ -4,7 +4,7 @@ import { getMedia, getNonceAndEpoch, supportedImageTypes, type RpcClient } from 
 
 type ModalAddMediaComponentProps = {
     modalAddMediaRef: React.RefObject<string>,
-    addMediaHandler: (location: string, file: File, ipfsUrl?: string | undefined) => Promise<void>,
+    addMediaHandler: (attachmentId: string, file: File, ipfsUrl?: string | undefined) => Promise<void>,
     rpcClient: RpcClient,
     postersAddress: string,
     makePostsWith: string,
@@ -24,7 +24,7 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
 
     const [ipfsUrl, setIpfsUrl] = useState<string>('');
 
-    const selectIpfsUrlHandler = async (e: MouseEventLocal, location: string) => {
+    const selectIpfsUrlHandler = async (e: MouseEventLocal, attachmentId: string) => {
         e.stopPropagation();
 
         if (!ipfsUrl.startsWith('ipfs://')) {
@@ -42,7 +42,7 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
         const file = new File([blob!], 'preview', { type: mediaType });
 
         if (file) {
-            await addMediaHandler(location, file, ipfsUrl);
+            await addMediaHandler(attachmentId, file, ipfsUrl);
             closeModal();
         }
     }
@@ -66,13 +66,13 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
         };
     }
 
-    const localAddMediaHandler = async (e: React.ChangeEvent<HTMLInputElement>, location: string) => {
+    const localAddMediaHandler = async (e: React.ChangeEvent<HTMLInputElement>, attachmentId: string) => {
         e?.stopPropagation();
 
         const file = e.currentTarget.files?.[0];
 
         if (file) {
-            await addMediaHandler(location, file);
+            await addMediaHandler(attachmentId, file);
             closeModal();
         }
     }

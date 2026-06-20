@@ -1,9 +1,12 @@
 import Decimal from "decimal.js";
 import imageType from 'image-type';
 import isSvg from 'is-svg';
-import { calculateMaxFee, dna2num, getCallTransaction, getMakePostTransactionPayload, hex2str, hexToDecimal, sanitizeStr } from "./utils";
+import { decrypt } from "eciesjs";
+import { calculateMaxFee, dna2num, getCallTransaction, getMakePostTransactionPayload, getSendMessageTransactionPayload, hex2str, hexToDecimal, isValidLowerCaseAddress, sanitizeStr, decryptAESGCM } from "./utils";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
+import type { EventTransaction } from "../App.exports";
+import { keccak256, sha3_256 } from "js-sha3";
 
 export const breakingChanges = {
     v3: { timestamp: 1767578641 },
@@ -11,12 +14,13 @@ export const breakingChanges = {
     v9: { timestamp: 1775551992, block: 10604687, postIdPrefix: 'preV9:' },
     v10: { timestamp: 1775992052, block: 10627018, postIdPrefix: 'preV10:' },
     v11: { timestamp: 1777976356, block: 10727655, postIdPrefix: 'preV11:' },
+    v12: { timestamp: 1781956251, block: 10929805, postIdPrefix: 'preV12:' },
 };
 
 export const supportedImageTypes = ['image/apng', 'image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/svg+xml', 'image/webp'];
 export const supportedVideoTypes = ['audio/mpeg', 'audio/mp4', 'audio/ogg', 'video/mp4', 'video/webm', 'video/ogg'];
 
-const identityStateConversion: Record<number, string> = {
+export const identityStateConversion: Record<number, string> = {
     0: 'Undefined',
     1: 'Invite',
     2: 'Candidate',
@@ -42,6 +46,24 @@ export type Post = {
     cid?: string,
     orphaned: boolean,
 };
+export type Message = {
+    timestamp: number,
+    txHash: string,
+    messageId: string,
+    sender: string,
+    participants: string[], // includes sender
+    channelId: string,
+    message?: string,
+    replyToMessageId: string,
+    image?: string,
+    video?: string,
+    cid?: string,
+    tags: string[],
+    textPassword: string,
+    mediaPassword: string,
+    sendersDetails_atTimeOfMessage:  { stake: number, state: string, age: number },
+};
+
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
 export type Tip = { postId: string, txHash: string, timestamp: number, tipper: string, tipperDetails_atTimeOfTip: { stake: number, state: string, age: number }, amount: number, burnAmount: number };
 export type NodeDetails = { idenaNodeUrl: string, idenaNodeApiKey: string };
@@ -295,6 +317,7 @@ export const getNewPosterAndPost = async (
     const preV9 = timestamp < breakingChanges.v9.timestamp;
     const preV10 = timestamp < breakingChanges.v10.timestamp;
     const preV11 = timestamp < breakingChanges.v11.timestamp;
+    const preV12 = timestamp < breakingChanges.v12.timestamp;
 
     if (!preV9 && !eventArgs2nd?.length) {
         return { continued: true };
@@ -326,6 +349,8 @@ export const getNewPosterAndPost = async (
         postId = breakingChanges.v10.postIdPrefix + postId;
     } else if (preV11) {
         postId = breakingChanges.v11.postIdPrefix + postId;
+    } else if (preV12) {
+        postId = breakingChanges.v12.postIdPrefix + postId;
     }
     
     if (postsRef.current[postId]) {
@@ -347,14 +372,16 @@ export const getNewPosterAndPost = async (
             replyToPostId = breakingChanges.v10.postIdPrefix + replyToPostId;
         } else if (preV11) {
             replyToPostId = breakingChanges.v11.postIdPrefix + replyToPostId;
+        } else if (preV12) {
+            replyToPostId = breakingChanges.v12.postIdPrefix + replyToPostId;
         }
     }
 
     if (replyToPostId) {
         const replyToPost = postsRef.current[replyToPostId];
-        const newReplyRespectsTime = replyToPost?.timestamp ? timestamp > replyToPost.timestamp : null;
+        const newReplyExistsAndRespectsTime = replyToPost?.timestamp ? timestamp > replyToPost.timestamp : null;
 
-        if (newReplyRespectsTime === false) {
+        if (newReplyExistsAndRespectsTime === false) {
             return { continued: true };
         }
     }
@@ -386,29 +413,35 @@ export const getNewPosterAndPost = async (
     let posterPromise: Promise<Poster> | undefined;
 
     if (!postersRef.current[poster]) {
-        posterPromise = getPoster(rpcClient, poster);
+        posterPromise = getPoster(rpcClient, poster) as Promise<Poster>;
     }
 
     return { newPost, posterPromise, mediaPromise, messagePromise };
 }
 
-const getMessage = async (postId: string, message: string, rpcClient: RpcClient) => {
+const getMessage = async (id: string, message: string, rpcClient: RpcClient, textPassword?: string) => {
     if (message.startsWith('ipfs://')) {
         const cid = message.split('ipfs://')[1];
         const { result: getCidResult } = await rpcClient('ipfs_get', [cid], true);
 
         if (!getCidResult) {
             message = 'Issue loading message from IPFS';
-            return { postId, message };
+            return { id, message };
         }
 
-        message = sanitizeStr(hex2str(getCidResult));
+        if (textPassword) {
+            // @ts-ignore: Uint8Array.fromBase64 not recognized yet
+            const keyData = Uint8Array.fromBase64(textPassword);
+            message = sanitizeStr(hex2str(await decryptAESGCM(getCidResult, keyData)));
+        } else {
+            message = sanitizeStr(hex2str(getCidResult));
+        }
     }
 
-    return { postId, message };
+    return { id, message };
 };
 
-export const getMedia = async (postId: string, media: string, rpcClient: RpcClient) => {
+export const getMedia = async (id: string, media: string, rpcClient: RpcClient, mediaPassword?: string) => {
     let image = '';
     let video = '';
     let mediaType = '';
@@ -421,10 +454,17 @@ export const getMedia = async (postId: string, media: string, rpcClient: RpcClie
 
         if (!getCidResult) {
             image = ErrorLoadingMedia;
-            return { postId, image, video, mediaType, blob, cid };
+            return { id, image, video, mediaType, blob, cid };
         }
 
-        const bytes = hexToUint8Array(getCidResult);
+        let bytes;
+        if (mediaPassword) {
+            // @ts-ignore: Uint8Array.fromBase64 not recognized yet
+            const keyData = Uint8Array.fromBase64(mediaPassword);
+            bytes = hexToUint8Array(await decryptAESGCM(getCidResult, keyData));
+        } else {
+            bytes = hexToUint8Array(getCidResult);
+        }
         ({ image, video, mediaType, blob } = await getMediaFromHex(bytes));
     } else {
         // @ts-ignore: Uint8Array.fromBase64 not recognized yet
@@ -432,7 +472,7 @@ export const getMedia = async (postId: string, media: string, rpcClient: RpcClie
         ({ image, video, mediaType, blob } = await getMediaFromHex(bytes));
     }
 
-    return { postId, image, video, mediaType, blob, cid };
+    return { id, image, video, mediaType, blob, cid };
 }
 
 const getMediaFromHex = async (bytes: Uint8Array) => {
@@ -526,6 +566,7 @@ export const processTip = async (
     const preV9 = timestamp < breakingChanges.v9.timestamp;
     const preV10 = timestamp < breakingChanges.v10.timestamp;
     const preV11 = timestamp < breakingChanges.v11.timestamp;
+    const preV12 = timestamp < breakingChanges.v12.timestamp;
 
     const tipper = eventArgs[0];
 
@@ -539,6 +580,8 @@ export const processTip = async (
         postId = breakingChanges.v10.postIdPrefix + postIdRaw;
     } else if (preV11) {
         postId = breakingChanges.v11.postIdPrefix + postIdRaw;
+    } else if (preV12) {
+        postId = breakingChanges.v12.postIdPrefix + postIdRaw;
     } else {
         postId = postIdRaw;
     }
@@ -579,23 +622,196 @@ export const processTip = async (
     let posterPromise: Promise<Poster> | undefined;
 
     if (!postersRef.current[tipper]) {
-        posterPromise = getPoster(rpcClient, tipper);
+        posterPromise = getPoster(rpcClient, tipper) as Promise<Poster>;
     }
 
     return { postId, newTip, updatedPostTips, posterPromise };
 }
 
-export const getPoster = async (rpcClient: RpcClient, posterAddress: string) => {
-    const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClient('dna_identity', [posterAddress]);
+export const getPoster = async (rpcClient: RpcClient, posterAddress: string, skipStateUpdate?: boolean) => {
+    const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClient('dna_identity', [posterAddress], skipStateUpdate);
 
-    if (getDnaIdentityError) {
+    if (!skipStateUpdate && getDnaIdentityError) {
         throw 'rpc unavailable';
     }
 
-    const { address, stake, age, pubkey, state } = getDnaIdentityResult;
+    if (!getDnaIdentityResult) {
+        return;
+    }
+
+    let { address, stake, age, pubkey, state } = getDnaIdentityResult;
 
     return { address, stake, age, pubkey, state };
 };
+
+export const processMessage = async (
+    message: EventTransaction,
+    encryptedPrivateKey: string,
+    password: string,
+    postersAddress: string,
+    messagesRef: React.RefObject<Record<string, Message>>,
+    thisChannelId: string,
+    postersRef: React.RefObject<Record<string, Poster>>,
+    rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>) | undefined>,
+) => {
+    const { txHash, eventArgs, eventArgs2nd, timestamp } = message;
+
+    if (!eventArgs2nd?.length) {
+        return { continued: true };
+    }
+
+    const sender = eventArgs[0];
+
+    const newMessageId = hexToDecimal(eventArgs[1]);
+
+    const messageEventRaw = hex2str(eventArgs[2]);
+
+    if (!messageEventRaw) {
+        return { continued: true };
+    }
+
+    const messageEventHash = hex2str(eventArgs[3]);
+    if (!messageEventHash) {
+        return { continued: true };
+    }
+
+    const encrypted = hex2str(eventArgs[4]);
+    if (encrypted !== 'true') {
+        return { continued: true };
+    }
+
+    const messageEvent = messageEventRaw.split(',');
+    // @ts-ignore: Uint8Array.fromBase64 not recognized yet
+    const sendersMessageEncrypted = Uint8Array.fromBase64(messageEvent[0]);
+    // @ts-ignore: Uint8Array.fromBase64 not recognized yet
+    const recipientsMessageEncrypted =  Uint8Array.fromBase64(messageEvent[1]);
+
+    const keyData = new Uint8Array(sha3_256.array(password));
+    const myPrivateKey = await decryptAESGCM(encryptedPrivateKey, keyData);
+    const myPrivateKeyBytes = hexToUint8Array(myPrivateKey);
+
+    const iAmSender = sender === postersAddress;
+    let iAmRecipient = false;
+
+    let messageDecoded: string | undefined;
+
+    if (iAmSender) {
+        try {
+            const myMessageDecrypted = await decrypt(myPrivateKeyBytes, sendersMessageEncrypted);
+            messageDecoded = new TextDecoder().decode(myMessageDecrypted);
+
+            const rawMessageHash = keccak256(messageDecoded);
+
+            if (rawMessageHash !== messageEventHash) {
+                return { continued: true };
+            }
+        } catch (error) {
+            return { continued: true };
+        }
+    }
+
+    try {
+        const messageDecrypted = await decrypt(myPrivateKeyBytes, recipientsMessageEncrypted);
+        iAmRecipient = true;
+
+        if (!iAmSender) {
+            messageDecoded = new TextDecoder().decode(messageDecrypted);
+            const rawMessageHash = keccak256(messageDecoded);
+
+            if (rawMessageHash !== messageEventHash) {
+                return { continued: true };
+            }
+        }
+    } catch (error) {
+        if (!iAmSender) {
+            return { continued: true };
+        }
+    }
+
+    const [ participants, channelId, inputText, textPassword, replyToMessageId, mediaArray, mediaTypeArray, mediaPassword, tags ] = JSON.parse(messageDecoded!);
+
+    const media = mediaArray[0];
+    const mediaType = mediaTypeArray[0];
+
+    const sanitizedInputText = sanitizeStr(inputText);
+
+    if (!sanitizedInputText && !(media && mediaType)) {
+        return { continued: true };
+    }
+
+    if (messagesRef.current[newMessageId]) {
+        return { continued: true };
+    }
+
+    if (channelId !== thisChannelId) {
+        return { continued: true };
+    }
+
+    if (replyToMessageId && replyToMessageId >= newMessageId) {
+        return { continued: true };
+    }
+
+    if (participants.length !== 2) {
+        return { continued: true };
+    }
+
+    if (participants[0] !== sender) {
+        return { continued: true };
+    }
+
+    if (iAmRecipient && participants[1] !== postersAddress.toLowerCase()) {
+        return { continued: true };
+    }
+
+    if (!isValidLowerCaseAddress(participants[1])) {
+        return { continued: true };
+    }
+
+    for (let index = 0; index < participants.length; index++) {
+        const participant = participants[index];
+
+        const existingPoster = postersRef.current[participant];
+
+        if (!existingPoster) {
+            const poster = await getPoster(rpcClientRef.current!, participant, true);
+
+            if (poster) {
+                postersRef.current[participant] = poster;
+            }
+        }
+    }
+
+    const sendersDetails_atTimeOfMessage = {
+        stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
+        state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
+        age: Number(hexToDecimal(eventArgs2nd[3])),
+    };
+
+    const messagePromise = sanitizedInputText && getMessage(newMessageId, sanitizedInputText, rpcClientRef.current!, textPassword);
+    const mediaPromise = (media && mediaType) && getMedia(newMessageId, media, rpcClientRef.current!, mediaPassword);
+
+    const newMessage = {
+        timestamp,
+        txHash,
+        messageId: newMessageId,
+        sender,
+        participants,
+        channelId,
+        replyToMessageId,
+        tags,
+        textPassword,
+        mediaPassword,
+        sendersDetails_atTimeOfMessage,
+    } as Message;
+
+    let posterPromise: Promise<Poster> | undefined;
+
+    if (!postersRef.current[sender]) {
+        posterPromise = getPoster(rpcClientRef.current!, sender) as Promise<Poster>;
+    }
+
+    return { newMessage, posterPromise, mediaPromise, messagePromise };
+}
 
 export const getReplyPosts = (
     newPostId: string,
@@ -765,6 +981,57 @@ export const submitSendTip = async (
     );
 };
 
+export const copyMessageTx = async (
+    postersAddress: string,
+    contractAddress: string,
+    sendMessageMethod: string,
+    inputMessage: string[],
+    inputMessageHash: string,
+    rpcClient: RpcClient,
+) => {
+    const { txAmount, payload } = getSendMessageTransactionPayload(sendMessageMethod, inputMessage, inputMessageHash);
+    const inputMessageLength = JSON.stringify(inputMessage).length + inputMessageHash.length;
+    const maxFeeResult = await getMaxFee(rpcClient, { from: postersAddress, to: contractAddress, type: transactionType.CallContractTx, amount: txAmount.toNumber(), payload });
+    const { maxFeeDna } = calculateMaxFee(maxFeeResult, inputMessageLength);
+    const { nonce, epoch } = await getNonceAndEpoch(rpcClient, postersAddress);
+    const txHex = getCallTransaction(contractAddress, txAmount, nonce, epoch, maxFeeDna, payload);
+
+    try {
+        await navigator.clipboard.writeText(txHex);
+        return { success: true };
+    } catch (err) {
+        console.error('Failed to copy: ', err);
+        return { success: false };
+    }
+};
+
+export const submitMessage = async (
+    postersAddress: string,
+    contractAddress: string,
+    sendMessageMethod: string,
+    inputMessage: string[],
+    inputMessageHash: string,
+    makePostsWith: string,
+    rpcClient: RpcClient,
+    callbackUrl: string,
+) => {
+    const { txAmount, args, payload } = getSendMessageTransactionPayload(sendMessageMethod, inputMessage, inputMessageHash);
+    const inputMessageLength = JSON.stringify(inputMessage).length + inputMessageHash.length;
+
+    await makeCallTransaction(
+        postersAddress,
+        contractAddress,
+        sendMessageMethod,
+        makePostsWith,
+        rpcClient,
+        callbackUrl,
+        txAmount,
+        args,
+        payload,
+        inputMessageLength,
+    );
+};
+
 type CallContractArg = {
     format: ContractArgumentFormatValue;
     index: number;
@@ -845,6 +1112,7 @@ export const getPostIdFromChannelId = (timestamp: number, channelId: string, dis
     const preV9 = timestamp < breakingChanges.v9.timestamp;
     const preV10 = timestamp < breakingChanges.v10.timestamp;
     const preV11 = timestamp < breakingChanges.v11.timestamp;
+    const preV12 = timestamp < breakingChanges.v12.timestamp;
     const discussionPostIdRaw = channelId.split(discussPrefix)[1];
 
     let discussionPostId;
@@ -855,6 +1123,8 @@ export const getPostIdFromChannelId = (timestamp: number, channelId: string, dis
         discussionPostId = breakingChanges.v10.postIdPrefix + discussionPostIdRaw;
     } else if (preV11) {
         discussionPostId = breakingChanges.v11.postIdPrefix + discussionPostIdRaw;
+    } else if (preV12) {
+        discussionPostId = breakingChanges.v12.postIdPrefix + discussionPostIdRaw;
     } else {
         discussionPostId = discussionPostIdRaw;
     }
@@ -910,4 +1180,35 @@ export const getNewPostLatestActivity = (
     }
 
     return newPostLatestActivity;
+}
+
+export const resolveNewPosters = async (posterPromises: any[], postersRef: any) => {
+    const postersResolved = await Promise.all(posterPromises);
+    let newPosters = {};
+    for (let index = 0; index < postersResolved.length; index++) {
+        const posterResolved = postersResolved[index];
+        newPosters = { ...newPosters, [posterResolved.address]: posterResolved };
+    }
+
+    postersRef.current = { ...postersRef.current, ...newPosters };
+}
+
+export const resolveNewMessages = async (messagePromises: any[], postsRef?: any, messagesRef?: any) => {
+    const itemsRef = postsRef ?? messagesRef;
+    const messages = await Promise.all(messagePromises);
+    for (let index = 0; index < messages.length; index++) {
+        const { id, ...messagesPropsWithoutId } = messages[index];
+        const updatedPost = { ...itemsRef.current[id], ...messagesPropsWithoutId };
+        itemsRef.current = { ...itemsRef.current, [id]: updatedPost };
+    }
+}
+
+export const resolveNewMedia = async (mediaPromises: any[], postsRef?: any, messagesRef?: any) => {
+    const itemsRef = postsRef ?? messagesRef;
+    const media = await Promise.all(mediaPromises);
+    for (let index = 0; index < media.length; index++) {
+        const { id, blob, ...mediaPropsWithoutIdAndBlob } = media[index];
+        const updatedPost = { ...itemsRef.current[id], ...mediaPropsWithoutIdAndBlob };
+        itemsRef.current = { ...itemsRef.current, [id]: updatedPost };
+    }
 }
