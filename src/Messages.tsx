@@ -165,6 +165,11 @@ function Messages() {
             return;
         }
 
+        if (!postersRef.current[recipient].pubkey) {
+            alert('Recipient pubKey missing');
+            return;
+        }
+
         makePostsWith === 'rpc' ? handleOpenRpcSendMessageModal(location, recipient, replyToMessageId) : submitMessageHandler(location, recipient, replyToMessageId);
 
         const conversation = conversationsRef.current[location];
