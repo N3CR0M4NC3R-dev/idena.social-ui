@@ -1,11 +1,10 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { hexToUint8Array } from 'idena-sdk-js-lite';
-import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { keccak256, sha3_256 } from "js-sha3";
 import { encrypt } from "eciesjs";
 import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message } from './logic/asyncUtils';
-import { decryptAESGCM, encryptAESGCM, extractPubKeyAddressFromPrivateKey, getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
+import { decryptAESGCM, encryptAESGCM, extractPubKeyAddressFromPrivateKey, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
 import menuWhiteSvg from './assets/menu-8-white.svg';
@@ -51,7 +50,6 @@ const defaultAd = {
 
 const POLLING_INTERVAL = 10000;
 const SCANNING_INTERVAL = 10;
-const ADS_INTERVAL = 10000;
 const SCAN_PAST_POSTS_TTL = 1 * 60;
 const INDEXER_API_ITEMS_LIMIT = 20;
 const SET_NEW_POSTS_ADDED_DELAY = 20;
@@ -142,11 +140,6 @@ function App() {
     const [viewOnlyNode, setViewOnlyNode] = useState<boolean>(false);
     const [encryptedPrivateKeyFromNode, setEncryptedPrivateKeyFromNode] = useState<string>('');
     const [passwordFromNode, setPasswordFromNode] = useState<string>('');
-
-    // ads
-    const [ads, setAds] = useState<ApprovedAd[]>([]);
-    const [currentAd, setCurrentAd] = useState<ApprovedAd | null>(null);
-    const currentAdRef = useRef(currentAd);
 
     // blocks
     const [initialBlock, setInitialBlock] = useState<number>(0);
@@ -259,16 +252,6 @@ function App() {
                 setPasswordFromNode(uuid);
             }
 
-            const adsClient = new IdenaApprovedAds({ idenaNodeUrl, idenaNodeApiKey });
-
-            try {
-                const ads = await adsClient.getApprovedAds();
-                setAds([defaultAd as ApprovedAd, ...ads]);
-            } catch (error) {
-                console.error(error);
-                setAds([defaultAd as ApprovedAd]);
-            }
-
         })();
     };
 
@@ -321,27 +304,6 @@ function App() {
     }, [inputIdenaIndexerApiUrlApplied]);
 
     useEffect(() => {
-        setCurrentAd(ads[0]);
-        if (ads.length) {
-            setCurrentAd(ads[0]);
-
-            let rotateAdsIntervalId: NodeJS.Timeout;
-
-            async function recurse() {
-                rotateAdsIntervalId = setTimeout(() => {
-                    const adIndex = ads.findIndex((ad) => ad.cid === currentAdRef.current?.cid);
-                    const nextIndex = adIndex !== (ads.length - 1) ? adIndex + 1 : 0;
-                    setCurrentAd(ads[nextIndex]);
-                    recurse();
-                }, ADS_INTERVAL);
-            };
-            recurse();
-
-            return () => clearInterval(rotateAdsIntervalId);
-        }
-    }, [ads]);
-
-    useEffect(() => {
         console.info('nodeAvailable', nodeAvailable);
         console.info('makePostsWith', makePostsWith);
         console.info('credentialsInvalid', credentialsInvalid);
@@ -377,10 +339,6 @@ function App() {
     useEffect(() => {
         pastBlockCapturedRef.current = pastBlockCaptured;
     }, [pastBlockCaptured]);
-
-    useEffect(() => {
-        currentAdRef.current = currentAd;
-    }, [currentAd]);
 
     useEffect(() => {
         findPostsWithRef.current = findPostsWith;
@@ -1574,16 +1532,15 @@ function App() {
             <div className="w-full md:w-[500px] flex-none">
                 <div className="lg:hidden flex flex-row gap-2 text-[12px] bg-stone-700 rounded-md">
                     <div className="m-1 min-w-[70px]">
-                        <a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
-                            <img className="rounded-md h-[70px] w-[70px]" src={currentAd?.thumb ?? defaultAd.thumb} />
+                        <a href={defaultAd.url} target="_blank" rel="noopener noreferrer">
+                            <img className="rounded-md h-[70px] w-[70px]" src={defaultAd.thumb} />
                         </a>
                     </div>
                     <div className="flex flex-col justify-center whitespace-nowrap overflow-hidden">
-                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
-                        <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
-                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
+                        <div className="px-1 font-[700] text-gray-400"><p>{defaultAd.title}</p></div>
+                        <div className="px-1"><p>{defaultAd.desc}</p></div>
+                        <div className="px-1 text-blue-400"><a className="hover:underline" href={defaultAd.url} target="_blank" rel="noopener noreferrer">{defaultAd.url}</a></div>
                     </div>
-                    <div className="flex-1 text-right"><p className="text-[12px] mt-1 mr-2">Ad</p></div>
                 </div>
                 <div className="lg:hidden my-2">
                     <div className="text-[26px] mb-1">
@@ -1690,30 +1647,14 @@ function App() {
             <div className="hidden lg:flex flex-1 justify-start">
                 <div className="min-w-[320px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
                     <div className="flex flex-col h-[90px] justify-center">
-                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
-                        <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
-                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
+                        <div className="px-1 font-[700] text-gray-400"><p>{defaultAd.title}</p></div>
+                        <div className="px-1"><p>{defaultAd.desc}</p></div>
+                        <div className="px-1 text-blue-400"><a className="hover:underline" href={defaultAd.url} target="_blank" rel="noopener noreferrer">{defaultAd.url}</a></div>
                     </div>
                     <div className="my-3">
-                        <a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
-                            <img className="rounded-md h-[320px] w-[320px]" src={currentAd?.media ?? defaultAd.media} />
+                        <a href={defaultAd.url} target="_blank" rel="noopener noreferrer">
+                            <img className="rounded-md h-[320px] w-[320px]" src={defaultAd.media} />
                         </a>
-                    </div>
-                    <div className="flex flex-row px-1">
-                        <div className="w-16 flex-auto">
-                            <div className="font-[600] text-gray-400"><p>Sponsored by</p></div>
-                            <div>
-                                <a className="flex flex-row items-center" href={`https://scan.idena.io/address/${currentAd?.author}`} target="_blank" rel="noopener noreferrer">
-                                    <img className="-mt-0.5 -ml-1.5 h-5 w-5" src={`https://robohash.org/${currentAd?.author}?set=set1`} />
-                                    <span>{getDisplayAddress(currentAd?.author || '')}</span>
-                                </a>
-                            </div>
-                        </div>
-                        <div className="flex-1" />
-                        <div className="w-16 flex-auto">
-                            <div className="font-[600] text-gray-400"><p>Burnt, in 24 hr</p></div>
-                            <div><p>{currentAd?.burnAmount} iDNA</p></div>
-                        </div>
                     </div>
                 </div>
             </div>
