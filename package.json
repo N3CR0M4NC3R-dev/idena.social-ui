@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "audit:privacy": "node scripts/check-release-privacy.cjs",
     "preview": "vite preview",
     "lint:fix": "eslint --fix .",
     "test": "npx vitest run"

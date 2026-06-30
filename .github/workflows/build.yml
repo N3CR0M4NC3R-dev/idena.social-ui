@@ -24,5 +24,8 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Run privacy audit
+        run: npm run audit:privacy
+
       - name: Build
         run: npm run build
