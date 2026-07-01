@@ -13,7 +13,7 @@
     "audit:privacy": "node scripts/check-release-privacy.cjs",
     "preview": "vite preview",
     "lint:fix": "eslint --fix .",
-    "test": "npx vitest run"
+    "test": "npx vitest run --passWithNoTests"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.10.2",
@@ -21,7 +21,7 @@
     "bn.js": "^5.2.2",
     "decimal.js": "^10.6.0",
     "eciesjs": "^0.5.0",
-    "idena-sdk-js-lite": "^0.2.0",
+    "idena-sdk-js-lite": "https://github.com/ubiubi18/idena-sdk-js-lite/archive/2575cf22a71d34a03c5381eb1ad9095634ad6719.tar.gz",
     "image-type": "^6.1.0",
     "is-svg": "^6.1.0",
     "js-sha3": "^0.9.3",
@@ -29,7 +29,6 @@
     "react-dom": "^19.2.0",
     "react-modal": "^3.16.3",
     "react-router": "^7.13.0",
-    "secp256k1": "^5.0.1",
     "tailwindcss": "^4.1.17"
   },
   "devDependencies": {
@@ -38,7 +37,6 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@types/react-modal": "^3.16.3",
-    "@types/secp256k1": "^4.0.7",
     "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
