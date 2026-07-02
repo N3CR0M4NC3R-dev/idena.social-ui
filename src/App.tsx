@@ -206,7 +206,7 @@ function App() {
         };
 
         rerender && forceUpdate();
-    }
+    };
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
@@ -377,7 +377,7 @@ function App() {
 
             return () => clearInterval(recurseForwardIntervalId);
         } else {
-            recurseForwardIntervalId && clearInterval(recurseForwardIntervalId)
+            recurseForwardIntervalId && clearInterval(recurseForwardIntervalId);
         }
     }, [initialBlock, nodeAvailable]);
 
@@ -959,7 +959,7 @@ function App() {
                         for (let index = 0; index < conversationKeys.length; index++) {
                             const conversationKey = conversationKeys[index];
                             const currentValueExcluding = newLatestConversationActivity.filter(item => item !== conversationKey);
-                            newLatestConversationActivity = [ conversationKey, ...currentValueExcluding ]
+                            newLatestConversationActivity = [ conversationKey, ...currentValueExcluding ];
                         }
                     } else {
                         for (let index = 0; index < conversationKeys.length; index++) {
@@ -977,8 +977,8 @@ function App() {
             } finally {
                 recurse();
             }
-        }
-    }
+        };
+    };
 
     useEffect(() => {
         let intervalSubmittingPost: NodeJS.Timeout;
@@ -1045,7 +1045,9 @@ function App() {
             const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
             const postMediaAttachment = postMediaAttachmentsRef.current[`post-${location}`];
 
-            let { inputText, media, mediaType } = getTextAndMediaForPost(postTextareaElement, postMediaAttachment);
+            const { inputText, media: postMedia, mediaType: postMediaType } = getTextAndMediaForPost(postTextareaElement, postMediaAttachment);
+            let media = postMedia;
+            let mediaType = postMediaType;
 
             if (!inputText && !postMediaAttachment) {
                 alert('No text or media provided!');
@@ -1083,7 +1085,7 @@ function App() {
                 }, 1000);
             });
         }
-    }
+    };
 
     const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string, storeTextIpfs?: boolean, storeMediaIpfs?: boolean) => {
         if (!nodeAvailable) {
@@ -1188,7 +1190,9 @@ function App() {
             const messageTextareaElement = document.getElementById(`message-input-${location}`) as HTMLTextAreaElement;
             const postMediaAttachment = postMediaAttachmentsRef.current['message-' + location];
 
-            let { inputText, media, mediaType } = getTextAndMediaForPost(messageTextareaElement, postMediaAttachment);
+            const { inputText, media: postMedia, mediaType: postMediaType } = getTextAndMediaForPost(messageTextareaElement, postMediaAttachment);
+            let media = postMedia;
+            let mediaType = postMediaType;
 
             if (!inputText && !postMediaAttachment) {
                 alert('No text or media provided!');
@@ -1197,8 +1201,8 @@ function App() {
                 return;
             }
 
-            let textPassword = '';
-            let mediaPassword = '';
+            const textPassword = '';
+            const mediaPassword = '';
 
             if (postMediaAttachment?.ipfsUrl) {
                 media = [postMediaAttachment.ipfsUrl];
@@ -1249,7 +1253,7 @@ function App() {
                 }, 1000);
             });
         }
-    }
+    };
 
     const submitMessageHandler = async (location: string, recipient: string, replyToMessageId?: string, storeTextIpfs?: boolean, storeMediaIpfs?: boolean) => {
         if (!nodeAvailable) {
@@ -1502,7 +1506,7 @@ function App() {
             setCredentialsInvalid('Invalid key or password');
             return;
         }
-    }
+    };
 
     return (
         <main className="w-full flex flex-row justify-center p-2">

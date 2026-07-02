@@ -21,11 +21,11 @@ function RpcPostMessageUIComponent(props: RpcPostMessageUIComponentProps) {
 
     const onChangeTextIpfsHandler = () => {
         setStoreTextIpfs(!storeTextIpfs);
-    }
+    };
 
     const onChangeMediaIpfsHandler = () => {
         setStoreMediaIpfs(!storeMediaIpfs);
-    }
+    };
 
     return (<>
         <div className="text-[14px]">

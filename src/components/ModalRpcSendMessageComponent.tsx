@@ -22,7 +22,7 @@ function ModalRpcSendMessageComponent(props: ModalRpcSendMessageComponentProps) 
         const { location, recipient, replyToMessageId } = modalRpcSendMessageRef.current;
         submitMessageHandler(location, recipient, replyToMessageId, storeTextIpfs, storeMediaIpfs);
         closeModal();
-    }
+    };
 
     return (<>
         <div className="w-full sm:w-[500px] px-3">

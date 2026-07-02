@@ -105,7 +105,7 @@ function Messages() {
         }
 
         setAddressInvalid('');
-    }
+    };
 
     const handleClickAddress = (e: MouseEventLocal, to: string) => {
         e.stopPropagation();
@@ -127,7 +127,7 @@ function Messages() {
         };
 
         setBrowserStateHistorySettings({ postDomSettings: postDomSettingsUpdated }, rerender);
-    }
+    };
 
     const setDiscussReplyToPostIdHandler = (conversationKey: string, discussReplyToPostId?: string) => {
         setPostDomSettings(conversationKey, { discussReplyToPostId }, true);
@@ -157,7 +157,7 @@ function Messages() {
             return;
         }
         copyMessageTxHandler(location, recipient, replyToMessageId);
-    }
+    };
 
     const localSubmitMessageHandler = async (location: string, recipient: string, replyToMessageId?: string) => {
         if (location === 'main' && addressInvalid) {
@@ -176,7 +176,7 @@ function Messages() {
         if (conversation) {
             setDiscussReplyToPostIdHandler(location);
         }
-    }
+    };
 
     return (<>
         <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
