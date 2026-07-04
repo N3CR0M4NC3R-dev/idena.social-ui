@@ -56,18 +56,25 @@ const SET_NEW_POSTS_ADDED_DELAY = 20;
 const SUBMITTING_POST_INTERVAL = 2000;
 const MAX_POST_MEDIA_BYTES = 1024 * 1024;
 const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
+const sensitiveLocalStorageKeys = [
+    'nodeKey',
+    'saveEncryptedKey',
+    'encryptedPrivateKey',
+    'savePassword',
+    'password',
+];
+
+sensitiveLocalStorageKeys.forEach(key => localStorage.removeItem(key));
 
 const initSettings = {
     nodeUrl: localStorage.getItem('nodeUrl') || defaultNodeUrl,
-    nodeKey: localStorage.getItem('nodeKey') || defaultNodeApiKey,
+    nodeKey: sessionStorage.getItem('nodeKey') || defaultNodeApiKey,
     makePostsWith: localStorage.getItem('makePostsWith') || 'idena-app',
     postersAddress: localStorage.getItem('postersAddress') || zeroAddress,
     findPostsWith: localStorage.getItem('findPostsWith') || 'indexer-api',
     indexerApiUrl: localStorage.getItem('indexerApiUrl') || initIndexerApiUrl,
-    saveEncryptedKey: localStorage.getItem('saveEncryptedKey') === 'true' || false,
-    encryptedPrivateKey: localStorage.getItem('encryptedPrivateKey') || '',
-    savePassword: localStorage.getItem('savePassword') === 'true' || false,
-    password: localStorage.getItem('password') || '',
+    encryptedPrivateKey: '',
+    password: '',
 };
 
 const DEBUG = false;
@@ -130,8 +137,6 @@ function App() {
     const indexerApiUrlRef = useRef(indexerApiUrl);
     const [encryptedPrivateKey, setEncryptedPrivateKey] = useState<string>(initSettings.encryptedPrivateKey);
     const [password, setPassword] = useState<string>(initSettings.password);
-    const [saveEncryptedKey, setSaveEncryptedKey] = useState<boolean>(initSettings.saveEncryptedKey);
-    const [savePassword, setSavePassword] = useState<boolean>(initSettings.savePassword);
 
     // node
     const [nodeAvailable, setNodeAvailable] = useState<boolean>(true);
@@ -224,7 +229,7 @@ function App() {
             }
 
             localStorage.setItem('nodeUrl', idenaNodeUrl);
-            localStorage.setItem('nodeKey', idenaNodeApiKey);
+            sessionStorage.setItem('nodeKey', idenaNodeApiKey);
 
             if (!initialBlock) {
                 const { result: getLastBlockResult } = findPostsWith === 'indexer-api' ? await getLastBlockWithIdenaIndexerApi(indexerApiUrl) : await rpcClientRef.current!('bcn_lastBlock', []);
@@ -1492,14 +1497,6 @@ function App() {
                 return;
             }
 
-            if (saveEncryptedKey) {
-                localStorage.setItem('encryptedPrivateKey', encryptedPrivateKey);
-            }
-
-            if (savePassword) {
-                localStorage.setItem('password', password);
-            }
-
             setCredentialsInvalid('');
 
         } catch (error) {
@@ -1632,10 +1629,6 @@ function App() {
                         setPassword,
                         inputCredentialsApplied,
                         credentialsInvalid,
-                        saveEncryptedKey,
-                        setSaveEncryptedKey,
-                        savePassword,
-                        setSavePassword,
                         handleSetInputCredentialsApplied,
                         encryptedPrivateKeyFromNode,
                         passwordFromNode,
