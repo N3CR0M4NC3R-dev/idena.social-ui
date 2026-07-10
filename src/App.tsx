@@ -56,7 +56,7 @@ const SET_NEW_POSTS_ADDED_DELAY = 20;
 const SUBMITTING_POST_INTERVAL = 2000;
 const MAX_POST_MEDIA_BYTES = 1024 * 1024;
 const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
-const sensitiveLocalStorageKeys = [
+const sensitiveBrowserStorageKeys = [
     'nodeKey',
     'saveEncryptedKey',
     'encryptedPrivateKey',
@@ -64,11 +64,14 @@ const sensitiveLocalStorageKeys = [
     'password',
 ];
 
-sensitiveLocalStorageKeys.forEach(key => localStorage.removeItem(key));
+sensitiveBrowserStorageKeys.forEach(key => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+});
 
 const initSettings = {
     nodeUrl: localStorage.getItem('nodeUrl') || defaultNodeUrl,
-    nodeKey: sessionStorage.getItem('nodeKey') || defaultNodeApiKey,
+    nodeKey: defaultNodeApiKey,
     makePostsWith: localStorage.getItem('makePostsWith') || 'idena-app',
     postersAddress: localStorage.getItem('postersAddress') || zeroAddress,
     findPostsWith: localStorage.getItem('findPostsWith') || 'indexer-api',
@@ -229,8 +232,6 @@ function App() {
             }
 
             localStorage.setItem('nodeUrl', idenaNodeUrl);
-            sessionStorage.setItem('nodeKey', idenaNodeApiKey);
-
             if (!initialBlock) {
                 const { result: getLastBlockResult } = findPostsWith === 'indexer-api' ? await getLastBlockWithIdenaIndexerApi(indexerApiUrl) : await rpcClientRef.current!('bcn_lastBlock', []);
                 setInitialBlock(getLastBlockResult?.height ?? 0);

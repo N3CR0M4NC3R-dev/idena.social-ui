@@ -83,14 +83,14 @@ const CHECKS = [
       /\b(?:apiKey|api_key|privateKey|private_key|secret|token|password)\b\s*[:=]\s*['"`](?!test\b|test-|example\b|changeme\b|idena-restricted-node-key\b)[A-Za-z0-9_./+=-]{32,}['"`]/gi,
   },
   {
-    name: 'sensitive browser localStorage read',
+    name: 'sensitive browser storage read',
     regex:
-      /localStorage\.getItem\(\s*['"`](?:nodeKey|encryptedPrivateKey|password|saveEncryptedKey|savePassword)['"`]\s*\)/g,
+      /(?:localStorage|sessionStorage)\.getItem\(\s*['"`](?:nodeKey|encryptedPrivateKey|password|saveEncryptedKey|savePassword)['"`]\s*\)/g,
   },
   {
-    name: 'sensitive browser localStorage write',
+    name: 'sensitive browser storage write',
     regex:
-      /localStorage\.setItem\(\s*['"`](?:nodeKey|encryptedPrivateKey|password|saveEncryptedKey|savePassword)['"`]\s*,/g,
+      /(?:localStorage|sessionStorage)\.setItem\(\s*['"`](?:nodeKey|encryptedPrivateKey|password|saveEncryptedKey|savePassword)['"`]\s*,/g,
   },
 ]
 
