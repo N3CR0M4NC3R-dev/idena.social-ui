@@ -1,0 +1,3 @@
+# Historical deterministic cryptography fixtures removed from the current tree.
+9370effd7f181045644b3a0e6d5ed66f26e40214:src/logic/messages.test.ts:generic-api-key:6
+d7ebe49191a1fe54b772637ba240388e2b3dce49:src/logic/idena-sdk-js-modified/models/transactions/transaction.test.ts:generic-api-key:8
