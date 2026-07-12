@@ -33,6 +33,9 @@ jobs:
       - name: Run privacy audit
         run: npm run audit:privacy
 
+      - name: Compatibility lock audit
+        run: npm run audit:compatibility
+
       - name: Test
         run: npm test
 

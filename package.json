@@ -13,7 +13,9 @@
     "audit:privacy": "node scripts/check-release-privacy.cjs",
     "preview": "vite preview",
     "lint:fix": "eslint --fix .",
-    "test": "npx vitest run"
+    "test": "npm run test:compatibility && npx vitest run",
+    "test:compatibility": "node --test scripts/check-compatibility-lock.node-test.cjs",
+    "audit:compatibility": "node scripts/check-compatibility-lock.cjs"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.10.2",
@@ -21,7 +23,7 @@
     "bn.js": "^5.2.2",
     "decimal.js": "^10.6.0",
     "eciesjs": "^0.5.0",
-    "idena-sdk-js-lite": "https://github.com/ubiubi18/idena-sdk-js-lite/archive/7850d97f63f36d5b8e542c8528104abd8d43e938.tar.gz",
+    "idena-sdk-js-lite": "https://github.com/ubiubi18/idena-sdk-js-lite/archive/cc6e69b9b87aa381398b7839050a4640f46eb5ba.tar.gz",
     "image-type": "^6.1.0",
     "is-svg": "^6.1.0",
     "js-sha3": "^0.9.3",

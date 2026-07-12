@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "releaseId": "idena-mainnet-legacy-compat-2026.07.12-rc2",
+  "status": "candidate",
+  "legacyBaseline": {
+    "repository": "https://github.com/idena-network/idena-go.git",
+    "commit": "938be81dbdeff85f888f4337060a8ebabb12e5b5",
+    "nodeVersion": "1.1.2"
+  },
+  "chainInvariants": {
+    "mainnetNetworkId": 1,
+    "gossipProtocol": "/idena/gossip/1.1.0",
+    "intermediateGenesisHeaderSha256": "27e696414b955714ba7ed4defe063794c8dcadef28a7e61dd9249b8623571b3c",
+    "stateSnapshotSha256": "7cf6f8c334d76a3617cbd5ac3aa5a104a8d337cb6ceb8d6906c62bf7fab8d131",
+    "identitySnapshotSha256": "f136ec8939e3f78587a38de517128c7071501e283bac7d12c24ce4be830ff8aa",
+    "consensusChangesAllowed": false
+  },
+  "components": [
+    {
+      "name": "idena-go",
+      "role": "node",
+      "repository": "https://github.com/ubiubi18/idena-go.git",
+      "commit": "4947ddfd41391cca0e51dc2635aaa8a06827a890",
+      "runtimeCodeCommit": "728d32badabc0edbac11a0eeb8bc946ebc12bf5f"
+    },
+    {
+      "name": "idena-wasm-binding",
+      "role": "native-binding",
+      "repository": "https://github.com/ubiubi18/idena-wasm-binding.git",
+      "commit": "67ba065fdb02aa07cced2a43a261e481ca5b39d9"
+    },
+    {
+      "name": "idena-wasm",
+      "role": "contract-runtime",
+      "repository": "https://github.com/ubiubi18/idena-wasm.git",
+      "commit": "7e1138959f9f96f59d20efa11f2c27b134067541"
+    },
+    {
+      "name": "wasmer",
+      "role": "wasm-engine",
+      "repository": "https://github.com/ubiubi18/wasmer.git",
+      "commit": "1637dea03c0110f7dd800f2d9781193caf820074"
+    },
+    {
+      "name": "idena-sdk-js-lite",
+      "role": "transaction-sdk",
+      "repository": "https://github.com/ubiubi18/idena-sdk-js-lite.git",
+      "commit": "cc6e69b9b87aa381398b7839050a4640f46eb5ba"
+    }
+  ],
+  "toolchains": {
+    "go": "1.26.5",
+    "rust": "1.97.0",
+    "node": "24.18.0",
+    "npm": "11.16.0"
+  },
+  "artifacts": [
+    {
+      "name": "libidena_wasm_linux_amd64.a",
+      "sha256": "0c8941ab8073a63946214a62c87b78a1e0f7731a3d81809588f1ae0088c8ee35"
+    },
+    {
+      "name": "libidena_wasm_linux_aarch64.a",
+      "sha256": "3d636c192f34385d3c9dc5797acf29bd33ab1761b78fd65711cff11e64277c81"
+    },
+    {
+      "name": "libidena_wasm_darwin_amd64.a",
+      "sha256": "0451d1480827de6dc413712d461264d0f586287b6fd7e3c587e60ce374854767"
+    },
+    {
+      "name": "libidena_wasm_darwin_arm64.a",
+      "sha256": "b7fad0121df49ebe30286d7a8c3660ba198111f9ca3bcf414eaa422487186a90"
+    },
+    {
+      "name": "libidena_wasm_windows_amd64.a",
+      "sha256": "38cd4e31d29e0acda2a2d7511722eef6e34e0ff922ab7f2b01d30a4107d3bcf7"
+    }
+  ],
+  "consumerPins": {
+    "idena-desktop": {
+      "idena-go": "4947ddfd41391cca0e51dc2635aaa8a06827a890",
+      "idena-wasm-binding": "67ba065fdb02aa07cced2a43a261e481ca5b39d9"
+    },
+    "idena-social-contract-runner": {
+      "idena-go": "4947ddfd41391cca0e51dc2635aaa8a06827a890",
+      "idena-wasm-binding": "67ba065fdb02aa07cced2a43a261e481ca5b39d9"
+    },
+    "idena-social-ui": {
+      "idena-sdk-js-lite": "cc6e69b9b87aa381398b7839050a4640f46eb5ba"
+    },
+    "idena-web": {
+      "idena-go": "4947ddfd41391cca0e51dc2635aaa8a06827a890"
+    },
+    "idena-indexer": {
+      "idena-go": "4947ddfd41391cca0e51dc2635aaa8a06827a890"
+    },
+    "P2poolBTC": {
+      "idena-go": "4947ddfd41391cca0e51dc2635aaa8a06827a890"
+    }
+  },
+  "requiredGates": [
+    "stack-lock-validation",
+    "legacy-block-rpc-differential",
+    "legacy-state-replay-differential",
+    "legacy-modern-p2p-interoperability",
+    "wasm-receipt-and-gas-differential",
+    "wasm-cross-architecture-determinism",
+    "independent-rebuild-digest-match",
+    "secret-scan",
+    "dependency-policy"
+  ]
+}

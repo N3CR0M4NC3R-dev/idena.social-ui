@@ -48,6 +48,9 @@ before entering node or identity credentials.
   reference.
 - The SDK is pinned to a GitHub source archive rather than a release from this
   fork. Changing that pin requires a full transaction/signature regression run.
+- The exact SDK commit and archive integrity are now constrained by
+  [`compatibility/stack-lock.json`](compatibility/stack-lock.json); moving the
+  dependency requires an intentional coordinated compatibility update.
 - Major React, Router, Vite, and TypeScript upgrades can still cause browser or
   navigation regressions not covered by the current tests.
 - The UI cannot prove that indexer responses, node RPC data, media URLs, or the
