@@ -68,7 +68,7 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                             </div>
                             {!isLastItem && <hr className="text-gray-700" />}
                         </li>
-                    )
+                    );
                 })}
             </ul>
         </div>

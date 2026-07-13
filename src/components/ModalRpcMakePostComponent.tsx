@@ -22,7 +22,7 @@ function ModalRpcMakePostComponent(props: ModalRpcMakePostComponentProps) {
         const { location, replyToPostId, channelId } = modalRpcMakePostRef.current;
         submitPostHandler(location, replyToPostId, channelId, storeTextIpfs, storeMediaIpfs);
         closeModal();
-    }
+    };
 
     return (<>
         <div className="w-full sm:w-[500px] px-3">
