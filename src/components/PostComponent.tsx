@@ -91,7 +91,7 @@ function PostComponent(props: PostComponentProps) {
         };
 
         setBrowserStateHistorySettings({ postDomSettings: postDomSettingsUpdated }, rerender);
-    }
+    };
 
     const mainPostDomSettings = isPostOutlet ? isPostOutletDomSettings : initDomSettings;
 
@@ -239,7 +239,7 @@ function PostComponent(props: PostComponentProps) {
         }
 
         copyPostTxHandler(location, replyToPostId, channelId);
-    }
+    };
 
 
     const localSubmitPostHandler = async (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => {
@@ -251,7 +251,7 @@ function PostComponent(props: PostComponentProps) {
         if (post) {
             setDiscussReplyToPostIdHandler(post);
         }
-    }
+    };
 
     const localSubmitLikeHandler = async (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => {
         e.stopPropagation();
@@ -261,7 +261,7 @@ function PostComponent(props: PostComponentProps) {
         }
 
         await submitLikeHandler(likeEmoji, location, replyToPostId, channelId);
-    }
+    };
 
     let mouseClicked = false;
 
@@ -304,21 +304,21 @@ function PostComponent(props: PostComponentProps) {
                 <div className="w-22">
                     {replyComments.length ?
                         <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => toggleShowReplyInputHandler(e, post)} /><a className="block sm:inline text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{ totalNumberOfReplies} replies</a></div>
-                    :
+                        :
                         <div className="text-gray-500"><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => toggleShowReplyInputHandler(e, post)} /><p className="block sm:inline align-[-0.5px]">0 replies</p></div>
                     }
                 </div>
                 <div className="w-20">
                     {replyLikes.length ?
                         <div className="text-red-400"><img src={heartRedSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === post.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, post.postId, post.postId)} /><a className="block sm:inline text-red-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{ replyLikes.length} likes</a></div>
-                    :
+                        :
                         <div className="text-gray-500"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === post.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, post.postId, post.postId)} /><p className="block sm:inline align-[-0.5px]">0 likes</p></div>
                     }
                 </div>
                 <div className="flex-1 min-w-20">
                     {postTips.totalAmount ?
                         <div className="text-green-400"><img src={cashGreenSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === post.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, post)} /><a className="block sm:inline text-green-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} idna</a></div>
-                    :
+                        :
                         <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === post.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, post)} /><p className="block sm:inline align-[-0.5px]">0 idna</p></div>
                     }
                 </div>
@@ -346,7 +346,7 @@ function PostComponent(props: PostComponentProps) {
                         </div>
                     </div>
                     {postMediaAttachment && <div className="my-1">
-                            <img className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-sm" src={postMediaAttachment.dataUrl} />
+                        <img className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-sm" src={postMediaAttachment.dataUrl} />
                     </div>}
                     <div className="leading-[12px]">
                         {postMediaAttachment ? <>
@@ -424,21 +424,21 @@ function PostComponent(props: PostComponentProps) {
                                     <div className="w-26">
                                         {discussionPostComments.length || showDiscussion ?
                                             <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => toggleReplyDiscussionHandler(replyPost)} /><a className="block sm:inline text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={() => toggleShowDiscussionHandler(replyPost)}>{ discussionPostComments.length} comments</a></div>
-                                        :
+                                            :
                                             <div className="text-gray-500"><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => toggleReplyDiscussionHandler(replyPost)} /><p className="block sm:inline align-[-0.5px]">0 comments</p></div>
                                         }
                                     </div>
                                     <div className="w-19">
                                         {likesForReplyPost.length ?
                                             <div className="text-red-400"><img src={heartRedSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === replyPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, replyPost.postId, replyPost.postId, discussParentId)} /><a className="block sm:inline text-red-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForReplyPost)}>{likesForReplyPost.length} likes</a></div>
-                                        :
+                                            :
                                             <div className="text-gray-500"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === replyPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, replyPost.postId, replyPost.postId, discussParentId)} /><p className="block sm:inline align-[-0.5px]">0 likes</p></div>
                                         }
                                     </div>
                                     <div className="flex-1 min-w-19">
                                         {postTips.totalAmount ?
                                             <div className="text-green-400"><img src={cashGreenSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === replyPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, replyPost)} /><a className="block sm:inline text-green-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} idna</a></div>
-                                        :
+                                            :
                                             <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === replyPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, replyPost)} /><p className="block sm:inline align-[-0.5px]">0 idna</p></div>
                                         }
                                     </div>
@@ -502,12 +502,12 @@ function PostComponent(props: PostComponentProps) {
                                                                 <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] -ml-0.5 mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)} /></div>
                                                                 {likesForDiscussionPost.length ?
                                                                     <div className="text-red-400 text-left whitespace-nowrap"><img src={heartRedSvg} className={'h-5 p-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === discussionPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, discussionPost.postId, discussionPost.postId, discussParentId)} /><a className="text-red-400 ml-[1px] align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForDiscussionPost)}>{likesForDiscussionPost.length}</a></div>
-                                                                :
+                                                                    :
                                                                     <div className="text-gray-500 text-left"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === discussionPost.postId ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, discussionPost.postId, discussionPost.postId, discussParentId)} /></div>
                                                                 }
                                                                 {postTips.totalAmount ?
                                                                     <div className="text-green-400 text-left whitespace-nowrap"><img src={cashGreenSvg} className={'h-5 p-0.5 -ml-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === discussionPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, discussionPost)} /><a className="text-green-400 ml-0.5 align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getShortDisplayTipAmount(postTips.totalAmount)}</a></div>
-                                                                :
+                                                                    :
                                                                     <div className="text-gray-500 text-left"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === discussionPost.postId ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, discussionPost)} /></div>
                                                                 }
                                                             </div>

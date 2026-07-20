@@ -33,7 +33,7 @@ export function getMessageLines(message?: string, calculateViewMoreIndex = false
 
     let messageLines = message.split(/\r\n/g, limit);
     if (messageLines.length === 1) {
-        messageLines = message.split(/\n/g), limit;
+        messageLines = message.split(/\n/g, limit);
     }
 
     if (!calculateViewMoreIndex) {
@@ -109,7 +109,7 @@ export function sanitizeStr(str: string) {
 }
 
 export function numToUint8Array(num: number, uint8ArrayLength: number) {
-    let arr = new Uint8Array(uint8ArrayLength);
+    const arr = new Uint8Array(uint8ArrayLength);
 
     for (let i = 0; i < 8; i++) {
         arr[i] = num % 256;
@@ -190,12 +190,12 @@ export function getBase64FromDataUrl(dataUrl: string) {
 }
 
 export function getTextAndMediaForPost(postTextareaElement: HTMLTextAreaElement, postMediaAttachment?: PostMediaAttachment) {
-    let inputText = postTextareaElement.value ?? '';
+    const inputText = postTextareaElement.value ?? '';
 
     const { base64Media, base64MediaType } = postMediaAttachment ? getBase64FromDataUrl(postMediaAttachment.dataUrl) : {};
 
-    let media = base64Media ? [base64Media] : [];
-    let mediaType = base64MediaType ? [base64MediaType] : [];
+    const media = base64Media ? [base64Media] : [];
+    const mediaType = base64MediaType ? [base64MediaType] : [];
 
     return { inputText, media, mediaType };
 }

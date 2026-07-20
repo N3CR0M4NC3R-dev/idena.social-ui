@@ -30,10 +30,6 @@ type SettingsProps = {
     setPassword: React.Dispatch<React.SetStateAction<string>>,
     inputCredentialsApplied: boolean,
     credentialsInvalid: string,
-    saveEncryptedKey: boolean,
-    setSaveEncryptedKey: React.Dispatch<React.SetStateAction<boolean>>,
-    savePassword: boolean,
-    setSavePassword: React.Dispatch<React.SetStateAction<boolean>>,
     handleSetInputCredentialsApplied: (newValue: boolean) => Promise<void>,
 };
 
@@ -69,26 +65,8 @@ function Settings() {
         setPassword,
         inputCredentialsApplied,
         credentialsInvalid,
-        saveEncryptedKey,
-        setSaveEncryptedKey,
-        savePassword,
-        setSavePassword,
         handleSetInputCredentialsApplied,
     } = useOutletContext() as SettingsProps;
-
-    const onChangeSaveEncryptedKeyHandler = () => {
-        const newSaveEncryptedKey = !saveEncryptedKey;
-        setSaveEncryptedKey(newSaveEncryptedKey);
-        localStorage.setItem('saveEncryptedKey', `${newSaveEncryptedKey}`);
-        localStorage.setItem('encryptedPrivateKey', newSaveEncryptedKey ? encryptedPrivateKey : '');
-    };
-
-    const onChangeSavePasswordHandler = () => {
-        const newSavePassword = !savePassword;
-        setSavePassword(newSavePassword);
-        localStorage.setItem('savePassword', `${newSavePassword}`);
-        localStorage.setItem('password', newSavePassword ? password : '');
-    };
 
     const handleGoBack = () => {
         navigate(-1);
@@ -149,47 +127,6 @@ function Settings() {
                         {!inputCredentialsApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
                     </div>
                     {credentialsInvalid && inputCredentialsApplied && <p className="mt-1 text-[11px] text-red-400">Invalid credentials: {credentialsInvalid}. (Messaging is disabled)</p>}
-                    <div className="mt-2 flex flex-row gap-2 items-center">
-                        <div className="group grid size-4 grid-cols-1">
-                            <input
-                                id="saveEncryptedKey"
-                                type="checkbox"
-                                name="saveEncryptedKey"
-                                checked={saveEncryptedKey}
-                                aria-describedby="comments-description"
-                                className="col-start-1 row-start-1 appearance-none rounded-sm border border-white/10 bg-white/5 checked:border-blue-500 checked:bg-blue-500 indeterminate:border-blue-500 indeterminate:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-white/5 disabled:bg-white/10 disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                                onChange={onChangeSaveEncryptedKeyHandler}
-                            />
-                            <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25">
-                                <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-checked:opacity-100" />
-                                <path d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
-                            </svg>
-                        </div>
-                        <div className="flex-1">
-                            <label htmlFor="saveEncryptedKey">Save the encrypted key in browser localStorage</label>
-                        </div>
-                    </div>
-                    <div className="mt-2 flex flex-row gap-2 items-center">
-                        <div className="group grid size-4 grid-cols-1">
-                            <input
-                                id="savePassword"
-                                type="checkbox"
-                                name="savePassword"
-                                checked={savePassword}
-                                aria-describedby="comments-description"
-                                className="col-start-1 row-start-1 appearance-none rounded-sm border border-white/10 bg-white/5 checked:border-blue-500 checked:bg-blue-500 indeterminate:border-blue-500 indeterminate:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-white/5 disabled:bg-white/10 disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                                onChange={onChangeSavePasswordHandler}
-                            />
-                            <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25">
-                                <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-checked:opacity-100" />
-                                <path d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
-                            </svg>
-                        </div>
-                        <div className="flex-1">
-                            <label htmlFor="savePassword">Save the password in browser localStorage</label>
-                        </div>
-                    </div>
-                    <p className="ml-6 text-[12px]">(Note: There is a heightened risk when saving both the encrypted key and password. Only do this with accounts possessing small amounts of idna.)</p>
                 </div>
             </>)}
         </div>
