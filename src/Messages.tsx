@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState } from "react";
 import { useLocation, useNavigate, useOutletContext } from "react-router";
-import { getPoster, type Message, type Poster } from "./logic/asyncUtils";
+import { getPoster, getPubKeyWithIdenaIndexerApi, getPubKeyWithRpc, type Message, type Poster } from "./logic/asyncUtils";
 import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessageLines } from "./logic/utils";
 import { initDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from "./App.exports";
 import commentGraySvg from './assets/comment-alt-lines-gray.svg';
@@ -28,9 +28,12 @@ type MessagesProps = {
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
+    handleSubmitPubKeyModal: (address: string) => void,
     handleOpenRpcSendMessageModal: (location: string, recipient: string, replyToMessageId?: string | undefined) => void,
     messageSettingsInvalid: boolean,
     handleSetInputCredentialsApplied: (newValue: boolean) => Promise<void>,
+    findPostsWithRef: React.RefObject<string>,
+    indexerApiUrlRef: React.RefObject<string>,
 };
 
 function Messages() {
@@ -55,9 +58,12 @@ function Messages() {
         postMediaAttachmentsRef,
         handleOpenAddMediaModal,
         handleExpandImageModal,
+        handleSubmitPubKeyModal,
         handleOpenRpcSendMessageModal,
         messageSettingsInvalid,
         handleSetInputCredentialsApplied,
+        findPostsWithRef,
+        indexerApiUrlRef,
     } = useOutletContext() as MessagesProps;
 
     const [sendMessageToAddress, setSendMessageToAddress] = useState<string>(zeroAddress);
@@ -100,8 +106,18 @@ function Messages() {
         }
 
         if (!recipient.pubkey) {
-            setAddressInvalid('pubKey missing');
-            return;
+            if (findPostsWithRef.current === 'indexer-api') {
+                const pubKey = await getPubKeyWithIdenaIndexerApi(indexerApiUrlRef.current, recipient.address);
+                postersRef.current[sendMessageToAddress].pubkey = pubKey ?? '';
+            } else {
+                const pubKey = await getPubKeyWithRpc(rpcClientRef.current, recipient.address);
+                postersRef.current[sendMessageToAddress].pubkey = pubKey ?? '';
+            }
+
+            if (!recipient.pubkey) {
+                setAddressInvalid('pubKey missing');
+                return;
+            }
         }
 
         setAddressInvalid('');
@@ -186,7 +202,10 @@ function Messages() {
         <div className="mb-4">
             <p className="mb-1">Send message to address:</p>
             <input className="w-full mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputSendMessageToAddressApplied} value={sendMessageToAddress} onChange={e => setSendMessageToAddress(e.target.value)} />
-            {addressInvalid && <p className="text-[11px] text-red-400">Invalid address: {addressInvalid}</p>}
+            {addressInvalid && <div className="flex gap-2">
+                <span className="text-[11px] text-red-400">Invalid address: {addressInvalid}</span>
+                {addressInvalid === 'pubKey missing' && sendMessageToAddress !== zeroAddress && <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={() => handleSubmitPubKeyModal(sendMessageToAddress)}>Manually Provide PubKey</span>}
+            </div>}
             <div>
                 <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputSendMessageToAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputSendMessageToAddressAppliedLocal(!inputSendMessageToAddressApplied)}>{inputSendMessageToAddressApplied ? 'Change' : 'Apply'}</button>
                 {!inputSendMessageToAddressApplied && <p className="mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
@@ -238,7 +257,16 @@ function Messages() {
 
                 return <>
                     <div className="flex flex-col py-3 bg-stone-800">
-                        <PosterHeaderComponent address={conversationPartner.address} age={conversationPartner.age} state={conversationPartner.state} stake={conversationPartner.stake} />
+                        <PosterHeaderComponent
+                            address={conversationPartner.address}
+                            age={conversationPartner.age}
+                            state={getIdentityStatus(conversationPartner.state)}
+                            stake={parseInt(conversationPartner.stake)}
+                        />
+                        {!conversationPartner.pubkey && <div className="ml-3 flex gap-2">
+                            <span className="text-[11px] text-red-400">pubKey missing</span>
+                            <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={() => handleSubmitPubKeyModal(conversationPartner.address)}>Manually Provide PubKey</span>
+                        </div>}
                         <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
                             <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
                                 {conversation.map((messageId) => {

@@ -4,7 +4,7 @@ import { hexToUint8Array } from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { keccak256, sha3_256 } from "js-sha3";
 import { encrypt } from "eciesjs";
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubKeyWithIdenaIndexerApi, getPubKeyWithRpc } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubKeyAddressFromPrivateKey, getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
@@ -19,6 +19,7 @@ import ModalExpandImageComponent from './components/ModalExpandImageComponent';
 import MenuComponent from './components/MenuComponent';
 import ModalRpcSendMessageComponent from './components/ModalRpcSendMessageComponent';
 import ScanBlocksComponent from './components/ScanBlocksComponent';
+import ModalSubmitPubKeyComponent from './components/ModalSubmitPubKeyComponent';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -196,7 +197,8 @@ function App() {
     const modalAddMediaRef = useRef<string>('');
     const modalRpcMakePostRef = useRef<{ location: string, replyToPostId?: string, channelId?: string }>({ location: '' });
     const modalRpcSendMessageRef = useRef<{ location: string, recipient: string, replyToMessageId?: string }>({ location: '', recipient: '' });
-    const modalExpandImageRef = useRef<{ dataUrl?: string, cid?: string}>({});
+    const modalExpandImageRef = useRef<{ dataUrl?: string, cid?: string }>({});
+    const modalSubmitPubKeyRef = useRef<{ address: string }>({ address: '' });
 
     // miscellaneous
     const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -342,24 +344,15 @@ function App() {
     }, [ads]);
 
     useEffect(() => {
-        console.info('nodeAvailable', nodeAvailable);
-        console.info('makePostsWith', makePostsWith);
-        console.info('credentialsInvalid', credentialsInvalid);
-        console.info('viewOnlyNode', viewOnlyNode);
-
         if (
             !nodeAvailable ||
             makePostsWith === 'idena-app' && credentialsInvalid ||
             makePostsWith === 'rpc' && viewOnlyNode
         ) {
             setMessageSettingsInvalid(true);
-            console.info('invalid');
         } else {
             setMessageSettingsInvalid(false);
-            console.info('valid');
         }
-        console.info('----------');
-
     }, [nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode]);
 
     useEffect(() => {
@@ -654,6 +647,7 @@ function App() {
 
                 let newReplyPostsCollection = {};
 
+                const postersPromised: string[] = [];
                 const posterPromises = [];
                 const messagePromises = [];
                 const mediaPromises = [];
@@ -662,7 +656,7 @@ function App() {
                     const transaction = transactionsWithDetails[index];
 
                     if ([sendTipMethod].includes(transaction.method)) {
-                        const { postId, newTip, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, isRecurseForward);
+                        const { postId, newTip, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, isRecurseForward, postersPromised);
                         tipsRef.current = { ...tipsRef.current, [postId]: updatedPostTips };
 
                         posterPromise && posterPromises.push(posterPromise);
@@ -718,6 +712,7 @@ function App() {
                         rpcClientRef.current!,
                         postsRef,
                         postersRef,
+                        postersPromised,
                     );
 
                     if (continued) {
@@ -949,6 +944,7 @@ function App() {
             const isRecurseForward = recurseDirection === 'forward';
 
             try {
+                const postersPromised: string[] = [];
                 const posterPromises = [];
                 const messagePromises = [];
                 const mediaPromises = [];
@@ -966,6 +962,7 @@ function App() {
                         thisChannelId,
                         postersRef,
                         rpcClientRef,
+                        postersPromised,
                     );
 
                     if (continued) {
@@ -987,12 +984,26 @@ function App() {
                 const conversationKeys: string[] = [];
 
                 for (let index = 0; index < newMessages.length; index++) {
-                    const newMessage = newMessages[index];
-                    const conversationKey = newMessage!.participants.map((item: string) => item.toLowerCase()).sort().join('-');
-                    const conversation = isRecurseForward ? [ newMessage!.messageId, ...(conversationsRef.current[conversationKey] ?? []) ] : [ ...(conversationsRef.current[conversationKey] ?? []), newMessage!.messageId ];
+                    const newMessage = newMessages[index] as Message;
+                    const conversationKey = newMessage.participants.map((item: string) => item.toLowerCase()).sort().join('-');
+                    const conversation = isRecurseForward ? [ newMessage.messageId, ...(conversationsRef.current[conversationKey] ?? []) ] : [ ...(conversationsRef.current[conversationKey] ?? []), newMessage!.messageId ];
                     conversationsRef.current = { ...conversationsRef.current, [conversationKey]: conversation };
-
                     conversationKeys.push(conversationKey);
+
+                    const allParticipants = [newMessage.sender, ...newMessage.participants];
+                    for (let index = 0; index < allParticipants.length; index++) {
+                        const participantAddress = allParticipants[index];
+                        const participant = postersRef.current[participantAddress];
+                        if (participant && !participant.pubkey) {
+                            if (findPostsWithRef.current === 'indexer-api') {
+                                const pubKey = await getPubKeyWithIdenaIndexerApi(indexerApiUrlRef.current, participantAddress);
+                                participant.pubkey = pubKey ?? '';
+                            } else {
+                                const pubKey = await getPubKeyWithRpc(rpcClientRef.current!, participantAddress);
+                                participant.pubkey = pubKey ?? '';
+                            }
+                        }
+                    }
                 }
 
                 setLatestConversationActivity((currentValue) => {
@@ -1498,6 +1509,11 @@ function App() {
         setModalOpen('expandImage');
     };
 
+    const handleSubmitPubKeyModal = (address: string) => {
+        modalSubmitPubKeyRef.current = { address };
+        setModalOpen('submitPubKey');
+    };
+
     const addMediaHandler = async (attachmentId: string, file: File, ipfsUrl?: string) => {
         await setPostMediaAttachmentHandler(attachmentId, file, ipfsUrl);
         forceUpdate();
@@ -1662,6 +1678,7 @@ function App() {
                         handleOpenRpcMakePostModal,
                         handleOpenRpcSendMessageModal,
                         handleExpandImageModal,
+                        handleSubmitPubKeyModal,
                         tipsRef,
                         postMediaAttachmentsRef,
                         rpcClientRef,
@@ -1684,6 +1701,8 @@ function App() {
                         conversationsRef,
                         messagesRef,
                         messageSettingsInvalid,
+                        findPostsWithRef,
+                        indexerApiUrlRef,
                     }}
                 />
             </div>
@@ -1730,6 +1749,7 @@ function App() {
                     {modalOpen === 'rpcMakePost' && <ModalRpcMakePostComponent modalRpcMakePostRef={modalRpcMakePostRef} submitPostHandler={submitPostHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'rpcSendMessage' && <ModalRpcSendMessageComponent modalRpcSendMessageRef={modalRpcSendMessageRef} submitMessageHandler={submitMessageHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'expandImage' && <ModalExpandImageComponent modalExpandImageRef={modalExpandImageRef} />}
+                    {modalOpen === 'submitPubKey' && <ModalSubmitPubKeyComponent modalSubmitPubKeyRef={modalSubmitPubKeyRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
                 </Modal>
             </div>

@@ -295,3 +295,12 @@ export function isValidAddress(address: string) {
 export function isValidLowerCaseAddress(address: string) {
     return /^0x[0-9a-f]{40}$/.test(address);
 };
+
+export function extractSenderInfoFromRawTx(rawTx: string) {
+    try {
+        const tx = Transaction.fromHex(rawTx);
+        return { address: tx.sender, pubKey: tx.senderPubKey };
+    } catch (error) {
+        return { error };
+    }
+}

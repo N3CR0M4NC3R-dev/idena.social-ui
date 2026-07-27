@@ -2,8 +2,8 @@ import Decimal from "decimal.js";
 import imageType from 'image-type';
 import isSvg from 'is-svg';
 import { decrypt } from "eciesjs";
-import { calculateMaxFee, dna2num, getCallTransaction, getMakePostTransactionPayload, getSendMessageTransactionPayload, hex2str, hexToDecimal, isValidLowerCaseAddress, sanitizeStr, decryptAESGCM } from "./utils";
-import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
+import { calculateMaxFee, dna2num, getCallTransaction, getMakePostTransactionPayload, getSendMessageTransactionPayload, hex2str, hexToDecimal, isValidLowerCaseAddress, sanitizeStr, decryptAESGCM, extractSenderInfoFromRawTx } from "./utils";
+import { BlockBody, CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
 import type { EventTransaction } from "../App.exports";
 import { keccak256, sha3_256 } from "js-sha3";
@@ -247,6 +247,49 @@ export const getTxEventsWithIdenaIndexerApi = async (indexerApiUrl: string, txHa
     }
 };
 
+export const getAddressTxsWithIdenaIndexerApi = async (indexerApiUrl: string, address: string, limit: number, continuationToken?: string) => {
+    try {
+        const params = new URLSearchParams({
+            limit: limit.toString(),
+            ...(continuationToken && { continuationToken }),
+        });
+
+        const path = `api/Address/${address}/Txs`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
+export const getRawTxWithIdenaIndexerApi = async (indexerApiUrl: string, txHash: string) => {
+    try {
+        const path = `api/Transaction/${txHash}/Raw`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
 export const getChildPostIds = (parentId: string, postsTreeRef: Record<string, string>) => {
     const childPostIds = [];
     let childPostId;
@@ -309,6 +352,7 @@ export const getNewPosterAndPost = async (
     rpcClient: RpcClient,
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
+    postersPromised: string[],
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = transaction;
 
@@ -412,7 +456,8 @@ export const getNewPosterAndPost = async (
 
     let posterPromise: Promise<Poster> | undefined;
 
-    if (!postersRef.current[poster]) {
+    if (!postersRef.current[poster] && !postersPromised.includes(poster)) {
+        postersPromised.push(poster);
         posterPromise = getPoster(rpcClient, poster) as Promise<Poster>;
     }
 
@@ -560,6 +605,7 @@ export const processTip = async (
     tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
     postersRef: React.RefObject<Record<string, Poster>>,
     isRecurseForward: boolean,
+    postersPromised: string[],
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = transaction;
 
@@ -621,7 +667,8 @@ export const processTip = async (
 
     let posterPromise: Promise<Poster> | undefined;
 
-    if (!postersRef.current[tipper]) {
+    if (!postersRef.current[tipper] && !postersPromised.includes(tipper)) {
+        postersPromised.push(tipper);
         posterPromise = getPoster(rpcClient, tipper) as Promise<Poster>;
     }
 
@@ -653,6 +700,7 @@ export const processMessage = async (
     thisChannelId: string,
     postersRef: React.RefObject<Record<string, Poster>>,
     rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>) | undefined>,
+    postersPromised: string[],
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = message;
 
@@ -806,7 +854,8 @@ export const processMessage = async (
 
     let posterPromise: Promise<Poster> | undefined;
 
-    if (!postersRef.current[sender]) {
+    if (!postersRef.current[sender] && !postersPromised.includes(sender)) {
+        postersPromised.push(sender);
         posterPromise = getPoster(rpcClientRef.current!, sender) as Promise<Poster>;
     }
 
@@ -1212,3 +1261,96 @@ export const resolveNewMedia = async (mediaPromises: any[], postsRef?: any, mess
         itemsRef.current = { ...itemsRef.current, [id]: updatedPost };
     }
 }
+
+export const getPubKeyWithIdenaIndexerApi = async (indexerApiUrl: string, address: string) => {
+    let pubKey = '';
+    const limit = 100;
+    let continuationToken = '';
+    let txHash;
+
+    outerLoop: do {
+        const { result: getAddressTxsResult, error: getAddressTxsError, continuationToken: continuationTokenCurrent } = await getAddressTxsWithIdenaIndexerApi(indexerApiUrl, address, limit, continuationToken);
+        
+        if (!getAddressTxsError && getAddressTxsResult?.length) {
+            for (let index = 0; index < getAddressTxsResult.length; index++) {
+                const tx = getAddressTxsResult[index];
+                if (tx.from.toLowerCase() === address.toLowerCase()) {
+                    txHash = tx.hash;
+                    break outerLoop;
+                }
+            }
+        } else {
+            break;
+        }
+
+        continuationToken = continuationTokenCurrent ?? '';
+
+    } while (continuationToken);
+
+    if (txHash) {
+        const { result: getRawTxResult, error: getRawTxError } = await getRawTxWithIdenaIndexerApi(indexerApiUrl, txHash);
+
+        if (!getRawTxError && getRawTxResult) {
+            try {
+                pubKey = extractSenderInfoFromRawTx(getRawTxResult).pubKey ?? '';
+            } catch (error) {
+                // do nothing
+            }
+        }
+    }
+
+    return pubKey;
+};
+
+export const getPubKeyWithRpc = async (rpcClient: RpcClient, address: string) => {
+    let pubKey = '';
+    const count = 100;
+    let token;
+    let txHash;
+    let blockHash;
+
+    outerLoop: do {
+        const { result: getTransactionsResult, error: getTransactionsError } = await rpcClient('bcn_transactions', [{ address, count, ...(token && { token }) }], true);
+
+        if (!getTransactionsError && getTransactionsResult.transactions?.length) {
+            for (let index = 0; index < getTransactionsResult.transactions.length; index++) {
+                const tx = getTransactionsResult.transactions[index];
+                if (tx.from.toLowerCase() === address.toLowerCase()) {
+                    txHash = tx.hash;
+                    blockHash = tx.blockHash;
+                    break outerLoop;
+                }
+            }
+        } else {
+            break;
+        }
+
+        token = getTransactionsResult.token;
+
+    } while (token);
+
+    let ipfsCid;
+    let txIndex;
+    let blockBodyData;
+
+    if (txHash && blockHash) {
+        const { result: getBlockResult, error: getBlockError } = await rpcClient('bcn_block', [blockHash], true);
+
+        if (!getBlockError && getBlockResult) {
+            ipfsCid = getBlockResult.ipfsCid;
+            txIndex = getBlockResult.transactions.findIndex((item: string) => item === txHash);
+        }
+
+        if (ipfsCid && txIndex > -1) {
+            ({ result: blockBodyData } = await rpcClient('ipfs_get', [ipfsCid], true));
+        }
+
+        if (blockBodyData) {
+            const blockBody = BlockBody.fromHex(blockBodyData);
+            const transaction = blockBody.transactions[txIndex];
+            pubKey = transaction.senderPubKey ?? '';
+        }
+    }
+
+    return pubKey;
+};
