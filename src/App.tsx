@@ -2,8 +2,8 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { hexToUint8Array } from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { keccak256, sha3_256 } from "js-sha3";
-import { encrypt } from "eciesjs";
+import { keccak256, sha3_256 } from 'js-sha3';
+import { encrypt } from 'eciesjs';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubKeyWithIdenaIndexerApi, getPubKeyWithRpc } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubKeyAddressFromPrivateKey, getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
@@ -60,17 +60,30 @@ const SUBMITTING_POST_INTERVAL = 2000;
 const MAX_POST_MEDIA_BYTES = 1024 * 1024;
 const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
 
+export const defaultSettings = {
+    nodeUrl: defaultNodeUrl,
+    nodeKey: defaultNodeApiKey,
+    makePostsWith: 'idena-app',
+    postersAddress: zeroAddress,
+    findPostsWith: 'indexer-api',
+    indexerApiUrl: initIndexerApiUrl,
+    saveEncryptedKey: false,
+    encryptedPrivateKey: '',
+    savePassword: false,
+    password: '',
+};
+
 const initSettings = {
-    nodeUrl: localStorage.getItem('nodeUrl') || defaultNodeUrl,
-    nodeKey: localStorage.getItem('nodeKey') || defaultNodeApiKey,
-    makePostsWith: localStorage.getItem('makePostsWith') || 'idena-app',
-    postersAddress: localStorage.getItem('postersAddress') || zeroAddress,
-    findPostsWith: localStorage.getItem('findPostsWith') || 'indexer-api',
-    indexerApiUrl: localStorage.getItem('indexerApiUrl') || initIndexerApiUrl,
-    saveEncryptedKey: localStorage.getItem('saveEncryptedKey') === 'true' || false,
-    encryptedPrivateKey: localStorage.getItem('encryptedPrivateKey') || '',
-    savePassword: localStorage.getItem('savePassword') === 'true' || false,
-    password: localStorage.getItem('password') || '',
+    nodeUrl: localStorage.getItem('nodeUrl') || defaultSettings.nodeUrl,
+    nodeKey: localStorage.getItem('nodeKey') || defaultSettings.nodeKey,
+    makePostsWith: localStorage.getItem('makePostsWith') || defaultSettings.makePostsWith,
+    postersAddress: localStorage.getItem('postersAddress') || defaultSettings.postersAddress,
+    findPostsWith: localStorage.getItem('findPostsWith') || defaultSettings.findPostsWith,
+    indexerApiUrl: localStorage.getItem('indexerApiUrl') || defaultSettings.indexerApiUrl,
+    saveEncryptedKey: localStorage.getItem('saveEncryptedKey') === 'true' || defaultSettings.saveEncryptedKey,
+    encryptedPrivateKey: localStorage.getItem('encryptedPrivateKey') || defaultSettings.encryptedPrivateKey,
+    savePassword: localStorage.getItem('savePassword') === 'true' || defaultSettings.savePassword,
+    password: localStorage.getItem('password') || defaultSettings.password,
 };
 
 const DEBUG = false;
@@ -281,28 +294,10 @@ function App() {
     }, [inputNodeApplied]);
 
     useEffect(() => {
-        if (inputPostersAddressApplied && makePostsWith === 'idena-app') {
-            setPostersAddress(inputPostersAddress);
-            localStorage.setItem('postersAddress', inputPostersAddress);
-
-            if (inputPostersAddress === zeroAddress) {
-                setPostersAddressInvalid(true);
-            } else {
-                (async function() {
-                    const { result: getBalanceResult } = await rpcClientRef.current!('dna_getBalance', [inputPostersAddress]);
-
-                    if (!getBalanceResult) {
-                        setPostersAddressInvalid(true);
-                    } else {
-                        if (Number(getBalanceResult.balance) === 0) {
-                            alert('Your address has no idna, posting will fail!');
-                        }
-                        setIdenaWalletBalance(getBalanceResult.balance);
-                        setPostersAddressInvalid(false);
-                    }
-                })();
-            }
+        if (!inputPostersAddressApplied || makePostsWith !== 'idena-app') {
+            return;
         }
+        validatePostersAddress();
     }, [inputPostersAddressApplied]);
 
     useEffect(() => {
@@ -321,6 +316,29 @@ function App() {
             })();
         }
     }, [inputIdenaIndexerApiUrlApplied]);
+
+    useEffect(() => {
+        if (!inputCredentialsApplied) {
+            return;
+        }
+        validateCredentials();
+    }, [inputCredentialsApplied]);
+
+    // special case for restoring defaults
+    useEffect(() => {
+        if (inputPostersAddress !== zeroAddress || makePostsWith !== 'idena-app' || !inputPostersAddressApplied) {
+            return;
+        }
+        validatePostersAddress();
+    }, [inputPostersAddress, makePostsWith]);
+
+    // special case for restoring defaults
+    useEffect(() => {
+        if (password || encryptedPrivateKey || !inputCredentialsApplied) {
+            return;
+        }
+        validateCredentials();
+    }, [password, encryptedPrivateKey]);
 
     useEffect(() => {
         setCurrentAd(ads[0]);
@@ -442,18 +460,77 @@ function App() {
         }
     }, [scanningPastBlocks, initialBlock, nodeAvailable]);
 
-    const handleMakePostsWithToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setMakePostsWith(event.target.value);
+    const validatePostersAddress = () => {
+        setPostersAddress(inputPostersAddress);
 
-        localStorage.setItem('makePostsWith', event.target.value);
+        if (inputPostersAddress === zeroAddress) {
+            localStorage.setItem('postersAddress', '');
+            setPostersAddressInvalid(true);
+        } else {
+            localStorage.setItem('postersAddress', inputPostersAddress);
+            (async function() {
+                const { result: getBalanceResult } = await rpcClientRef.current!('dna_getBalance', [inputPostersAddress]);
 
-        if (event.target.value === 'rpc') {
+                if (!getBalanceResult) {
+                    setPostersAddressInvalid(true);
+                } else {
+                    if (Number(getBalanceResult.balance) === 0) {
+                        alert('Your address has no idna, posting will fail!');
+                    }
+                    setIdenaWalletBalance(getBalanceResult.balance);
+                    setPostersAddressInvalid(false);
+                }
+            })();
+        }
+    };
+
+    const validateCredentials = () => {
+        if (encryptedPrivateKey.length !== 120) {
+            setCredentialsInvalid('Key must be 120 chars');
+            return;
+        }
+
+        if (!password.length) {
+            setCredentialsInvalid('Password missing');
+            return;
+        }
+
+        const keyData = new Uint8Array(sha3_256.array(password));
+
+        decryptAESGCM(encryptedPrivateKey, keyData).then((privateKey) => {
+            const { address: calculatedAddress } = extractPubKeyAddressFromPrivateKey(privateKey);
+
+            if (calculatedAddress !== postersAddress.toLowerCase()) {
+                setCredentialsInvalid('Key corresponds to wrong address');
+                return;
+            }
+
+            if (saveEncryptedKey) {
+                localStorage.setItem('encryptedPrivateKey', encryptedPrivateKey);
+            }
+
+            if (savePassword) {
+                localStorage.setItem('password', password);
+            }
+
+            setCredentialsInvalid('');
+        }).catch(() => {
+            setCredentialsInvalid('Invalid key or password');
+        });
+    };
+
+    const handleMakePostsWithToggle = (value: string) => {
+        setMakePostsWith(value);
+
+        localStorage.setItem('makePostsWith', value);
+
+        if (value === 'rpc') {
             setInputPostersAddress('');
             setPostersAddressInvalid(false);
             setRpcClient(nodeUrl, nodeKey, setNodeAvailable);
         }
 
-        if (event.target.value === 'idena-app') {
+        if (value === 'idena-app') {
             if (postersAddress) {
                 setInputPostersAddress(postersAddress);
                 setPostersAddressInvalid(false);
@@ -466,16 +543,16 @@ function App() {
         }
     };
 
-    const handleInputFindPostsWithToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setFindPostsWith(event.target.value);
-        localStorage.setItem('findPostsWith', event.target.value);
+    const handleInputFindPostsWithToggle = (value: string) => {
+        setFindPostsWith(value);
+        localStorage.setItem('findPostsWith', value);
 
-        if (event.target.value === 'rpc') {
+        if (value === 'rpc') {
             setIndexerApiUrl('');
             setIdenaIndexerApiUrlInvalid(false);
         }
 
-        if (event.target.value === 'indexer-api') {
+        if (value === 'indexer-api') {
             if (indexerApiUrl) {
                 setIndexerApiUrl(indexerApiUrl);
                 setPostersAddressInvalid(false);
@@ -1519,49 +1596,6 @@ function App() {
         forceUpdate();
     };
 
-    const handleSetInputCredentialsApplied = async (newValue: boolean) => {
-        setInputCredentialsApplied(newValue);
-
-        if (!newValue) {
-            return;
-        }
-
-        if (encryptedPrivateKey.length !== 120) {
-            setCredentialsInvalid('Key must be 120 chars');
-            return;
-        }
-
-        if (!password.length) {
-            setCredentialsInvalid('Password missing');
-            return;
-        }
-
-        try {
-            const keyData = new Uint8Array(sha3_256.array(password));
-            const privateKey = await decryptAESGCM(encryptedPrivateKey, keyData);
-            const { address: calculatedAddress } = extractPubKeyAddressFromPrivateKey(privateKey);
-
-            if (calculatedAddress !== postersAddress.toLowerCase()) {
-                setCredentialsInvalid('Key corresponds to wrong address');
-                return;
-            }
-
-            if (saveEncryptedKey) {
-                localStorage.setItem('encryptedPrivateKey', encryptedPrivateKey);
-            }
-
-            if (savePassword) {
-                localStorage.setItem('password', password);
-            }
-
-            setCredentialsInvalid('');
-
-        } catch (error) {
-            setCredentialsInvalid('Invalid key or password');
-            return;
-        }
-    }
-
     return (
         <main className="w-full flex flex-row justify-center p-2">
             <div className="hidden lg:flex flex-1 justify-end">
@@ -1692,7 +1726,7 @@ function App() {
                         setSaveEncryptedKey,
                         savePassword,
                         setSavePassword,
-                        handleSetInputCredentialsApplied,
+                        setInputCredentialsApplied,
                         encryptedPrivateKeyFromNode,
                         passwordFromNode,
                         zeroAddress,
@@ -1703,6 +1737,8 @@ function App() {
                         messageSettingsInvalid,
                         findPostsWithRef,
                         indexerApiUrlRef,
+                        setMakePostsWith,
+                        setIndexerApiUrl,
                     }}
                 />
             </div>

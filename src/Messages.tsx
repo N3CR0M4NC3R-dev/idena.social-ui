@@ -31,7 +31,7 @@ type MessagesProps = {
     handleSubmitPubKeyModal: (address: string) => void,
     handleOpenRpcSendMessageModal: (location: string, recipient: string, replyToMessageId?: string | undefined) => void,
     messageSettingsInvalid: boolean,
-    handleSetInputCredentialsApplied: (newValue: boolean) => Promise<void>,
+    setInputCredentialsApplied: React.Dispatch<React.SetStateAction<boolean>>,
     findPostsWithRef: React.RefObject<string>,
     indexerApiUrlRef: React.RefObject<string>,
 };
@@ -61,7 +61,7 @@ function Messages() {
         handleSubmitPubKeyModal,
         handleOpenRpcSendMessageModal,
         messageSettingsInvalid,
-        handleSetInputCredentialsApplied,
+        setInputCredentialsApplied,
         findPostsWithRef,
         indexerApiUrlRef,
     } = useOutletContext() as MessagesProps;
@@ -73,7 +73,7 @@ function Messages() {
     const [, forceUpdate] = useReducer(x => x + 1, 0);
 
     useEffect(() => {
-        handleSetInputCredentialsApplied(true);
+        setInputCredentialsApplied(true);
     }, []);
 
     const { key: locationKey } = location;

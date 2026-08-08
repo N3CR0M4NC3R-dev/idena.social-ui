@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate, useOutletContext } from "react-router";
+import { defaultSettings } from "./App";
 
 type SettingsProps = {
     inputNodeApplied: boolean,
@@ -10,7 +11,7 @@ type SettingsProps = {
     setNodeKey: React.Dispatch<React.SetStateAction<string>>,
     setInputNodeApplied: React.Dispatch<React.SetStateAction<boolean>>,
     makePostsWith: string,
-    handleMakePostsWithToggle: (event: React.ChangeEvent<HTMLInputElement, Element>) => void,
+    handleMakePostsWithToggle: (value: string) => void,
     viewOnlyNode: boolean,
     inputPostersAddressApplied: boolean,
     inputPostersAddress: string,
@@ -18,7 +19,7 @@ type SettingsProps = {
     postersAddressInvalid: boolean,
     setInputPostersAddressApplied: React.Dispatch<React.SetStateAction<boolean>>,
     findPostsWith: string,
-    handleInputFindPostsWithToggle: (event: React.ChangeEvent<HTMLInputElement, Element>) => void,
+    handleInputFindPostsWithToggle: (value: string) => void,
     inputIdenaIndexerApiUrlApplied: boolean,
     inputIdenaIndexerApiUrl: string,
     setInputIdenaIndexerApiUrl: React.Dispatch<React.SetStateAction<string>>,
@@ -34,7 +35,9 @@ type SettingsProps = {
     setSaveEncryptedKey: React.Dispatch<React.SetStateAction<boolean>>,
     savePassword: boolean,
     setSavePassword: React.Dispatch<React.SetStateAction<boolean>>,
-    handleSetInputCredentialsApplied: (newValue: boolean) => Promise<void>,
+    setInputCredentialsApplied: React.Dispatch<React.SetStateAction<boolean>>,
+    setMakePostsWith: React.Dispatch<React.SetStateAction<string>>,
+    setIndexerApiUrl: React.Dispatch<React.SetStateAction<string>>,
 };
 
 function Settings() {
@@ -73,18 +76,18 @@ function Settings() {
         setSaveEncryptedKey,
         savePassword,
         setSavePassword,
-        handleSetInputCredentialsApplied,
+        setInputCredentialsApplied,
+        setMakePostsWith,
+        setIndexerApiUrl,
     } = useOutletContext() as SettingsProps;
 
-    const onChangeSaveEncryptedKeyHandler = () => {
-        const newSaveEncryptedKey = !saveEncryptedKey;
+    const onChangeSaveEncryptedKeyHandler = (newSaveEncryptedKey: boolean) => {
         setSaveEncryptedKey(newSaveEncryptedKey);
         localStorage.setItem('saveEncryptedKey', `${newSaveEncryptedKey}`);
         localStorage.setItem('encryptedPrivateKey', newSaveEncryptedKey ? encryptedPrivateKey : '');
     };
 
-    const onChangeSavePasswordHandler = () => {
-        const newSavePassword = !savePassword;
+    const onChangeSavePasswordHandler = (newSavePassword: boolean) => {
         setSavePassword(newSavePassword);
         localStorage.setItem('savePassword', `${newSavePassword}`);
         localStorage.setItem('password', newSavePassword ? password : '');
@@ -95,8 +98,34 @@ function Settings() {
     };
 
     useEffect(() => {
-        handleSetInputCredentialsApplied(true);
+        setInputCredentialsApplied(true);
     }, []);
+
+    const handleRestoreDefaults = () => {
+        const userConfirmed = confirm('Are you sure you want to restore default settings?');
+
+        if (userConfirmed) {
+            setNodeUrl(defaultSettings.nodeUrl);
+            setNodeKey(defaultSettings.nodeKey);
+            setInputNodeApplied(true);
+
+            setMakePostsWith(defaultSettings.makePostsWith);
+            setInputPostersAddress(defaultSettings.postersAddress);
+            setInputPostersAddressApplied(true);
+
+            setEncryptedPrivateKey(defaultSettings.encryptedPrivateKey);
+            setPassword(defaultSettings.password);
+            setInputCredentialsApplied(true);
+            onChangeSaveEncryptedKeyHandler(defaultSettings.saveEncryptedKey);
+            onChangeSavePasswordHandler(defaultSettings.savePassword);
+
+            setIndexerApiUrl(defaultSettings.indexerApiUrl);
+            setInputIdenaIndexerApiUrl(defaultSettings.indexerApiUrl);
+            setInputIdenaIndexerApiUrlApplied(true);
+
+            localStorage.clear();
+        }
+    };
 
     return (<>
         <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
@@ -121,12 +150,12 @@ function Settings() {
         <div className="flex flex-col mb-6">
             <p>Make posts with:</p>
             <div className="flex flex-row gap-2">
-                <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={handleMakePostsWithToggle} />
+                <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} />
                 <label htmlFor="useRpc" className="flex-none text-right">RPC</label>
             </div>
             {makePostsWith === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Idena Web App for making posts. (Posting, liking, tipping is disabled)</p>}
             <div className="flex flex-row gap-2">
-                <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={handleMakePostsWithToggle} />
+                <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} />
                 <label htmlFor="notUseRpc" className="flex-none text-right">Idena Web App</label>
             </div>
             {makePostsWith === 'idena-app' && (<>
@@ -145,7 +174,7 @@ function Settings() {
                     <p className="mb-1">Password:</p>
                     <input type="password" className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputCredentialsApplied} value={password} onChange={e => setPassword(e.target.value)} />
                     <div className="flex flex-row">
-                        <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputCredentialsApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => handleSetInputCredentialsApplied(!inputCredentialsApplied)}>{inputCredentialsApplied ? 'Change' : 'Apply'}</button>
+                        <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputCredentialsApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputCredentialsApplied(!inputCredentialsApplied)}>{inputCredentialsApplied ? 'Change' : 'Apply'}</button>
                         {!inputCredentialsApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
                     </div>
                     {credentialsInvalid && inputCredentialsApplied && <p className="mt-1 text-[11px] text-red-400">Invalid credentials: {credentialsInvalid}. (Messaging is disabled)</p>}
@@ -158,7 +187,7 @@ function Settings() {
                                 checked={saveEncryptedKey}
                                 aria-describedby="comments-description"
                                 className="col-start-1 row-start-1 appearance-none rounded-sm border border-white/10 bg-white/5 checked:border-blue-500 checked:bg-blue-500 indeterminate:border-blue-500 indeterminate:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-white/5 disabled:bg-white/10 disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                                onChange={onChangeSaveEncryptedKeyHandler}
+                                onChange={() => onChangeSaveEncryptedKeyHandler(!saveEncryptedKey)}
                             />
                             <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25">
                                 <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-checked:opacity-100" />
@@ -178,7 +207,7 @@ function Settings() {
                                 checked={savePassword}
                                 aria-describedby="comments-description"
                                 className="col-start-1 row-start-1 appearance-none rounded-sm border border-white/10 bg-white/5 checked:border-blue-500 checked:bg-blue-500 indeterminate:border-blue-500 indeterminate:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-white/5 disabled:bg-white/10 disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                                onChange={onChangeSavePasswordHandler}
+                                onChange={() => onChangeSavePasswordHandler(!savePassword)}
                             />
                             <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25">
                                 <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-checked:opacity-100" />
@@ -197,11 +226,11 @@ function Settings() {
         <div className="flex flex-col mb-6">
             <p>Find posts with:</p>
             <div className="flex flex-row gap-2">
-                <input id="findPostsWith" type="radio" name="findPostsWith" value="rpc" checked={findPostsWith === 'rpc'} onChange={handleInputFindPostsWithToggle} />
+                <input id="findPostsWith" type="radio" name="findPostsWith" value="rpc" checked={findPostsWith === 'rpc'} onChange={(e) => handleInputFindPostsWithToggle(e.target.value)} />
                 <label htmlFor="findPostsWith" className="flex-none text-right">RPC</label>
             </div>
             <div className="flex flex-row gap-2">
-                <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPostsWith" value="indexer-api" checked={findPostsWith === 'indexer-api'} onChange={handleInputFindPostsWithToggle} />
+                <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPostsWith" value="indexer-api" checked={findPostsWith === 'indexer-api'} onChange={(e) => handleInputFindPostsWithToggle(e.target.value)} />
                 <label htmlFor="notUseFindPastBlocksWithTxsApi" className="flex-none text-right">Indexer Api</label>
             </div>
             {findPostsWith === 'indexer-api' && (
@@ -217,6 +246,10 @@ function Settings() {
                     </div>
                 </div>
             )}
+        </div>
+        <hr className="mb-3 text-gray-500" />
+        <div className="mb-6">
+            <button className="h-9 w-36 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" onClick={() => handleRestoreDefaults()}>Restore Defaults</button>
         </div>
     </>);
 }
