@@ -262,11 +262,11 @@ export function getTimestampFromIndexerApi(indexerApiTimestamp: number) {
     return Math.floor((new Date(indexerApiTimestamp)).getTime() / 1000 );
 }
 
-export function extractPubKeyAddressFromPrivateKey(privateKey: string) {
-    const pubKey = privateKeyToPublicKey(privateKey);
-    const address = publicKeyToAddress(pubKey);
+export function extractPubkeyAddressFromPrivateKey(privateKey: string) {
+    const pubkey = privateKeyToPublicKey(privateKey);
+    const address = publicKeyToAddress(pubkey);
 
-    return { pubKey, address };
+    return { pubkey, address };
 }
 
 export async function encryptAESGCM(data: Uint8Array<ArrayBuffer>, rawSecretKey: Uint8Array<ArrayBuffer>) {
@@ -299,7 +299,7 @@ export function isValidLowerCaseAddress(address: string) {
 export function extractSenderInfoFromRawTx(rawTx: string) {
     try {
         const tx = Transaction.fromHex(rawTx);
-        return { address: tx.sender, pubKey: tx.senderPubKey };
+        return { address: tx.sender, pubkey: tx.senderPubKey };
     } catch (error) {
         return { error };
     }

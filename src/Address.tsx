@@ -1,5 +1,5 @@
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
-import { getPoster, type Post, type Poster, type Tip } from "./logic/asyncUtils";
+import { getPoster, getPosterWithIndexerApi, type Post, type Poster, type Tip } from "./logic/asyncUtils";
 import { getDisplayAddress, getIdentityStatus } from "./logic/utils";
 import PostComponent from "./components/PostComponent";
 import { type BrowserStateHistorySettings, type PostMediaAttachment } from "./App.exports";
@@ -36,6 +36,8 @@ type AddressProps = {
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
     rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>)>,
+    findPostsWithRef: React.RefObject<string>,
+    indexerApiUrlRef: React.RefObject<string>,
 };
 
 function Address() {
@@ -73,6 +75,8 @@ function Address() {
         postMediaAttachmentsRef,
         makePostsWith,
         rpcClientRef,
+        findPostsWithRef,
+        indexerApiUrlRef,
     } = useOutletContext() as AddressProps;
 
     if (!browserStateHistoryRef.current[locationKey]?.sortPostsBy) {
@@ -84,7 +88,8 @@ function Address() {
     const poster = postersRef.current[address!] ?? {};
 
     if (!poster.address) {
-        getPoster(rpcClientRef.current, address!, true).then((result) => result && (postersRef.current[address!] = result));
+        (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current!, address!, true) : getPosterWithIndexerApi(indexerApiUrlRef.current, address!))
+            .then((result) => result && (postersRef.current[address!] = result));
     }
 
     const posterDisplayAddress = poster.address ? getDisplayAddress(poster.address) : '';

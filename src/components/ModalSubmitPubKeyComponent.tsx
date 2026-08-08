@@ -2,16 +2,16 @@ import { useState } from "react";
 import { extractSenderInfoFromRawTx } from "../logic/utils";
 import type { Poster } from "../logic/asyncUtils";
 
-type ModalSubmitPubKeyComponentProps = {
-    modalSubmitPubKeyRef: React.RefObject<{ address: string; }>,
+type ModalSubmitPubkeyComponentProps = {
+    modalSubmitPubkeyRef: React.RefObject<{ address: string; }>,
     postersRef: React.RefObject<Record<string, Poster>>,
     closeModal: () => void,
 };
 
-function ModalSubmitPubKeyComponent(props: ModalSubmitPubKeyComponentProps) {
+function ModalSubmitPubkeyComponent(props: ModalSubmitPubkeyComponentProps) {
 
     const {
-        modalSubmitPubKeyRef,
+        modalSubmitPubkeyRef,
         postersRef,
         closeModal,
     } = props;
@@ -19,21 +19,21 @@ function ModalSubmitPubKeyComponent(props: ModalSubmitPubKeyComponentProps) {
     const [rawTransaction, setRawTransaction] = useState<string>('');
     const [rawTransactionError, setRawTransactionError] = useState<string>('');
 
-    const localSubmitPubKeyHandler = () => {
+    const localSubmitPubkeyHandler = () => {
         const senderInfo = extractSenderInfoFromRawTx(rawTransaction);
 
-        if (!senderInfo.pubKey) {
+        if (!senderInfo.pubkey) {
             setRawTransactionError('Issue with raw transaction.');
             return;
         }
 
-        if (senderInfo.address !== modalSubmitPubKeyRef.current.address) {
+        if (senderInfo.address !== modalSubmitPubkeyRef.current.address) {
             setRawTransactionError('Address is not the tx sender.');
             return;
         }
 
-        const sender = postersRef.current[modalSubmitPubKeyRef.current.address];
-        sender.pubkey = senderInfo.pubKey;
+        const sender = postersRef.current[modalSubmitPubkeyRef.current.address];
+        sender.pubkey = senderInfo.pubkey;
 
         setRawTransactionError('');
         closeModal();
@@ -41,10 +41,10 @@ function ModalSubmitPubKeyComponent(props: ModalSubmitPubKeyComponentProps) {
 
     return (<>
         <div className="w-full sm:w-[500px] px-3">
-            <p className="mb-2 text-center">Submit PubKey</p>
+            <p className="mb-2 text-center">Submit Pubkey</p>
             <div className="text-[14px]">
                 <div className="mb-3">
-                    <div>To manually submit the pubKey for this address {modalSubmitPubKeyRef.current.address}, paste and submit a raw transaction where this address was the sender. Raw transactions can be found at <a className="text-blue-400 hover:underline hover:cursor-pointer" href="http://scan.idena.io" target="_blank">scan.idena.io</a></div>
+                    <div>To manually submit the pubkey for this address {modalSubmitPubkeyRef.current.address}, paste and submit a raw transaction where this address was the sender. Raw transactions can be found at <a className="text-blue-400 hover:underline hover:cursor-pointer" href="http://scan.idena.io" target="_blank">scan.idena.io</a></div>
                 </div>
                 <div className="mb-3">
                     <textarea
@@ -55,7 +55,7 @@ function ModalSubmitPubKeyComponent(props: ModalSubmitPubKeyComponentProps) {
                         placeholder="Paste raw transaction here..."
                         onChange={(e) => setRawTransaction(e.target.value)}
                     />
-                    <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => localSubmitPubKeyHandler()}>Submit</button>
+                    <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => localSubmitPubkeyHandler()}>Submit</button>
                     {rawTransactionError && <p className="text-[11px] text-red-400">{rawTransactionError}</p>}
                 </div>
             </div>
@@ -63,4 +63,4 @@ function ModalSubmitPubKeyComponent(props: ModalSubmitPubKeyComponentProps) {
     </>);
 }
 
-export default ModalSubmitPubKeyComponent;
+export default ModalSubmitPubkeyComponent;

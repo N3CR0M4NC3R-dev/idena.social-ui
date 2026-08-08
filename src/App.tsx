@@ -4,8 +4,8 @@ import { hexToUint8Array } from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { keccak256, sha3_256 } from 'js-sha3';
 import { encrypt } from 'eciesjs';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubKeyWithIdenaIndexerApi, getPubKeyWithRpc } from './logic/asyncUtils';
-import { decryptAESGCM, encryptAESGCM, extractPubKeyAddressFromPrivateKey, getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc } from './logic/asyncUtils';
+import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
 import menuWhiteSvg from './assets/menu-8-white.svg';
@@ -19,7 +19,7 @@ import ModalExpandImageComponent from './components/ModalExpandImageComponent';
 import MenuComponent from './components/MenuComponent';
 import ModalRpcSendMessageComponent from './components/ModalRpcSendMessageComponent';
 import ScanBlocksComponent from './components/ScanBlocksComponent';
-import ModalSubmitPubKeyComponent from './components/ModalSubmitPubKeyComponent';
+import ModalSubmitPubkeyComponent from './components/ModalSubmitPubkeyComponent';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -154,8 +154,8 @@ function App() {
     const nodeAvailableRef = useRef(nodeAvailable);
     const rpcClientRef = useRef(undefined as undefined | RpcClient);
     const [viewOnlyNode, setViewOnlyNode] = useState<boolean>(false);
-    const [encryptedPrivateKeyFromNode, setEncryptedPrivateKeyFromNode] = useState<string>('');
-    const [passwordFromNode, setPasswordFromNode] = useState<string>('');
+    const encryptedPrivateKeyFromNodeRef = useRef('');
+    const passwordFromNodeRef = useRef('');
 
     // ads
     const [ads, setAds] = useState<ApprovedAd[]>([]);
@@ -211,7 +211,7 @@ function App() {
     const modalRpcMakePostRef = useRef<{ location: string, replyToPostId?: string, channelId?: string }>({ location: '' });
     const modalRpcSendMessageRef = useRef<{ location: string, recipient: string, replyToMessageId?: string }>({ location: '', recipient: '' });
     const modalExpandImageRef = useRef<{ dataUrl?: string, cid?: string }>({});
-    const modalSubmitPubKeyRef = useRef<{ address: string }>({ address: '' });
+    const modalSubmitPubkeyRef = useRef<{ address: string }>({ address: '' });
 
     // miscellaneous
     const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -270,8 +270,8 @@ function App() {
                 const uuid = crypto.randomUUID();
                 const { result: exportKeyResult } = await rpcClientRef.current!('dna_exportKey', [uuid]);
 
-                setEncryptedPrivateKeyFromNode(exportKeyResult);
-                setPasswordFromNode(uuid);
+                encryptedPrivateKeyFromNodeRef.current = exportKeyResult;
+                passwordFromNodeRef.current = uuid;
             }
 
             const adsClient = new IdenaApprovedAds({ idenaNodeUrl, idenaNodeApiKey });
@@ -498,7 +498,7 @@ function App() {
         const keyData = new Uint8Array(sha3_256.array(password));
 
         decryptAESGCM(encryptedPrivateKey, keyData).then((privateKey) => {
-            const { address: calculatedAddress } = extractPubKeyAddressFromPrivateKey(privateKey);
+            const { address: calculatedAddress } = extractPubkeyAddressFromPrivateKey(privateKey);
 
             if (calculatedAddress !== postersAddress.toLowerCase()) {
                 setCredentialsInvalid('Key corresponds to wrong address');
@@ -733,7 +733,7 @@ function App() {
                     const transaction = transactionsWithDetails[index];
 
                     if ([sendTipMethod].includes(transaction.method)) {
-                        const { postId, newTip, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, isRecurseForward, postersPromised);
+                        const { postId, newTip, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, isRecurseForward, postersPromised, findPostsWithRef, indexerApiUrlRef);
                         tipsRef.current = { ...tipsRef.current, [postId]: updatedPostTips };
 
                         posterPromise && posterPromises.push(posterPromise);
@@ -790,6 +790,8 @@ function App() {
                         postsRef,
                         postersRef,
                         postersPromised,
+                        findPostsWithRef,
+                        indexerApiUrlRef,
                     );
 
                     if (continued) {
@@ -1027,19 +1029,24 @@ function App() {
                 const mediaPromises = [];
                 const newMessages = [];
 
+                const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+                const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
+
                 while (latestMessagesQueueRef.current.length) {
                     const firstMessage = latestMessagesQueueRef.current.shift();
 
                     const { newMessage, posterPromise, mediaPromise, messagePromise, continued } = await processMessage(
                         firstMessage!,
-                        encryptedPrivateKey,
-                        password,
+                        encryptedPrivateKeyActual,
+                        passwordyActual,
                         postersAddress,
                         messagesRef,
                         thisChannelId,
                         postersRef,
                         rpcClientRef,
                         postersPromised,
+                        findPostsWithRef,
+                        indexerApiUrlRef,
                     );
 
                     if (continued) {
@@ -1073,11 +1080,11 @@ function App() {
                         const participant = postersRef.current[participantAddress];
                         if (participant && !participant.pubkey) {
                             if (findPostsWithRef.current === 'indexer-api') {
-                                const pubKey = await getPubKeyWithIdenaIndexerApi(indexerApiUrlRef.current, participantAddress);
-                                participant.pubkey = pubKey ?? '';
+                                const pubkey = await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, participantAddress);
+                                participant.pubkey = pubkey ?? '';
                             } else {
-                                const pubKey = await getPubKeyWithRpc(rpcClientRef.current!, participantAddress);
-                                participant.pubkey = pubKey ?? '';
+                                const pubkey = await getPubkeyWithRpc(rpcClientRef.current!, participantAddress);
+                                participant.pubkey = pubkey ?? '';
                             }
                         }
                     }
@@ -1342,11 +1349,12 @@ function App() {
             const rawMessageHash = keccak256(rawMessage);
 
             const encodedMessage = new TextEncoder().encode(rawMessage);
-
-            const keyData = new Uint8Array(sha3_256.array(password));
-            const myPrivateKey = await decryptAESGCM(encryptedPrivateKey, keyData);
-            const { pubKey: myPubKey } = extractPubKeyAddressFromPrivateKey(myPrivateKey);
-            const myEncryptedMessage = await encrypt(hexToUint8Array(myPubKey), encodedMessage);
+            const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+            const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
+            const keyData = new Uint8Array(sha3_256.array(passwordyActual));
+            const myPrivateKey = await decryptAESGCM(encryptedPrivateKeyActual, keyData);
+            const { pubkey: myPubkey } = extractPubkeyAddressFromPrivateKey(myPrivateKey);
+            const myEncryptedMessage = await encrypt(hexToUint8Array(myPubkey), encodedMessage);
             // @ts-ignore: Uint8Array.toBase64 not recognized yet
             const mySerializedEncryptedMessage = myEncryptedMessage.toBase64();
 
@@ -1465,10 +1473,12 @@ function App() {
 
         const encodedMessage = new TextEncoder().encode(rawMessage);
 
-        const keyData = new Uint8Array(sha3_256.array(password));
-        const myPrivateKey = await decryptAESGCM(encryptedPrivateKey, keyData);
-        const { pubKey: myPubKey } = extractPubKeyAddressFromPrivateKey(myPrivateKey);
-        const myEncryptedMessage = await encrypt(hexToUint8Array(myPubKey), encodedMessage);
+        const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+        const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
+        const keyData = new Uint8Array(sha3_256.array(passwordyActual));
+        const myPrivateKey = await decryptAESGCM(encryptedPrivateKeyActual, keyData);
+        const { pubkey: myPubkey } = extractPubkeyAddressFromPrivateKey(myPrivateKey);
+        const myEncryptedMessage = await encrypt(hexToUint8Array(myPubkey), encodedMessage);
         // @ts-ignore: Uint8Array.toBase64 not recognized yet
         const mySerializedEncryptedMessage = myEncryptedMessage.toBase64();
 
@@ -1586,9 +1596,9 @@ function App() {
         setModalOpen('expandImage');
     };
 
-    const handleSubmitPubKeyModal = (address: string) => {
-        modalSubmitPubKeyRef.current = { address };
-        setModalOpen('submitPubKey');
+    const handleSubmitPubkeyModal = (address: string) => {
+        modalSubmitPubkeyRef.current = { address };
+        setModalOpen('submitPubkey');
     };
 
     const addMediaHandler = async (attachmentId: string, file: File, ipfsUrl?: string) => {
@@ -1712,7 +1722,7 @@ function App() {
                         handleOpenRpcMakePostModal,
                         handleOpenRpcSendMessageModal,
                         handleExpandImageModal,
-                        handleSubmitPubKeyModal,
+                        handleSubmitPubkeyModal,
                         tipsRef,
                         postMediaAttachmentsRef,
                         rpcClientRef,
@@ -1727,8 +1737,6 @@ function App() {
                         savePassword,
                         setSavePassword,
                         setInputCredentialsApplied,
-                        encryptedPrivateKeyFromNode,
-                        passwordFromNode,
                         zeroAddress,
                         latestConversationActivity,
                         postersAddress,
@@ -1785,7 +1793,7 @@ function App() {
                     {modalOpen === 'rpcMakePost' && <ModalRpcMakePostComponent modalRpcMakePostRef={modalRpcMakePostRef} submitPostHandler={submitPostHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'rpcSendMessage' && <ModalRpcSendMessageComponent modalRpcSendMessageRef={modalRpcSendMessageRef} submitMessageHandler={submitMessageHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'expandImage' && <ModalExpandImageComponent modalExpandImageRef={modalExpandImageRef} />}
-                    {modalOpen === 'submitPubKey' && <ModalSubmitPubKeyComponent modalSubmitPubKeyRef={modalSubmitPubKeyRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'submitPubkey' && <ModalSubmitPubkeyComponent modalSubmitPubkeyRef={modalSubmitPubkeyRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
                 </Modal>
             </div>

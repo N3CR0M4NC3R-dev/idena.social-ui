@@ -290,6 +290,63 @@ export const getRawTxWithIdenaIndexerApi = async (indexerApiUrl: string, txHash:
     }
 };
 
+export const getAddressWithIndexerApi = async (indexerApiUrl: string, posterAddress: string) => {
+    try {
+        const path = `api/Address/${posterAddress}`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
+export const getIdentityWithIndexerApi = async (indexerApiUrl: string, posterAddress: string) => {
+    try {
+        const path = `api/Identity/${posterAddress}`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
+export const getIdentityAgeWithIndexerApi = async (indexerApiUrl: string, posterAddress: string) => {
+    try {
+        const path = `api/Identity/${posterAddress}/Age`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
 export const getChildPostIds = (parentId: string, postsTreeRef: Record<string, string>) => {
     const childPostIds = [];
     let childPostId;
@@ -353,6 +410,8 @@ export const getNewPosterAndPost = async (
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
     postersPromised: string[],
+    findPostsWithRef: React.RefObject<string>,
+    indexerApiUrlRef: React.RefObject<string>,
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = transaction;
 
@@ -458,7 +517,7 @@ export const getNewPosterAndPost = async (
 
     if (!postersRef.current[poster] && !postersPromised.includes(poster)) {
         postersPromised.push(poster);
-        posterPromise = getPoster(rpcClient, poster) as Promise<Poster>;
+        posterPromise = (findPostsWithRef.current === 'rpc' ? getPoster(rpcClient, poster) : getPosterWithIndexerApi(indexerApiUrlRef.current, poster)) as Promise<Poster>;
     }
 
     return { newPost, posterPromise, mediaPromise, messagePromise };
@@ -606,6 +665,8 @@ export const processTip = async (
     postersRef: React.RefObject<Record<string, Poster>>,
     isRecurseForward: boolean,
     postersPromised: string[],
+    findPostsWithRef: React.RefObject<string>,
+    indexerApiUrlRef: React.RefObject<string>,
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = transaction;
 
@@ -669,7 +730,7 @@ export const processTip = async (
 
     if (!postersRef.current[tipper] && !postersPromised.includes(tipper)) {
         postersPromised.push(tipper);
-        posterPromise = getPoster(rpcClient, tipper) as Promise<Poster>;
+        posterPromise = (findPostsWithRef.current === 'rpc' ? getPoster(rpcClient, tipper) : getPosterWithIndexerApi(indexerApiUrlRef.current, tipper)) as Promise<Poster>;
     }
 
     return { postId, newTip, updatedPostTips, posterPromise };
@@ -691,6 +752,26 @@ export const getPoster = async (rpcClient: RpcClient, posterAddress: string, ski
     return { address, stake, age, pubkey, state };
 };
 
+export const getPosterWithIndexerApi = async (indexerApiUrl: string, posterAddress: string) => {
+    const getAddressPromise = getAddressWithIndexerApi(indexerApiUrl, posterAddress);
+    const getIdentityPromise = getIdentityWithIndexerApi(indexerApiUrl, posterAddress);
+    const getIdentityAgePromise = getIdentityAgeWithIndexerApi(indexerApiUrl, posterAddress);
+
+    const resolvedPromises = await Promise.all([getAddressPromise, getIdentityPromise, getIdentityAgePromise]);
+
+    if (resolvedPromises[0].error || resolvedPromises[1].error || resolvedPromises[2].error) {
+        return;
+    }
+
+    const { result: { address, stake } } = resolvedPromises[0];
+    const { result: { state } } = resolvedPromises[1];
+    const { result: age } = resolvedPromises[2];
+
+    const pubkey = await getPubkeyWithIdenaIndexerApi(indexerApiUrl, posterAddress) ?? '';
+
+    return { address: address.toLowerCase(), stake, age, pubkey, state };
+};
+
 export const processMessage = async (
     message: EventTransaction,
     encryptedPrivateKey: string,
@@ -701,6 +782,8 @@ export const processMessage = async (
     postersRef: React.RefObject<Record<string, Poster>>,
     rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>) | undefined>,
     postersPromised: string[],
+    findPostsWithRef: React.RefObject<string>,
+    indexerApiUrlRef: React.RefObject<string>,
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = message;
 
@@ -821,7 +904,7 @@ export const processMessage = async (
         const existingPoster = postersRef.current[participant];
 
         if (!existingPoster) {
-            const poster = await getPoster(rpcClientRef.current!, participant, true);
+            const poster = await (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current!, participant, true) : getPosterWithIndexerApi(indexerApiUrlRef.current, participant));
 
             if (poster) {
                 postersRef.current[participant] = poster;
@@ -856,7 +939,7 @@ export const processMessage = async (
 
     if (!postersRef.current[sender] && !postersPromised.includes(sender)) {
         postersPromised.push(sender);
-        posterPromise = getPoster(rpcClientRef.current!, sender) as Promise<Poster>;
+        posterPromise = (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current!, sender) : getPosterWithIndexerApi(indexerApiUrlRef.current, sender)) as Promise<Poster>;
     }
 
     return { newMessage, posterPromise, mediaPromise, messagePromise };
@@ -1262,8 +1345,8 @@ export const resolveNewMedia = async (mediaPromises: any[], postsRef?: any, mess
     }
 }
 
-export const getPubKeyWithIdenaIndexerApi = async (indexerApiUrl: string, address: string) => {
-    let pubKey = '';
+export const getPubkeyWithIdenaIndexerApi = async (indexerApiUrl: string, address: string) => {
+    let pubkey = '';
     const limit = 100;
     let continuationToken = '';
     let txHash;
@@ -1292,18 +1375,18 @@ export const getPubKeyWithIdenaIndexerApi = async (indexerApiUrl: string, addres
 
         if (!getRawTxError && getRawTxResult) {
             try {
-                pubKey = extractSenderInfoFromRawTx(getRawTxResult).pubKey ?? '';
+                pubkey = extractSenderInfoFromRawTx(getRawTxResult).pubkey ?? '';
             } catch (error) {
                 // do nothing
             }
         }
     }
 
-    return pubKey;
+    return pubkey;
 };
 
-export const getPubKeyWithRpc = async (rpcClient: RpcClient, address: string) => {
-    let pubKey = '';
+export const getPubkeyWithRpc = async (rpcClient: RpcClient, address: string) => {
+    let pubkey = '';
     const count = 100;
     let token;
     let txHash;
@@ -1348,9 +1431,9 @@ export const getPubKeyWithRpc = async (rpcClient: RpcClient, address: string) =>
         if (blockBodyData) {
             const blockBody = BlockBody.fromHex(blockBodyData);
             const transaction = blockBody.transactions[txIndex];
-            pubKey = transaction.senderPubKey ?? '';
+            pubkey = transaction.senderPubKey ?? '';
         }
     }
 
-    return pubKey;
+    return pubkey;
 };
