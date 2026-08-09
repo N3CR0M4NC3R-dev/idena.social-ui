@@ -34,6 +34,7 @@ type MessagesProps = {
     setInputCredentialsApplied: React.Dispatch<React.SetStateAction<boolean>>,
     findPostsWithRef: React.RefObject<string>,
     indexerApiUrlRef: React.RefObject<string>,
+    SET_NEW_POSTS_ADDED_DELAY: number,
 };
 
 function Messages() {
@@ -64,6 +65,7 @@ function Messages() {
         setInputCredentialsApplied,
         findPostsWithRef,
         indexerApiUrlRef,
+        SET_NEW_POSTS_ADDED_DELAY,
     } = useOutletContext() as MessagesProps;
 
     const [sendMessageToAddress, setSendMessageToAddress] = useState<string>(zeroAddress);
@@ -194,6 +196,18 @@ function Messages() {
         }
     }
 
+    const toggleShowConversationHandler = (conversationKey: string) => {
+        const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[conversationKey][conversationKey].repliesHidden;
+        setPostDomSettings(conversationKey, { repliesHidden: newRepliesHidden }, true);
+
+        if (!newRepliesHidden) {
+            setTimeout(() => {
+                const messageInputTextareaElement = document.getElementById(`message-input-${conversationKey}`) as HTMLTextAreaElement;
+                messageInputTextareaElement.focus();
+            }, SET_NEW_POSTS_ADDED_DELAY);
+        }
+    };
+
     return (<>
         <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
         <div className="mb-4">
@@ -253,6 +267,8 @@ function Messages() {
                 const discussReplyToPostId = postDomSettingsItem.discussReplyToPostId;
                 const discussReplyToPost = discussReplyToPostId ? messagesRef.current[discussReplyToPostId!] : undefined;
 
+                const showReplies = !postDomSettingsItem.repliesHidden;
+
                 const postMediaAttachment = postMediaAttachmentsRef.current[`message-${conversationKey}`];
 
                 return <>
@@ -267,7 +283,10 @@ function Messages() {
                             <span className="text-[11px] text-red-400">pubkey missing</span>
                             <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={() => handleSubmitPubkeyModal(conversationPartner.address)}>Manually Provide Pubkey</span>
                         </div>}
-                        <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
+                        <div className="ml-3 flex gap-2">
+                            <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={() => toggleShowConversationHandler(conversationKey)}>Messages ({conversation.length})</span>
+                        </div>
+                        {showReplies && <div className="mt-1.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
                             <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
                                 {conversation.map((messageId) => {
                                     const message = messagesRef.current[messageId];
@@ -366,7 +385,7 @@ function Messages() {
                                     <p id={`message-copytx-${conversationKey}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => localCopyMessageTxHandler(conversationKey, conversationPartner.address, discussReplyToPostId)}>Copy tx</p>
                                 </div>
                             </>
-                        </div>
+                        </div>}
                     </div>
                     <div className="mt-10"></div>
                 </>;

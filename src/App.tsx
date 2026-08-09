@@ -1660,7 +1660,7 @@ function App() {
                         </div>
                     </div>
                     {mobileMenuOpen && <div className="mt-2 mb-4">
-                        <MenuComponent postersAddress={postersAddress} />
+                        <MenuComponent postersAddress={postersAddress} setMobileMenuOpen={setMobileMenuOpen} />
                     </div>}
                     <ScanBlocksComponent
                         currentBlockCaptured={currentBlockCaptured}
