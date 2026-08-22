@@ -9,18 +9,20 @@ import ScrollToTop from './components/ScrollToTop.tsx';
 import PostOutlet from './PostOutlet.tsx';
 import Settings from './Settings.tsx';
 import Messages from './Messages.tsx';
+import ConversationOutlet from './ConversationOutlet.tsx';
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
         <BrowserRouter>
             <ScrollToTop />
             <Routes>
-                <Route  path="/" element={<App />}>
+                <Route path="/" element={<App />}>
                     <Route index element={<LatestPosts />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/messages" element={<Messages />} />
                     <Route path="/address/:address" element={<Address />} />
                     <Route path="/post/:postId" element={<PostOutlet />} />
+                    <Route path="/conversation/:conversationKey" element={<ConversationOutlet />} />
                 </Route>
             </Routes>
         </BrowserRouter>

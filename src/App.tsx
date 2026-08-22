@@ -1069,7 +1069,7 @@ function App() {
 
                 for (let index = 0; index < newMessages.length; index++) {
                     const newMessage = newMessages[index] as Message;
-                    const conversationKey = newMessage.participants.map((item: string) => item.toLowerCase()).sort().join('-');
+                    const conversationKey = newMessage.conversationKey;
                     const conversation = isRecurseForward ? [ newMessage.messageId, ...(conversationsRef.current[conversationKey] ?? []) ] : [ ...(conversationsRef.current[conversationKey] ?? []), newMessage!.messageId ];
                     conversationsRef.current = { ...conversationsRef.current, [conversationKey]: conversation };
                     conversationKeys.push(conversationKey);
@@ -1596,7 +1596,8 @@ function App() {
         setModalOpen('expandImage');
     };
 
-    const handleSubmitPubkeyModal = (address: string) => {
+    const handleSubmitPubkeyModal = (e: MouseEventLocal, address: string) => {
+        e.stopPropagation();
         modalSubmitPubkeyRef.current = { address };
         setModalOpen('submitPubkey');
     };

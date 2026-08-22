@@ -52,6 +52,7 @@ export type Message = {
     messageId: string,
     sender: string,
     participants: string[], // includes sender
+    conversationKey: string,
     channelId: string,
     message?: string,
     replyToMessageId: string,
@@ -859,7 +860,7 @@ export const processMessage = async (
         }
     }
 
-    const [ participants, channelId, inputText, textPassword, replyToMessageId, mediaArray, mediaTypeArray, mediaPassword, tags ] = JSON.parse(messageDecoded!);
+    const [ participantsRaw, channelId, inputText, textPassword, replyToMessageId, mediaArray, mediaTypeArray, mediaPassword, tags ] = JSON.parse(messageDecoded!);
 
     const media = mediaArray[0];
     const mediaType = mediaTypeArray[0];
@@ -878,28 +879,28 @@ export const processMessage = async (
         return { continued: true };
     }
 
-    if (replyToMessageId && replyToMessageId >= newMessageId) {
+    if (replyToMessageId && parseInt(replyToMessageId) >= parseInt(newMessageId)) {
         return { continued: true };
     }
 
-    if (participants.length !== 2) {
+    if (participantsRaw.length !== 2) {
         return { continued: true };
     }
 
-    if (participants[0] !== sender) {
+    if (participantsRaw[0] !== sender) {
         return { continued: true };
     }
 
-    if (iAmRecipient && participants[1] !== postersAddress.toLowerCase()) {
+    if (iAmRecipient && participantsRaw[1] !== postersAddress.toLowerCase()) {
         return { continued: true };
     }
 
-    if (!isValidLowerCaseAddress(participants[1])) {
+    if (!isValidLowerCaseAddress(participantsRaw[1])) {
         return { continued: true };
     }
 
-    for (let index = 0; index < participants.length; index++) {
-        const participant = participants[index];
+    for (let index = 0; index < participantsRaw.length; index++) {
+        const participant = participantsRaw[index];
 
         const existingPoster = postersRef.current[participant];
 
@@ -911,6 +912,9 @@ export const processMessage = async (
             }
         }
     }
+
+    const participants = participantsRaw.map((item: string) => item.toLowerCase()).sort();
+    const conversationKey = keccak256(participants.join('-'));
 
     const sendersDetails_atTimeOfMessage = {
         stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
@@ -927,6 +931,7 @@ export const processMessage = async (
         messageId: newMessageId,
         sender,
         participants,
+        conversationKey,
         channelId,
         replyToMessageId,
         tags,
