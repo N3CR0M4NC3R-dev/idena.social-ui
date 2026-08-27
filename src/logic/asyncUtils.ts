@@ -755,13 +755,21 @@ export const getPoster = async (rpcClient: RpcClient, posterAddress: string, ski
 
 export const getPosterWithIndexerApi = async (indexerApiUrl: string, posterAddress: string) => {
     const getAddressPromise = getAddressWithIndexerApi(indexerApiUrl, posterAddress);
-    const getIdentityPromise = getIdentityWithIndexerApi(indexerApiUrl, posterAddress);
-    const getIdentityAgePromise = getIdentityAgeWithIndexerApi(indexerApiUrl, posterAddress);
+    const getIdentityPromise = getIdentityWithIndexerApi(indexerApiUrl, posterAddress); // error no identity found...
+    const getIdentityAgePromise = getIdentityAgeWithIndexerApi(indexerApiUrl, posterAddress); // result: 0
 
     const resolvedPromises = await Promise.all([getAddressPromise, getIdentityPromise, getIdentityAgePromise]);
 
-    if (resolvedPromises[0].error || resolvedPromises[1].error || resolvedPromises[2].error) {
+    if (resolvedPromises[0].error) {
         return;
+    }
+
+    if (resolvedPromises[1].error) {
+        resolvedPromises[1] = { result: { state: 'Not validated' } };
+    }
+
+    if (resolvedPromises[2].error) {
+        resolvedPromises[2] = { result: 0 };
     }
 
     const { result: { address, stake } } = resolvedPromises[0];
@@ -813,23 +821,32 @@ export const processMessage = async (
     }
 
     const messageEvent = messageEventRaw.split(',');
-    // @ts-ignore: Uint8Array.fromBase64 not recognized yet
-    const sendersMessageEncrypted = Uint8Array.fromBase64(messageEvent[0]);
-    // @ts-ignore: Uint8Array.fromBase64 not recognized yet
-    const recipientsMessageEncrypted =  Uint8Array.fromBase64(messageEvent[1]);
+
+    if (messageEvent.length < 2) {
+        return { continued: true };
+    }
 
     const keyData = new Uint8Array(sha3_256.array(password));
     const myPrivateKey = await decryptAESGCM(encryptedPrivateKey, keyData);
     const myPrivateKeyBytes = hexToUint8Array(myPrivateKey);
 
     const iAmSender = sender === postersAddress;
-    let iAmRecipient = false;
 
     let messageDecoded: string | undefined;
+    let decryptSuccesses: number[] = [];
 
-    if (iAmSender) {
+    for (let index = 0; index < messageEvent.length; index++) {
+        // @ts-ignore: Uint8Array.fromBase64 not recognized yet
+        const encryptedMessage = Uint8Array.fromBase64(messageEvent[index]);
+        
         try {
-            const myMessageDecrypted = await decrypt(myPrivateKeyBytes, sendersMessageEncrypted);
+            const myMessageDecrypted = await decrypt(myPrivateKeyBytes, encryptedMessage);
+            decryptSuccesses.push(index);
+
+            if (decryptSuccesses.length > 1 && messageEvent.length > 2) {
+                return { continued: true };
+            }
+
             messageDecoded = new TextDecoder().decode(myMessageDecrypted);
 
             const rawMessageHash = keccak256(messageDecoded);
@@ -838,26 +855,14 @@ export const processMessage = async (
                 return { continued: true };
             }
         } catch (error) {
-            return { continued: true };
-        }
-    }
-
-    try {
-        const messageDecrypted = await decrypt(myPrivateKeyBytes, recipientsMessageEncrypted);
-        iAmRecipient = true;
-
-        if (!iAmSender) {
-            messageDecoded = new TextDecoder().decode(messageDecrypted);
-            const rawMessageHash = keccak256(messageDecoded);
-
-            if (rawMessageHash !== messageEventHash) {
+            if (index === 0 && iAmSender) {
                 return { continued: true };
             }
         }
-    } catch (error) {
-        if (!iAmSender) {
-            return { continued: true };
-        }
+    }
+
+    if (!decryptSuccesses.length) {
+        return { continued: true };
     }
 
     const [ participantsRaw, channelId, inputText, textPassword, replyToMessageId, mediaArray, mediaTypeArray, mediaPassword, tags ] = JSON.parse(messageDecoded!);
@@ -883,7 +888,7 @@ export const processMessage = async (
         return { continued: true };
     }
 
-    if (participantsRaw.length !== 2) {
+    if (participantsRaw.length !== messageEvent.length) {
         return { continued: true };
     }
 
@@ -891,12 +896,29 @@ export const processMessage = async (
         return { continued: true };
     }
 
-    if (iAmRecipient && participantsRaw[1] !== postersAddress.toLowerCase()) {
+    if (participantsRaw.length > 2 && new Set(participantsRaw).size !== participantsRaw.length) {
         return { continued: true };
     }
 
-    if (!isValidLowerCaseAddress(participantsRaw[1])) {
+    for (let index = 0; index < participantsRaw.length; index++) {
+        const participant = participantsRaw[index];
+
+        if (!isValidLowerCaseAddress(participant)) {
+            return { continued: true };
+        }
+    }
+
+    const selfParticipants = participantsRaw.filter((participant: string) => participant === postersAddress.toLowerCase());
+    if (selfParticipants.length !== decryptSuccesses.length) {
         return { continued: true };
+    }
+
+    for (let index = 0; index < decryptSuccesses.length; index++) {
+        const jindex = decryptSuccesses[index];
+
+        if (participantsRaw[jindex] !== postersAddress.toLowerCase()) {
+            return { continued: true };
+        }
     }
 
     for (let index = 0; index < participantsRaw.length; index++) {

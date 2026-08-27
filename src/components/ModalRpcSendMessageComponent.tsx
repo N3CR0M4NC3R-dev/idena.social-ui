@@ -2,8 +2,8 @@ import { useState } from 'react';
 import RpcPostMessageUIComponent from './RpcPostMessageUIComponent';
 
 type ModalRpcSendMessageComponentProps = {
-    modalRpcSendMessageRef: React.RefObject<{ location: string; recipient: string; replyToMessageId?: string; }>,
-    submitMessageHandler: (location: string, recipient: string, replyToMessageId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
+    modalRpcSendMessageRef: React.RefObject<{ location: string; recipients: string[]; replyToMessageId?: string; }>,
+    submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
     closeModal: () => void,
 };
 
@@ -19,8 +19,8 @@ function ModalRpcSendMessageComponent(props: ModalRpcSendMessageComponentProps) 
     const [storeMediaIpfs, setStoreMediaIpfs] = useState<boolean>(true);
 
     const localSubmitMessageHandler = () => {
-        const { location, recipient, replyToMessageId } = modalRpcSendMessageRef.current;
-        submitMessageHandler(location, recipient, replyToMessageId, storeTextIpfs, storeMediaIpfs);
+        const { location, recipients, replyToMessageId } = modalRpcSendMessageRef.current;
+        submitMessageHandler(location, recipients, replyToMessageId, storeTextIpfs, storeMediaIpfs);
         closeModal();
     }
 

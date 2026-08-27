@@ -2,10 +2,11 @@ import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessa
 import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
 import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
 import { initDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from "../App.exports";
-import PosterHeaderComponent from "./PosterHeaderComponent";
 import type { Message, Poster } from "../logic/asyncUtils";
 import { useLocation, useNavigate } from "react-router";
 import { useReducer } from "react";
+import OneOnOneConversationHeaderComponent from "./OneOnOneConversationHeaderComponent";
+import GroupConversationHeaderComponent from "./GroupConversationHeaderComponent";
 
 type ConversationComponentProps = {
     conversationKey: string,
@@ -18,10 +19,10 @@ type ConversationComponentProps = {
     setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     inputPostDisabled: boolean,
     messageSettingsInvalid: boolean,
-    copyMessageTxHandler: (location: string, recipient: string, replyToMessageId?: string | undefined) => Promise<void>,
-    submitMessageHandler: (location: string, recipient: string, replyToMessageId?: string) => Promise<void>,
+    copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
+    submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>,
     makePostsWith: string,
-    handleOpenRpcSendMessageModal: (location: string, recipient: string, replyToMessageId?: string | undefined) => void,
+    handleOpenRpcSendMessageModal: (location: string, recipients: string[], replyToMessageId?: string | undefined) => void,
     SET_NEW_POSTS_ADDED_DELAY: number,
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
@@ -105,17 +106,17 @@ function ConversationComponent(props: ConversationComponentProps) {
         forceUpdate();
     };
 
-    const localCopyMessageTxHandler = async (location: string, recipient: string, replyToMessageId?: string) => {
-        copyMessageTxHandler(location, recipient, replyToMessageId);
+    const localCopyMessageTxHandler = async (location: string, recipients: string[], replyToMessageId?: string) => {
+        copyMessageTxHandler(location, recipients, replyToMessageId);
     }
 
-    const localSubmitMessageHandler = async (location: string, recipient: string, replyToMessageId?: string) => {
-        if (!postersRef.current[recipient].pubkey) {
+    const localSubmitMessageHandler = async (location: string, recipients: string[], replyToMessageId?: string) => {
+        if (recipients.some(recipient => !postersRef.current[recipient].pubkey)) {
             alert('Recipient pubkey missing');
             return;
         }
 
-        makePostsWith === 'rpc' ? handleOpenRpcSendMessageModal(location, recipient, replyToMessageId) : submitMessageHandler(location, recipient, replyToMessageId);
+        makePostsWith === 'rpc' ? handleOpenRpcSendMessageModal(location, recipients, replyToMessageId) : submitMessageHandler(location, recipients, replyToMessageId);
 
         const conversation = conversationsRef.current[location];
         if (conversation) {
@@ -146,11 +147,13 @@ function ConversationComponent(props: ConversationComponentProps) {
 
     const conversation = conversationsRef.current[conversationKey];
 
-    const participantsExcludingSelf = messagesRef.current[conversation[0]].participants.filter(item => item !== postersAddress);
+    const participants = messagesRef.current[conversation[0]].participants;
+
+    const participantsExcludingSelf = participants.filter(item => item !== postersAddress);
     if (!participantsExcludingSelf.length) {
         participantsExcludingSelf.push(postersAddress);
     }
-    const conversationPartner = postersRef.current[participantsExcludingSelf[0]];
+    const conversationPartners = participantsExcludingSelf.map(participant => postersRef.current[participant]);
 
     if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[conversationKey]?.[conversationKey]) {
         const domSettings = { ...initDomSettings, ...(isConversationOutlet && { repliesHidden: false }) };
@@ -167,16 +170,9 @@ function ConversationComponent(props: ConversationComponentProps) {
 
     return <>
         <div className="flex flex-col pt-3 pb-2 bg-stone-800 hover:cursor-pointer" onClick={() => handleConversationClick(conversationKey)}>
-            <PosterHeaderComponent
-                address={conversationPartner.address}
-                age={conversationPartner.age}
-                state={getIdentityStatus(conversationPartner.state)}
-                stake={parseInt(conversationPartner.stake)}
-            />
-            {!conversationPartner.pubkey && <div className="ml-3 flex gap-2">
-                <span className="text-[11px] text-red-400">pubkey missing</span>
-                <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => handleSubmitPubkeyModal(e, conversationPartner.address)}>Manually Provide Pubkey</span>
-            </div>}
+            {conversationPartners.length === 1
+            ? <OneOnOneConversationHeaderComponent conversationPartner={conversationPartners[0]} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />
+            : <GroupConversationHeaderComponent conversationPartners={conversationPartners} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />}
             <div className="ml-3 flex gap-2">
                 <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({conversation.length})</span>
             </div>
@@ -265,7 +261,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                                 />
                             </div>
                             <div>
-                                <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || messageSettingsInvalid} onClick={() => localSubmitMessageHandler(conversationKey, conversationPartner.address, discussReplyToPostId)}>{submittingMessage === conversationKey ? '...' : 'Send!'}</button>
+                                <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || messageSettingsInvalid} onClick={() => localSubmitMessageHandler(conversationKey, participantsExcludingSelf, discussReplyToPostId)}>{submittingMessage === conversationKey ? '...' : 'Send!'}</button>
                             </div>
                         </div>
                     </div>
@@ -278,7 +274,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                         </> : <>
                             <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, conversationKey, 'message')}>Add image</p>
                         </>}
-                        <p id={`message-copytx-${conversationKey}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => localCopyMessageTxHandler(conversationKey, conversationPartner.address, discussReplyToPostId)}>Copy tx</p>
+                        <p id={`message-copytx-${conversationKey}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => localCopyMessageTxHandler(conversationKey, participantsExcludingSelf, discussReplyToPostId)}>Copy tx</p>
                     </div>
                 </>
             </div>

@@ -5,8 +5,8 @@ import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaA
 import ConversationComponent from "./components/ConversationComponent";
 
 type MessagesProps = {
-    copyMessageTxHandler: (location: string, recipient: string, replyToMessageId?: string | undefined) => Promise<void>,
-    submitMessageHandler: (location: string, recipient: string, replyToMessageId?: string) => Promise<void>
+    copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
+    submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>
     nodeAvailable: boolean,
     makePostsWith: string,
     credentialsInvalid: string,
@@ -26,7 +26,7 @@ type MessagesProps = {
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
-    handleOpenRpcSendMessageModal: (location: string, recipient: string, replyToMessageId?: string | undefined) => void,
+    handleOpenRpcSendMessageModal: (location: string, recipients: string[], replyToMessageId?: string | undefined) => void,
     messageSettingsInvalid: boolean,
     setInputCredentialsApplied: React.Dispatch<React.SetStateAction<boolean>>,
     findPostsWithRef: React.RefObject<string>,
@@ -64,9 +64,11 @@ function Messages() {
         SET_NEW_POSTS_ADDED_DELAY,
     } = useOutletContext() as MessagesProps;
 
-    const [sendMessageToAddress, setSendMessageToAddress] = useState<string>(zeroAddress);
-    const [inputSendMessageToAddressApplied, setInputSendMessageToAddressApplied] = useState<boolean>(true);
+    const [addNewRecipient, setAddNewRecipient] = useState<string>(zeroAddress);
+    const [loadingNewRecipient, setLoadingNewRecipient] = useState<boolean>(false);
     const [addressInvalid, setAddressInvalid] = useState<string>('pubkey missing');
+
+    const [recipients, setRecipients] = useState<string[]>([]);
 
     const [, forceUpdate] = useReducer(x => x + 1, 0);
 
@@ -80,45 +82,62 @@ function Messages() {
         navigate(-1);
     };
 
-    const setInputSendMessageToAddressAppliedLocal = async (applied: boolean) => {
-        setInputSendMessageToAddressApplied(applied);
+    const addRecipient = async () => {
 
-        if (!applied) {
-            return;
-        }
+        try {
+            setLoadingNewRecipient(true);
 
-        let recipient = postersRef.current[sendMessageToAddress];
+            const candidate = addNewRecipient.toLowerCase();
 
-        if (!recipient) {
-            const poster = await (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current, sendMessageToAddress, true) : getPosterWithIndexerApi(indexerApiUrlRef.current, sendMessageToAddress));
-
-            if (poster) {
-                postersRef.current[sendMessageToAddress] = poster;
-                recipient = poster;
+            if (candidate === zeroAddress) {
+                throw 'cannot add zero address';
             }
-        }
 
-        if (!recipient) {
-            setAddressInvalid('not found');
-            return;
-        }
+            if (recipients.includes(candidate)) {
+                throw 'already a recipient';
+            }
 
-        if (!recipient.pubkey) {
-            if (findPostsWithRef.current === 'indexer-api') {
-                const pubkey = await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, recipient.address);
-                postersRef.current[sendMessageToAddress].pubkey = pubkey ?? '';
-            } else {
-                const pubkey = await getPubkeyWithRpc(rpcClientRef.current, recipient.address);
-                postersRef.current[sendMessageToAddress].pubkey = pubkey ?? '';
+            let recipient = postersRef.current[candidate];
+
+            if (!recipient) {
+                const poster = await (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current, candidate, true) : getPosterWithIndexerApi(indexerApiUrlRef.current, candidate));
+
+                if (poster) {
+                    postersRef.current[candidate] = poster;
+                    recipient = poster;
+                }
+            }
+
+            if (!recipient) {
+                setAddressInvalid('not found');
+                throw 'not found';
             }
 
             if (!recipient.pubkey) {
-                setAddressInvalid('pubkey missing');
-                return;
-            }
-        }
+                if (findPostsWithRef.current === 'indexer-api') {
+                    const pubkey = await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, recipient.address);
+                    postersRef.current[candidate].pubkey = pubkey ?? '';
+                } else {
+                    const pubkey = await getPubkeyWithRpc(rpcClientRef.current, recipient.address);
+                    postersRef.current[candidate].pubkey = pubkey ?? '';
+                }
 
-        setAddressInvalid('');
+                if (!recipient.pubkey) {
+                    setAddressInvalid('pubkey missing');
+                    throw 'pubkey missing';
+                }
+            }
+
+            setAddressInvalid('');
+            setAddNewRecipient('');
+
+            setRecipients(current => [ ...current, candidate ]);
+
+        } catch (error) {
+            alert(error);
+        } finally {
+            setLoadingNewRecipient(false);
+        }
     }
 
     const removeMediaHandler = (e: MouseEventLocal, location: string) => {
@@ -128,26 +147,27 @@ function Messages() {
         forceUpdate();
     };
 
-    const localCopyMessageTxHandler = async (location: string, recipient: string, replyToMessageId?: string) => {
-        if (addressInvalid) {
-            alert('Invalid recipient address');
+    const localCopyMessageTxHandler = async (location: string, replyToMessageId?: string) => {
+        if (!recipients.length) {
+            alert('No recipients');
             return;
         }
-        copyMessageTxHandler(location, recipient, replyToMessageId);
+        copyMessageTxHandler(location, recipients, replyToMessageId);
     }
 
-    const localSubmitMessageHandler = async (location: string, recipient: string, replyToMessageId?: string) => {
-        if (addressInvalid) {
-            alert('Invalid recipient address');
+    const localSubmitMessageHandler = async (location: string, replyToMessageId?: string) => {
+        if (!recipients.length) {
+            alert('No recipients');
             return;
         }
 
-        if (!postersRef.current[recipient].pubkey) {
-            alert('Recipient pubkey missing');
-            return;
-        }
+        setRecipients([]);
 
-        makePostsWith === 'rpc' ? handleOpenRpcSendMessageModal(location, recipient, replyToMessageId) : submitMessageHandler(location, recipient, replyToMessageId);
+        makePostsWith === 'rpc' ? handleOpenRpcSendMessageModal(location, recipients, replyToMessageId) : submitMessageHandler(location, recipients, replyToMessageId);
+    }
+
+    const removeRecipient = (recipient: string) => {
+        setRecipients(recipients.filter((item) => item !== recipient));
     }
 
     return (<>
@@ -156,19 +176,21 @@ function Messages() {
             {messageSettingsInvalid && <p className="mt-1 text-red-400 text-[13px]">Messaging is disabled because there is a problem with your settings. Please adjust your settings and return to this page.</p>}
         </div>
         <div className="mb-4">
-            <p className="mb-1">Send message to address:</p>
-            <input className="w-full mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputSendMessageToAddressApplied} value={sendMessageToAddress} onChange={e => setSendMessageToAddress(e.target.value)} />
-            {addressInvalid && <div className="flex gap-2">
-                <span className="text-[11px] text-red-400">Invalid address: {addressInvalid}</span>
-                {addressInvalid === 'pubkey missing' && sendMessageToAddress !== zeroAddress && <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => handleSubmitPubkeyModal(e, sendMessageToAddress)}>Manually Provide Pubkey</span>}
+            <p className="mb-1">Add recipient address:</p>
+            <input className="w-full mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" value={addNewRecipient} onChange={e => { setAddressInvalid(''); setAddNewRecipient(e.target.value); }} />
+            {addressInvalid && <div className="flex gap-2 text-[11px] text-red-400">
+                <span>Invalid address: {addressInvalid}.</span>
+                {addressInvalid === 'pubkey missing' && addNewRecipient !== zeroAddress && <><span className="text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => handleSubmitPubkeyModal(e, addNewRecipient)}>Manually Provide Pubkey</span><span>then try again</span></>}
             </div>}
             <div>
-                <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputSendMessageToAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputSendMessageToAddressAppliedLocal(!inputSendMessageToAddressApplied)}>{inputSendMessageToAddressApplied ? 'Change' : 'Apply'}</button>
-                {!inputSendMessageToAddressApplied && <p className="mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
+                <button className="h-7 w-30 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={loadingNewRecipient} onClick={() => addRecipient()}>{loadingNewRecipient ? 'Loading...' : 'Add Recipient'}</button>
             </div>
         </div>
         <div className="mb-4">
-            <p>Message to send:</p>
+            <p>Recipients:</p>
+            {recipients.map(recipient => <><p className="inline">{recipient}</p><button className="ml-2 text-[10px] align-[2.5px] h-4 w-5 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => removeRecipient(recipient)}>✖</button></>)}
+        </div>
+        <div className="mb-4">
             <textarea
                 id='message-input-main'
                 rows={4}
@@ -186,9 +208,9 @@ function Messages() {
                     </> : <>
                         <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, 'main', 'message')}>Add image</p>
                     </>}
-                    <p id={"message-copytx-main"} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => !inputPostDisabled && !messageSettingsInvalid && localCopyMessageTxHandler('main', sendMessageToAddress)}>Copy tx</p>
+                    <p id={"message-copytx-main"} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => !inputPostDisabled && !messageSettingsInvalid && localCopyMessageTxHandler('main')}>Copy tx</p>
                 </div>
-                <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => localSubmitMessageHandler('main', sendMessageToAddress)}>{submittingMessage === 'main' ? 'Sending...' : 'Send!'}</button>
+                <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => localSubmitMessageHandler('main')}>{submittingMessage === 'main' ? 'Sending...' : 'Send!'}</button>
             </div>
         </div>
         <div className="mb-4">

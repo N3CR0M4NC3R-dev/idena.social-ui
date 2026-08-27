@@ -209,7 +209,7 @@ function App() {
     const modalSendTipRef = useRef<Post>(undefined);
     const modalAddMediaRef = useRef<string>('');
     const modalRpcMakePostRef = useRef<{ location: string, replyToPostId?: string, channelId?: string }>({ location: '' });
-    const modalRpcSendMessageRef = useRef<{ location: string, recipient: string, replyToMessageId?: string }>({ location: '', recipient: '' });
+    const modalRpcSendMessageRef = useRef<{ location: string, recipients: string[], replyToMessageId?: string }>({ location: '', recipients: [] });
     const modalExpandImageRef = useRef<{ dataUrl?: string, cid?: string }>({});
     const modalSubmitPubkeyRef = useRef<{ address: string }>({ address: '' });
 
@@ -1309,7 +1309,7 @@ function App() {
         await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, makePostsWith, rpcClientRef.current!, callbackUrl);
     };
 
-    const copyMessageTxHandler = async (location: string, recipient: string, replyToMessageId?: string) => {
+    const copyMessageTxHandler = async (location: string, recipients: string[], replyToMessageId?: string) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot message!');
             return;
@@ -1342,10 +1342,8 @@ function App() {
                 mediaType = [postMediaAttachment.file.type];
             }
 
-            const recipientDetails = postersRef.current[recipient.toLowerCase()];
-
             // [participants, channelId, message, textPassword (AES-GCM encryption), replyToMessageId, media, mediaType, mediaPassword (AES-GCM encryption), tags]
-            const rawMessage = JSON.stringify([[postersAddress.toLowerCase(), recipient.toLowerCase()], '', inputText, textPassword, replyToMessageId ?? '', media, mediaType, mediaPassword, []]);
+            const rawMessage = JSON.stringify([[postersAddress.toLowerCase(), ...recipients], '', inputText, textPassword, replyToMessageId ?? '', media, mediaType, mediaPassword, []]);
             const rawMessageHash = keccak256(rawMessage);
 
             const encodedMessage = new TextEncoder().encode(rawMessage);
@@ -1358,11 +1356,18 @@ function App() {
             // @ts-ignore: Uint8Array.toBase64 not recognized yet
             const mySerializedEncryptedMessage = myEncryptedMessage.toBase64();
 
-            const recipientEncryptedMessage = await encrypt(hexToUint8Array(recipientDetails.pubkey), encodedMessage);
-            // @ts-ignore: Uint8Array.toBase64 not recognized yet
-            const recipientSerializedEncryptedMessage = recipientEncryptedMessage.toBase64();
+            const message = [mySerializedEncryptedMessage];
 
-            const message = [mySerializedEncryptedMessage, recipientSerializedEncryptedMessage];
+            for (let index = 0; index < recipients.length; index++) {
+                const recipient = recipients[index];
+                const recipientDetails = postersRef.current[recipient];
+
+                const recipientEncryptedMessage = await encrypt(hexToUint8Array(recipientDetails.pubkey), encodedMessage);
+                // @ts-ignore: Uint8Array.toBase64 not recognized yet
+                const recipientSerializedEncryptedMessage = recipientEncryptedMessage.toBase64();
+
+                message.push(recipientSerializedEncryptedMessage);
+            }
 
             messageTextareaElement.value = '';
 
@@ -1389,7 +1394,7 @@ function App() {
         }
     }
 
-    const submitMessageHandler = async (location: string, recipient: string, replyToMessageId?: string, storeTextIpfs?: boolean, storeMediaIpfs?: boolean) => {
+    const submitMessageHandler = async (location: string, recipients: string[], replyToMessageId?: string, storeTextIpfs?: boolean, storeMediaIpfs?: boolean) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot message!');
             return;
@@ -1465,10 +1470,8 @@ function App() {
             mediaType = [postMediaAttachment.file.type];
         }
 
-        const recipientDetails = postersRef.current[recipient.toLowerCase()];
-
         // [participants, channelId, message, textPassword (AES-GCM encryption), replyToMessageId, media, mediaType, mediaPassword (AES-GCM encryption), tags]
-        const rawMessage = JSON.stringify([[postersAddress.toLowerCase(), recipient.toLowerCase()], '', inputText, textPassword, replyToMessageId ?? '', media, mediaType, mediaPassword, []]);
+        const rawMessage = JSON.stringify([[postersAddress.toLowerCase(), ...recipients], '', inputText, textPassword, replyToMessageId ?? '', media, mediaType, mediaPassword, []]);
         const rawMessageHash = keccak256(rawMessage);
 
         const encodedMessage = new TextEncoder().encode(rawMessage);
@@ -1482,11 +1485,18 @@ function App() {
         // @ts-ignore: Uint8Array.toBase64 not recognized yet
         const mySerializedEncryptedMessage = myEncryptedMessage.toBase64();
 
-        const recipientEncryptedMessage = await encrypt(hexToUint8Array(recipientDetails.pubkey), encodedMessage);
-        // @ts-ignore: Uint8Array.toBase64 not recognized yet
-        const recipientSerializedEncryptedMessage = recipientEncryptedMessage.toBase64();
+        const message = [mySerializedEncryptedMessage];
 
-        const message = [mySerializedEncryptedMessage, recipientSerializedEncryptedMessage];
+        for (let index = 0; index < recipients.length; index++) {
+            const recipient = recipients[index];
+            const recipientDetails = postersRef.current[recipient];
+
+            const recipientEncryptedMessage = await encrypt(hexToUint8Array(recipientDetails.pubkey), encodedMessage);
+            // @ts-ignore: Uint8Array.toBase64 not recognized yet
+            const recipientSerializedEncryptedMessage = recipientEncryptedMessage.toBase64();
+
+            message.push(recipientSerializedEncryptedMessage);
+        }
 
         messageTextareaElement.value = '';
         postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [`message-${location}`]: undefined };
@@ -1576,7 +1586,7 @@ function App() {
         setModalOpen('rpcMakePost');
     };
 
-    const handleOpenRpcSendMessageModal = (location: string, recipient: string, replyToMessageId?: string) => {
+    const handleOpenRpcSendMessageModal = (location: string, recipients: string[], replyToMessageId?: string) => {
         if (!nodeAvailable) {
             alert('Node unavailable, cannot message!');
             return;
@@ -1586,7 +1596,7 @@ function App() {
             return;
         }
 
-        modalRpcSendMessageRef.current = { location, recipient, replyToMessageId };
+        modalRpcSendMessageRef.current = { location, recipients, replyToMessageId };
         setModalOpen('rpcSendMessage');
     };
 

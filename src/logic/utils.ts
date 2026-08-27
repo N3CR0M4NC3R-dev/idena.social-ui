@@ -12,6 +12,10 @@ export function getDisplayAddressShort(address: string) {
     return `${address.slice(0, 5)}...${address.slice(-3)}`;
 }
 
+export function getDisplayAddressVeryShort(address: string) {
+    return `${address.slice(0, 4)}...${address.slice(-2)}`;
+}
+
 export function getDisplayDateTime(timestamp: number) {
     const datePost = new Date(timestamp * 1000);
     const dateToday = new Date();
