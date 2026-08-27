@@ -186,7 +186,7 @@ function Messages() {
                 <button className="h-7 w-30 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={loadingNewRecipient} onClick={() => addRecipient()}>{loadingNewRecipient ? 'Loading...' : 'Add Recipient'}</button>
             </div>
         </div>
-        {recipients.length && <div className="mb-4">
+        {!!recipients.length && <div className="mb-4">
             <p>Recipients:</p>
             {recipients.map(recipient => <><p className="inline">{recipient}</p><button className="ml-2 text-[10px] align-[2.5px] h-4 w-5 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => removeRecipient(recipient)}>✖</button></>)}
         </div>}
