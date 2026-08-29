@@ -1,8 +1,8 @@
 import Decimal from "decimal.js";
 import imageType from 'image-type';
 import isSvg from 'is-svg';
-import { decrypt } from "eciesjs";
-import { calculateMaxFee, dna2num, getCallTransaction, getMakePostTransactionPayload, getSendMessageTransactionPayload, hex2str, hexToDecimal, isValidLowerCaseAddress, sanitizeStr, decryptAESGCM, extractSenderInfoFromRawTx } from "./utils";
+import { decrypt, encrypt } from "eciesjs";
+import { calculateMaxFee, dna2num, getCallTransaction, getMakePostTransactionPayload, getSendMessageTransactionPayload, hex2str, hexToDecimal, isValidLowerCaseAddress, sanitizeStr, decryptAESGCM, extractSenderInfoFromRawTx, extractPubkeyAddressFromPrivateKey, likeEmoji } from "./utils";
 import { BlockBody, CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
 import type { EventTransaction } from "../App.exports";
@@ -63,6 +63,8 @@ export type Message = {
     textPassword: string,
     mediaPassword: string,
     sendersDetails_atTimeOfMessage:  { stake: number, state: string, age: number },
+    isLike: boolean,
+    orphaned: boolean,
 };
 
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
@@ -947,6 +949,8 @@ export const processMessage = async (
     const messagePromise = sanitizedInputText && getMessage(newMessageId, sanitizedInputText, rpcClientRef.current!, textPassword);
     const mediaPromise = (media && mediaType) && getMedia(newMessageId, media, rpcClientRef.current!, mediaPassword);
 
+    const isLike = sanitizedInputText === likeEmoji && !!replyToMessageId;
+
     const newMessage = {
         timestamp,
         txHash,
@@ -960,6 +964,7 @@ export const processMessage = async (
         textPassword,
         mediaPassword,
         sendersDetails_atTimeOfMessage,
+        isLike,
     } as Message;
 
     let posterPromise: Promise<Poster> | undefined;
@@ -972,11 +977,11 @@ export const processMessage = async (
     return { newMessage, posterPromise, mediaPromise, messagePromise };
 }
 
-export const getReplyPosts = (
-    newPostId: string,
+export const saveReplyPostId = (
+    newReplyPostId: string,
     replyToPostId: string,
+    replyToPost: Post | Message,
     isRecurseForward: boolean,
-    postsRef: Record<string, Post>,
     replyPostsTreeRef: Record<string, string>,
     forwardOrphanedReplyPostsTreeRef: Record<string, string>,
     backwardOrphanedReplyPostsTreeRef: Record<string, string>,
@@ -985,19 +990,17 @@ export const getReplyPosts = (
     newBackwardOrphanedReplyPosts: Record<string, string>,
 ) => {
     if (replyToPostId) {
-        const replyToPost = postsRef[replyToPostId];
-
         if (!replyToPost || replyToPost.orphaned) {
             if (isRecurseForward) {
                 const childPostIds = getChildPostIds(replyToPostId, forwardOrphanedReplyPostsTreeRef);
-                newForwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPostId;
+                newForwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newReplyPostId;
             } else {
                 const childPostIds = getChildPostIds(replyToPostId, backwardOrphanedReplyPostsTreeRef);
-                newBackwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPostId;
+                newBackwardOrphanedReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newReplyPostId;
             }
         } else {
             const childPostIds = getChildPostIds(replyToPostId, replyPostsTreeRef);
-            newReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newPostId;
+            newReplyPosts[`${replyToPostId}-${childPostIds.length}`] = newReplyPostId;
         }
     }
 };
@@ -1006,11 +1009,11 @@ export const deOrphanReplyPosts = (
     parentId: string,
     forwardOrphanedReplyPostsTreeRef: Record<string, string>,
     backwardOrphanedReplyPostsTreeRef: Record<string, string>,
-    postsRef: Record<string, Post>,
+    postsRef: Record<string, Post> | Record<string, Message>,
     newForwardOrphanedReplyPosts: Record<string, string>,
     newBackwardOrphanedReplyPosts: Record<string, string>,
     newDeOrphanedReplyPosts: Record<string, string>,
-    newPosts: Record<string, Post>
+    newPosts: Record<string, Post> | Record<string, Message>,
 ) => {
     const newForwardDeOrphanedIds = getChildPostIds(parentId, forwardOrphanedReplyPostsTreeRef).map((deOrphanedId, index) => ({ recurseForward: true, oldKey: `${parentId}-${index}`, deOrphanedId }));
     const newBackwardDeOrphanedIds = getChildPostIds(parentId, backwardOrphanedReplyPostsTreeRef).map((deOrphanedId, index) => ({ recurseForward: false, oldKey: `${parentId}-${index}`, deOrphanedId }));
@@ -1464,3 +1467,50 @@ export const getPubkeyWithRpc = async (rpcClient: RpcClient, address: string) =>
 
     return pubkey;
 };
+
+export const encryptRecipientsMessage = async (
+    postersAddress: string,
+    recipients: string[],
+    inputText: string,
+    textPassword: string,
+    media: string[],
+    mediaType: string[],
+    mediaPassword: string,
+    makePostsWith: string,
+    encryptedPrivateKeyFromNodeRef: React.RefObject<string>,
+    encryptedPrivateKey: string,
+    passwordFromNodeRef: React.RefObject<string>,
+    password: string,
+    postersRef: React.RefObject<Record<string, Poster>>,
+    replyToMessageId?: string,
+) => {
+    // [participants, channelId, message, textPassword (AES-GCM encryption), replyToMessageId, media, mediaType, mediaPassword (AES-GCM encryption), tags]
+    const rawMessage = JSON.stringify([[postersAddress.toLowerCase(), ...recipients], '', inputText, textPassword, replyToMessageId ?? '', media, mediaType, mediaPassword, []]);
+    const rawMessageHash = keccak256(rawMessage);
+
+    const encodedMessage = new TextEncoder().encode(rawMessage);
+
+    const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+    const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
+    const keyData = new Uint8Array(sha3_256.array(passwordyActual));
+    const myPrivateKey = await decryptAESGCM(encryptedPrivateKeyActual, keyData);
+    const { pubkey: myPubkey } = extractPubkeyAddressFromPrivateKey(myPrivateKey);
+    const myEncryptedMessage = await encrypt(hexToUint8Array(myPubkey), encodedMessage);
+    // @ts-ignore: Uint8Array.toBase64 not recognized yet
+    const mySerializedEncryptedMessage = myEncryptedMessage.toBase64();
+
+    const message = [mySerializedEncryptedMessage];
+
+    for (let index = 0; index < recipients.length; index++) {
+        const recipient = recipients[index];
+        const recipientDetails = postersRef.current[recipient];
+
+        const recipientEncryptedMessage = await encrypt(hexToUint8Array(recipientDetails.pubkey), encodedMessage);
+        // @ts-ignore: Uint8Array.toBase64 not recognized yet
+        const recipientSerializedEncryptedMessage = recipientEncryptedMessage.toBase64();
+
+        message.push(recipientSerializedEncryptedMessage);
+    }
+
+    return { message, rawMessageHash };
+}

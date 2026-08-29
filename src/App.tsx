@@ -4,7 +4,7 @@ import { hexToUint8Array } from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { keccak256, sha3_256 } from 'js-sha3';
 import { encrypt } from 'eciesjs';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, getReplyPosts, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, saveReplyPostId, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
@@ -37,6 +37,7 @@ const sendMessageMethod = 'sendMessage';
 const allMethods = [makePostMethod, sendTipMethod, sendMessageMethod];
 const thisChannelId = '';
 const discussPrefix = 'discuss:';
+const messagePrefix = 'message:';
 const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
@@ -722,8 +723,6 @@ function App() {
 
                 const newLatestPosts: string[] = [];
 
-                let newReplyPostsCollection = {};
-
                 const postersPromised: string[] = [];
                 const posterPromises = [];
                 const messagePromises = [];
@@ -838,11 +837,13 @@ function App() {
                         const channelId = discussPrefix + discussionPostId;
                         postsRef.current = { ...postsRef.current, [channelId]: { orphaned } as Post };
 
-                        getReplyPosts(
+                        const replyToPost = postsRef.current[channelId];
+
+                        saveReplyPostId(
                             newPost!.postId,
                             channelId,
+                            replyToPost,
                             isRecurseForward,
-                            postsRef.current,
                             replyPostsTreeRef.current,
                             forwardOrphanedReplyPostsTreeRef.current,
                             backwardOrphanedReplyPostsTreeRef.current,
@@ -856,11 +857,13 @@ function App() {
                         }
 
                     } else if (newPost!.channelId === thisChannelId) {
-                        getReplyPosts(
+                        const replyToPost = postsRef.current[newPost!.replyToPostId];
+
+                        saveReplyPostId(
                             newPost!.postId,
                             newPost!.replyToPostId,
+                            replyToPost,
                             isRecurseForward,
-                            postsRef.current,
                             replyPostsTreeRef.current,
                             forwardOrphanedReplyPostsTreeRef.current,
                             backwardOrphanedReplyPostsTreeRef.current,
@@ -872,8 +875,6 @@ function App() {
                         if (!isObjectEmpty(newForwardOrphanedReplyPosts) || !isObjectEmpty(newBackwardOrphanedReplyPosts)) {
                             newPost!.orphaned = true;
                         }
-
-                        newReplyPostsCollection = { ...newReplyPostsCollection, ...newReplyPosts };
 
                         deOrphanReplyPosts(
                             newPost!.postId,
@@ -1053,11 +1054,55 @@ function App() {
                         continue;
                     }
 
+                    const newReplyPosts: Record<string, string> = {};
+                    const newForwardOrphanedReplyPosts: Record<string, string> = {};
+                    const newBackwardOrphanedReplyPosts: Record<string, string> = {};
+                    const newDeOrphanedReplyPosts: Record<string, string> = {};
+
+                    const updatedMessages: Record<string, Message> = {};
+
+                    if (newMessage!.isLike) {
+                        const replyToMessage = messagesRef.current[newMessage!.replyToMessageId];
+
+                        saveReplyPostId(
+                            newMessage!.messageId,
+                            messagePrefix + newMessage!.replyToMessageId,
+                            replyToMessage,
+                            isRecurseForward,
+                            replyPostsTreeRef.current,
+                            forwardOrphanedReplyPostsTreeRef.current,
+                            backwardOrphanedReplyPostsTreeRef.current,
+                            newReplyPosts,
+                            newForwardOrphanedReplyPosts,
+                            newBackwardOrphanedReplyPosts,
+                        );
+
+                        if (!isObjectEmpty(newForwardOrphanedReplyPosts) || !isObjectEmpty(newBackwardOrphanedReplyPosts)) {
+                            newMessage!.orphaned = true;
+                        }
+                    }
+
+                    deOrphanReplyPosts(
+                        messagePrefix + newMessage!.messageId,
+                        forwardOrphanedReplyPostsTreeRef.current,
+                        backwardOrphanedReplyPostsTreeRef.current,
+                        messagesRef.current,
+                        newForwardOrphanedReplyPosts,
+                        newBackwardOrphanedReplyPosts,
+                        newDeOrphanedReplyPosts,
+                        updatedMessages,
+                    );
+
                     posterPromise && posterPromises.push(posterPromise);
                     messagePromise && messagePromises.push(messagePromise);
                     mediaPromise && mediaPromises.push(mediaPromise);
 
-                    messagesRef.current = { ...messagesRef.current, [newMessage!.messageId]: newMessage! };
+                    replyPostsTreeRef.current = { ...replyPostsTreeRef.current, ...newReplyPosts };
+                    deOrphanedReplyPostsTreeRef.current = { ...deOrphanedReplyPostsTreeRef.current, ...newDeOrphanedReplyPosts };
+                    messagesRef.current = { ...messagesRef.current, ...updatedMessages, [newMessage!.messageId]: newMessage! };
+                    forwardOrphanedReplyPostsTreeRef.current = { ...forwardOrphanedReplyPostsTreeRef.current, ...newForwardOrphanedReplyPosts };
+                    backwardOrphanedReplyPostsTreeRef.current = { ...backwardOrphanedReplyPostsTreeRef.current, ...newBackwardOrphanedReplyPosts };
+
                     newMessages.push(newMessage);
                 }
 
@@ -1470,33 +1515,22 @@ function App() {
             mediaType = [postMediaAttachment.file.type];
         }
 
-        // [participants, channelId, message, textPassword (AES-GCM encryption), replyToMessageId, media, mediaType, mediaPassword (AES-GCM encryption), tags]
-        const rawMessage = JSON.stringify([[postersAddress.toLowerCase(), ...recipients], '', inputText, textPassword, replyToMessageId ?? '', media, mediaType, mediaPassword, []]);
-        const rawMessageHash = keccak256(rawMessage);
-
-        const encodedMessage = new TextEncoder().encode(rawMessage);
-
-        const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
-        const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
-        const keyData = new Uint8Array(sha3_256.array(passwordyActual));
-        const myPrivateKey = await decryptAESGCM(encryptedPrivateKeyActual, keyData);
-        const { pubkey: myPubkey } = extractPubkeyAddressFromPrivateKey(myPrivateKey);
-        const myEncryptedMessage = await encrypt(hexToUint8Array(myPubkey), encodedMessage);
-        // @ts-ignore: Uint8Array.toBase64 not recognized yet
-        const mySerializedEncryptedMessage = myEncryptedMessage.toBase64();
-
-        const message = [mySerializedEncryptedMessage];
-
-        for (let index = 0; index < recipients.length; index++) {
-            const recipient = recipients[index];
-            const recipientDetails = postersRef.current[recipient];
-
-            const recipientEncryptedMessage = await encrypt(hexToUint8Array(recipientDetails.pubkey), encodedMessage);
-            // @ts-ignore: Uint8Array.toBase64 not recognized yet
-            const recipientSerializedEncryptedMessage = recipientEncryptedMessage.toBase64();
-
-            message.push(recipientSerializedEncryptedMessage);
-        }
+        const { message, rawMessageHash } = await encryptRecipientsMessage(
+            postersAddress,
+            recipients,
+            inputText,
+            textPassword,
+            media,
+            mediaType,
+            mediaPassword,
+            makePostsWith,
+            encryptedPrivateKeyFromNodeRef,
+            encryptedPrivateKey,
+            passwordFromNodeRef,
+            password,
+            postersRef,
+            replyToMessageId,
+        );
 
         messageTextareaElement.value = '';
         postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [`message-${location}`]: undefined };
@@ -1505,6 +1539,40 @@ function App() {
 
         await submitMessage(postersAddress, contractAddressCurrent, sendMessageMethod, message, rawMessageHash, makePostsWith, rpcClientRef.current!, callbackUrl);
     };
+
+    const submitMessageLikeHandler = async (emoji: string, location: string, recipients: string[], replyToMessageId: string) => {
+        if (!nodeAvailable) {
+            alert('Node unavailable, cannot like!');
+            return;
+        }
+
+        setSubmittingLike(location);
+
+        const inputText = emoji;
+        const media: string[] = [];
+        const mediaType: string[] = [];
+        let textPassword = '';
+        let mediaPassword = '';
+
+        const { message, rawMessageHash } = await encryptRecipientsMessage(
+            postersAddress,
+            recipients,
+            inputText,
+            textPassword,
+            media,
+            mediaType,
+            mediaPassword,
+            makePostsWith,
+            encryptedPrivateKeyFromNodeRef,
+            encryptedPrivateKey,
+            passwordFromNodeRef,
+            password,
+            postersRef,
+            replyToMessageId,
+        );
+
+        await submitMessage(postersAddress, contractAddressCurrent, sendMessageMethod, message, rawMessageHash, makePostsWith, rpcClientRef.current!, callbackUrl);
+    }
 
     const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
         e.stopPropagation();
@@ -1713,6 +1781,7 @@ function App() {
                         replyPostsTreeRef,
                         deOrphanedReplyPostsTreeRef,
                         discussPrefix,
+                        messagePrefix,
                         SET_NEW_POSTS_ADDED_DELAY,
                         inputPostDisabled,
                         copyPostTxHandler,
@@ -1720,6 +1789,7 @@ function App() {
                         submitLikeHandler,
                         copyMessageTxHandler,
                         submitMessageHandler,
+                        submitMessageLikeHandler,
                         submittingPost,
                         submittingLike,
                         submittingTip,

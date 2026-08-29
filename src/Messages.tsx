@@ -7,6 +7,7 @@ import ConversationComponent from "./components/ConversationComponent";
 type MessagesProps = {
     copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
     submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>
+    submitMessageLikeHandler: (emoji: string, location: string, recipients: string[], replyToMessageId: string) => Promise<void>,
     nodeAvailable: boolean,
     makePostsWith: string,
     credentialsInvalid: string,
@@ -21,17 +22,22 @@ type MessagesProps = {
     browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
     setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     submittingMessage: string,
+    submittingLike: string,
     inputPostDisabled: boolean,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
+    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Message[]) => void,
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
     handleOpenRpcSendMessageModal: (location: string, recipients: string[], replyToMessageId?: string | undefined) => void,
     messageSettingsInvalid: boolean,
     setInputCredentialsApplied: React.Dispatch<React.SetStateAction<boolean>>,
     findPostsWithRef: React.RefObject<string>,
     indexerApiUrlRef: React.RefObject<string>,
+    replyPostsTreeRef: React.RefObject<Record<string, string>>,
+    deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     SET_NEW_POSTS_ADDED_DELAY: number,
+    messagePrefix: string,
 };
 
 function Messages() {
@@ -40,6 +46,7 @@ function Messages() {
     const {
         copyMessageTxHandler,
         submitMessageHandler,
+        submitMessageLikeHandler,
         makePostsWith,
         zeroAddress,
         postersRef,
@@ -51,17 +58,22 @@ function Messages() {
         browserStateHistoryRef,
         setBrowserStateHistorySettings,
         submittingMessage,
+        submittingLike,
         inputPostDisabled,
         postMediaAttachmentsRef,
         handleOpenAddMediaModal,
         handleExpandImageModal,
+        handleOpenLikesModal,
         handleSubmitPubkeyModal,
         handleOpenRpcSendMessageModal,
         messageSettingsInvalid,
         setInputCredentialsApplied,
         findPostsWithRef,
         indexerApiUrlRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         SET_NEW_POSTS_ADDED_DELAY,
+        messagePrefix,
     } = useOutletContext() as MessagesProps;
 
     const [addNewRecipient, setAddNewRecipient] = useState<string>(zeroAddress);
@@ -218,6 +230,8 @@ function Messages() {
                 return <ConversationComponent
                     conversationKey={conversationKey}
                     postersAddress={postersAddress}
+                    replyPostsTreeRef={replyPostsTreeRef}
+                    deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
                     postersRef={postersRef}
                     conversationsRef={conversationsRef}
                     messagesRef={messagesRef}
@@ -228,13 +242,17 @@ function Messages() {
                     messageSettingsInvalid={messageSettingsInvalid}
                     copyMessageTxHandler={copyMessageTxHandler}
                     submitMessageHandler={submitMessageHandler}
+                    submitMessageLikeHandler={submitMessageLikeHandler}
                     makePostsWith={makePostsWith}
                     handleOpenRpcSendMessageModal={handleOpenRpcSendMessageModal}
                     SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
+                    handleOpenLikesModal={handleOpenLikesModal}
                     handleSubmitPubkeyModal={handleSubmitPubkeyModal}
                     handleOpenAddMediaModal={handleOpenAddMediaModal}
                     handleExpandImageModal={handleExpandImageModal}
                     submittingMessage={submittingMessage}
+                    submittingLike={submittingLike}
+                    messagePrefix={messagePrefix}
                 />
             })}
         </div>

@@ -1,8 +1,10 @@
-import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessageLines } from "../logic/utils";
+import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessageLines, likeEmoji } from "../logic/utils";
 import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
 import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
+import heartGraySvg from '../assets/heart-gray.svg';
+import heartRedSvg from '../assets/heart-red.svg';
 import { initDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from "../App.exports";
-import type { Message, Poster } from "../logic/asyncUtils";
+import { getChildPostIds, type Message, type Poster } from "../logic/asyncUtils";
 import { useLocation, useNavigate } from "react-router";
 import { useReducer } from "react";
 import OneOnOneConversationHeaderComponent from "./OneOnOneConversationHeaderComponent";
@@ -11,6 +13,8 @@ import GroupConversationHeaderComponent from "./GroupConversationHeaderComponent
 type ConversationComponentProps = {
     conversationKey: string,
     postersAddress: string,
+    replyPostsTreeRef: React.RefObject<Record<string, string>>,
+    deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     postersRef: React.RefObject<Record<string, Poster>>,
     conversationsRef: React.RefObject<Record<string, string[]>>,
     messagesRef: React.RefObject<Record<string, Message>>,
@@ -21,13 +25,17 @@ type ConversationComponentProps = {
     messageSettingsInvalid: boolean,
     copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
     submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>,
+    submitMessageLikeHandler: (emoji: string, location: string, recipients: string[], replyToMessageId: string) => Promise<void>,
     makePostsWith: string,
     handleOpenRpcSendMessageModal: (location: string, recipients: string[], replyToMessageId?: string | undefined) => void,
     SET_NEW_POSTS_ADDED_DELAY: number,
+    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Message[]) => void,
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
     submittingMessage: string,
+    submittingLike: string,
+    messagePrefix: string,
     isConversationOutlet?: boolean,
 };
 
@@ -39,6 +47,8 @@ function ConversationComponent(props: ConversationComponentProps) {
     const {
         conversationKey,
         postersAddress,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         postersRef,
         conversationsRef,
         messagesRef,
@@ -49,13 +59,17 @@ function ConversationComponent(props: ConversationComponentProps) {
         messageSettingsInvalid,
         copyMessageTxHandler,
         submitMessageHandler,
+        submitMessageLikeHandler,
         makePostsWith,
         handleOpenRpcSendMessageModal,
         SET_NEW_POSTS_ADDED_DELAY,
+        handleOpenLikesModal,
         handleSubmitPubkeyModal,
         handleOpenAddMediaModal,
         handleExpandImageModal,
         submittingMessage,
+        submittingLike,
+        messagePrefix,
         isConversationOutlet,
     } = props as ConversationComponentProps;
 
@@ -111,6 +125,10 @@ function ConversationComponent(props: ConversationComponentProps) {
     }
 
     const localSubmitMessageHandler = async (location: string, recipients: string[], replyToMessageId?: string) => {
+        if (inputPostDisabled || messageSettingsInvalid) {
+            return;
+        }
+
         if (recipients.some(recipient => !postersRef.current[recipient].pubkey)) {
             alert('Recipient pubkey missing');
             return;
@@ -122,6 +140,14 @@ function ConversationComponent(props: ConversationComponentProps) {
         if (conversation) {
             setDiscussReplyToPostIdHandler(location);
         }
+    }
+
+    const localSubmitLikeHandler = async (location: string, recipients: string[], replyToMessageId: string) => {
+        if (inputPostDisabled || messageSettingsInvalid) {
+            return;
+        }
+
+        await submitMessageLikeHandler(likeEmoji, location, recipients, replyToMessageId);
     }
 
     const toggleShowConversationHandler = (e: MouseEventLocal, conversationKey: string) => {
@@ -145,9 +171,9 @@ function ConversationComponent(props: ConversationComponentProps) {
         }
     };
 
-    const conversation = conversationsRef.current[conversationKey];
+    const conversation = conversationsRef.current[conversationKey].map((messageId) => messagesRef.current[messageId]).filter(message => !message.isLike);
 
-    const participants = messagesRef.current[conversation[0]].participants;
+    const participants = conversation[0].participants;
 
     const participantsExcludingSelf = participants.filter(item => item !== postersAddress);
     if (!participantsExcludingSelf.length) {
@@ -180,8 +206,7 @@ function ConversationComponent(props: ConversationComponentProps) {
         {showReplies && <div className="bg-stone-800 pt-1 pb-2">
             <div className="mt-1.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
                 <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
-                    {conversation.map((messageId) => {
-                        const message = messagesRef.current[messageId];
+                    {conversation.map((message) => {
                         const posterDisplayAddress = getDisplayAddressShort(message.sender);
                         const posterStake = message.sendersDetails_atTimeOfMessage.stake;
                         const posterState = message.sendersDetails_atTimeOfMessage.state;
@@ -190,6 +215,11 @@ function ConversationComponent(props: ConversationComponentProps) {
                         const { messageLines } = getMessageLines(message.message);
                         const replyToMessage = messagesRef.current[message.replyToMessageId];
                         const awaitingReplyToMessage = message.replyToMessageId && !replyToMessage;
+
+                        const messageParentId = messagePrefix + message.messageId;
+                        const repliesToThisMessage = [ ...getChildPostIds(messageParentId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(messageParentId, deOrphanedReplyPostsTreeRef.current) ];
+                        const replyMessages = repliesToThisMessage.map(replyMessageId => messagesRef.current[replyMessageId]);
+                        const replyLikes = replyMessages.filter(replyMessage => replyMessage.message === likeEmoji);
 
                         return (
                             <li key={message.messageId} className="hover:bg-stone-800">
@@ -234,7 +264,12 @@ function ConversationComponent(props: ConversationComponentProps) {
                                             </div>}
                                         </div>
                                         <div className="pt-0.5 mr-1 text-[12px] flex flex-col gap-0.5">
-                                            <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] -ml-0.5 mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(conversationKey, messageId)} /></div>
+                                            <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] -ml-0.5 mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)} /></div>
+                                            {replyLikes.length ?
+                                                <div className="text-red-400 text-left whitespace-nowrap"><img src={heartRedSvg} className={'h-5 p-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === message.messageId ? ' bg-red-400/30' : '')} onClick={() => localSubmitLikeHandler(conversationKey, participantsExcludingSelf, message.messageId)} /><a className="text-red-400 ml-[1px] align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{replyLikes.length}</a></div>
+                                            :
+                                                <div className="text-gray-500 text-left"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === message.messageId ? ' bg-red-400/30' : '')} onClick={() => localSubmitLikeHandler(conversationKey, participantsExcludingSelf, message.messageId)} /></div>
+                                            }
                                         </div>
                                     </div>
                                 </div>

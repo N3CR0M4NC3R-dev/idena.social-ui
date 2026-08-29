@@ -15,13 +15,19 @@ type ConversationOutletProps = {
     messageSettingsInvalid: boolean,
     copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
     submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>,
+    submitMessageLikeHandler: (emoji: string, location: string, recipients: string[], replyToMessageId: string) => Promise<void>,
     makePostsWith: string,
     handleOpenRpcSendMessageModal: (location: string, recipients: string[], replyToMessageId?: string | undefined) => void,
     SET_NEW_POSTS_ADDED_DELAY: number,
+    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Message[]) => void,
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
     submittingMessage: string,
+    submittingLike: string,
+    replyPostsTreeRef: React.RefObject<Record<string, string>>,
+    deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
+    messagePrefix: string,
 };
 
 function ConversationOutlet() {
@@ -40,13 +46,19 @@ function ConversationOutlet() {
         messageSettingsInvalid,
         copyMessageTxHandler,
         submitMessageHandler,
+        submitMessageLikeHandler,
         makePostsWith,
         handleOpenRpcSendMessageModal,
         SET_NEW_POSTS_ADDED_DELAY,
+        handleOpenLikesModal,
         handleSubmitPubkeyModal,
         handleOpenAddMediaModal,
         handleExpandImageModal,
         submittingMessage,
+        submittingLike,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
+        messagePrefix,
     } = useOutletContext() as ConversationOutletProps;
 
     const handleGoBack = () => {
@@ -58,6 +70,8 @@ function ConversationOutlet() {
         <ConversationComponent
             conversationKey={conversationKey!}
             postersAddress={postersAddress}
+            replyPostsTreeRef={replyPostsTreeRef}
+            deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
             postersRef={postersRef}
             conversationsRef={conversationsRef}
             messagesRef={messagesRef}
@@ -68,13 +82,17 @@ function ConversationOutlet() {
             messageSettingsInvalid={messageSettingsInvalid}
             copyMessageTxHandler={copyMessageTxHandler}
             submitMessageHandler={submitMessageHandler}
+            submitMessageLikeHandler={submitMessageLikeHandler}
             makePostsWith={makePostsWith}
             handleOpenRpcSendMessageModal={handleOpenRpcSendMessageModal}
             SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
+            handleOpenLikesModal={handleOpenLikesModal}
             handleSubmitPubkeyModal={handleSubmitPubkeyModal}
             handleOpenAddMediaModal={handleOpenAddMediaModal}
             handleExpandImageModal={handleExpandImageModal}
             submittingMessage={submittingMessage}
+            submittingLike={submittingLike}
+            messagePrefix={messagePrefix}
             isConversationOutlet={true}
         />
     </>);

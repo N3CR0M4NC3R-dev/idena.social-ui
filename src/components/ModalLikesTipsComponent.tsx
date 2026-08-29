@@ -1,12 +1,12 @@
 
 import type { MouseEventLocal } from '../App.exports';
-import type { Post, Tip } from '../logic/asyncUtils';
+import type { Message, Post, Tip } from '../logic/asyncUtils';
 import { getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus } from '../logic/utils';
 import { useNavigate } from 'react-router';
 
 type ModalLikesTipsComponentProps = {
     heading: string,
-    modalItemsRef: React.RefObject<Post[] | Tip[]>,
+    modalItemsRef: React.RefObject<Post[] | Tip[] | Message[]>,
     closeModal: () => void,
 };
 
@@ -34,15 +34,15 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                 <li className="text-center">{heading}</li>
                 {modalItemsRef!.current.map((item, index) => {
                     const isLastItem = index === (modalItemsRef!.current.length - 1);
-                    const address = (item as Post).poster ?? (item as Tip).tipper;
-                    const posterDetails = (item as Post).posterDetails_atTimeOfPost ?? (item as Tip).tipperDetails_atTimeOfTip;
+                    const address = (item as Post).poster ?? (item as Message).sender ?? (item as Tip).tipper;
+                    const posterDetails = (item as Post).posterDetails_atTimeOfPost ?? (item as Message).sendersDetails_atTimeOfMessage ?? (item as Tip).tipperDetails_atTimeOfTip;
                     const posterDisplayAddress = getDisplayAddressShort(address);
                     const posterStake = posterDetails.stake;
                     const posterState = posterDetails.state;
                     const posterAge = posterDetails.age;
 
                     const { displayDate, displayTime } = getDisplayDateTime(item.timestamp);
-                    const detail = (item as Post).message ?? getDisplayTipAmount((item as Tip).amount) + ' iDNA';
+                    const detail = (item as Post | Message).message ?? getDisplayTipAmount((item as Tip).amount) + ' iDNA';
 
                     return (
                         <li className="pl-2 pr-3">

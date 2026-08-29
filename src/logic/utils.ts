@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, privateKeyToPublicKey, publicKeyToAddress, toHexString, Transaction, transactionType } from "idena-sdk-js-lite";
 import type { PostMediaAttachment } from "../App.exports";
 
+export const likeEmoji = '❤️';
 export const dnaBase = 1e18;
 
 export function getDisplayAddress(address: string) {
