@@ -53,6 +53,7 @@ const defaultAd = {
 
 const POLLING_INTERVAL = 10000;
 const SCANNING_INTERVAL = 10;
+const SCANNING_INTERVAL_MESSAGES = 1000;
 const ADS_INTERVAL = 10000;
 const SCAN_PAST_POSTS_TTL = 1 * 60;
 const INDEXER_API_ITEMS_LIMIT = 20;
@@ -1005,7 +1006,7 @@ function App() {
             (async function recurseBackwardMessages() {
                 if (nodeAvailableRef.current && (scanningPastBlocks || latestMessagesBackwardQueueRef.current.length)) {
                     const recurseDirection = 'backward';
-                    recurseBackwardIntervalId = setTimeout(messagesProcessorFactory(recurseDirection, recurseBackwardMessages, latestMessagesBackwardQueueRef), POLLING_INTERVAL);
+                    recurseBackwardIntervalId = setTimeout(messagesProcessorFactory(recurseDirection, recurseBackwardMessages, latestMessagesBackwardQueueRef), SCANNING_INTERVAL_MESSAGES);
                 }
             } as RecurseBackwardMessages)();
 
