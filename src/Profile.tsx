@@ -114,13 +114,13 @@ function Profile() {
                     </div>
                 </div>
             </div>
-            <div className="h-8 mb-5 flex border-b-1 border-gray-500 gap-3">
-                <p className={location.pathname === `/profile/${poster.address}` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}`)}>Posts</p>
-                <p className={location.pathname === `/profile/${poster.address}/replies` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/replies`)}>Replies</p>
-                <p className={location.pathname === `/profile/${poster.address}/comments` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/comments`)}>Comments</p>
-                <p className={location.pathname === `/profile/${poster.address}/likes` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/likes`)}>Likes</p>
-                <p className={location.pathname === `/profile/${poster.address}/tips` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/tips`)}>Tips</p>
-                <p className={location.pathname === `/profile/${poster.address}/media` ? "px-3 border-b-3" : "px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/media`)}>Media</p>
+            <div className="gap-1 sm:gap-3 text-[14px] sm:text-[16px] h-8 mb-5 flex border-b-1 border-gray-500">
+                <p className={location.pathname === `/profile/${poster.address}` ? "px-2 sm:px-3 border-b-3" : "px-2 sm:px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}`)}>Posts</p>
+                <p className={location.pathname === `/profile/${poster.address}/replies` ? "px-2 sm:px-3 border-b-3" : "px-2 sm:px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/replies`)}>Replies</p>
+                <p className={location.pathname === `/profile/${poster.address}/comments` ? "px-2 sm:px-3 border-b-3" : "px-2 sm:px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/comments`)}>Comments</p>
+                <p className={location.pathname === `/profile/${poster.address}/likes` ? "px-2 sm:px-3 border-b-3" : "px-2 sm:px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/likes`)}>Likes</p>
+                <p className={location.pathname === `/profile/${poster.address}/tips` ? "px-2 sm:px-3 border-b-3" : "px-2 sm:px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/tips`)}>Tips</p>
+                <p className={location.pathname === `/profile/${poster.address}/media` ? "px-2 sm:px-3 border-b-3" : "px-2 sm:px-3 hover:border-b-3 hover:cursor-pointer"} onClick={(e) => handleClickAddress(e, `/profile/${poster.address}/media`)}>Media</p>
             </div>
             <Outlet
                 context={{
