@@ -219,7 +219,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                         const messageParentId = messagePrefix + message.messageId;
                         const repliesToThisMessage = [ ...getChildPostIds(messageParentId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(messageParentId, deOrphanedReplyPostsTreeRef.current) ];
                         const replyMessages = repliesToThisMessage.map(replyMessageId => messagesRef.current[replyMessageId]);
-                        const replyLikes = replyMessages.filter(replyMessage => replyMessage.message === likeEmoji);
+                        const replyLikes = replyMessages.filter(replyMessage => replyMessage.isLike);
 
                         return (
                             <li key={message.messageId} className="hover:bg-stone-800">
@@ -249,7 +249,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                                         <div className="flex-1 flex flex-col">
                                             <div className="mx-1 flex flex-row items-center overflow-hidden">
                                                 <div className="flex-1">
-                                                    <span className="text-[14px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${message.sender}`)}>{posterDisplayAddress}</span>
+                                                    <span className="text-[14px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${message.sender}`)}>{posterDisplayAddress}</span>
                                                     <span className="ml-1 text-[9px] align-[2px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                                 </div>
                                                 <div>

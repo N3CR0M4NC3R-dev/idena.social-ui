@@ -41,6 +41,9 @@ export type Post = {
     message?: string,
     txHash: string,
     replyToPostId: string,
+    postLevel: 'Post' | 'Reply' | 'Comment',
+    isLike: boolean,
+    hasMedia: boolean,
     image?: string,
     video?: string,
     cid?: string,
@@ -69,6 +72,8 @@ export type Message = {
 
 export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
 export type Tip = { postId: string, txHash: string, timestamp: number, tipper: string, tipperDetails_atTimeOfTip: { stake: number, state: string, age: number }, amount: number, burnAmount: number };
+export type PostTips = { postId: string, totalAmount: number, tips: Tip[] };
+
 export type NodeDetails = { idenaNodeUrl: string, idenaNodeApiKey: string };
 
 export const getRpcClient = (nodeDetails: NodeDetails, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) =>
@@ -408,7 +413,7 @@ export const getTransactionDetailsIndexerApi = async (
 export const getNewPosterAndPost = async (
     transaction: { txHash: string, eventArgs: string[], eventArgs2nd: string[], timestamp: number, blockHeight?: number },
     thisChannelId: string,
-    postChannelRegex: RegExp,
+    discussPrefix: string,
     rpcClient: RpcClient,
     postsRef: React.RefObject<Record<string, Post>>,
     postersRef: React.RefObject<Record<string, Poster>>,
@@ -435,7 +440,10 @@ export const getNewPosterAndPost = async (
     const media = hex2str(eventArgs[6]);
     const mediaType = hex2str(eventArgs[7]);
 
-    if (channelId !== thisChannelId && !postChannelRegex.test(channelId)) {
+    const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
+    const isDiscussionComment = postChannelRegex.test(channelId);
+
+    if (channelId !== thisChannelId && !isDiscussionComment) {
         return { continued: true };
     }
 
@@ -502,8 +510,13 @@ export const getNewPosterAndPost = async (
         age: NaN,
     };
 
+    const postLevel = isDiscussionComment ? 'Comment' : replyToPostId ? 'Reply' : 'Post';
+    
+    const isLike = message === likeEmoji && !!replyToPostId;
+    const hasMedia = !!(media && mediaType);
+
     const messagePromise = message && getMessage(postId, message, rpcClient);
-    const mediaPromise = (media && mediaType) && getMedia(postId, media, rpcClient);
+    const mediaPromise = hasMedia && getMedia(postId, media, rpcClient);
 
     const newPost = {
         timestamp,
@@ -513,6 +526,9 @@ export const getNewPosterAndPost = async (
         channelId,
         txHash,
         replyToPostId,
+        postLevel,
+        isLike,
+        hasMedia,
         orphaned: false,
     } as Post;
 
@@ -664,7 +680,7 @@ const isValidImageUrlCheck = (url: string, wait = 2000): Promise<boolean> => {
 export const processTip = async (
     transaction: { txHash: string, eventArgs: string[], eventArgs2nd: string[], timestamp: number, blockHeight?: number },
     rpcClient: RpcClient,
-    tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
+    tipsRef: React.RefObject<Record<string, PostTips>>,
     postersRef: React.RefObject<Record<string, Poster>>,
     isRecurseForward: boolean,
     postersPromised: string[],
@@ -724,10 +740,11 @@ export const processTip = async (
         burnAmount,
     };
 
-    const updatedPostTips = {
+    const updatedPostTips: PostTips = {
+        postId,
         totalAmount: (tipsRef.current[postId]?.totalAmount ?? 0) + amount,
         tips: isRecurseForward ? [ newTip, ...(tipsRef.current[postId]?.tips ?? []) ] : [ ...(tipsRef.current[postId]?.tips ?? []), newTip ],
-    }
+    };
 
     let posterPromise: Promise<Poster> | undefined;
 
@@ -1299,7 +1316,6 @@ export const getNewPostLatestActivity = (
     newPost: Post,
     postsRef: React.RefObject<Record<string, Post>>,
     postLatestActivityRef: React.RefObject<Record<string, number>>,
-    postChannelRegex: RegExp,
     discussPrefix: string,
 ) => {
     const newPostLatestActivity: Record<string, number> = {};
@@ -1312,11 +1328,12 @@ export const getNewPostLatestActivity = (
 
             const replyToPostId: string = loopPost!.replyToPostId;
             const channelId = loopPost!.channelId;
+            const postLevel = loopPost!.postLevel;
             const timestamp = loopPost!.timestamp;
 
             if (replyToPostId) {
                 loopPost = postsRef.current[replyToPostId];
-            } else if (postChannelRegex.test(channelId)) {
+            } else if (postLevel === 'Comment') {
                 const discussionPostId = getPostIdFromChannelId(timestamp, channelId, discussPrefix);
                 loopPost = postsRef.current[discussionPostId];
             } else {
@@ -1329,12 +1346,13 @@ export const getNewPostLatestActivity = (
 
         const replyToPostId = newPost!.replyToPostId;
         const channelId = newPost!.channelId;
+        const postLevel = newPost!.postLevel;
         const timestamp = newPost!.timestamp;
 
         if (replyToPostId) {
             newTimestamp = (postLatestActivityRef.current[replyToPostId] ?? 0) > newTimestamp ? postLatestActivityRef.current[replyToPostId] : newTimestamp;
             newPostLatestActivity[replyToPostId] = newTimestamp;
-        } else if (postChannelRegex.test(channelId)) {
+        } else if (postLevel === 'Comment') {
             const discussionPostId = getPostIdFromChannelId(timestamp, channelId, discussPrefix);
             newTimestamp = (postLatestActivityRef.current[discussionPostId] ?? 0) > newTimestamp ? postLatestActivityRef.current[discussionPostId] : newTimestamp;
             newPostLatestActivity[discussionPostId] = newTimestamp;

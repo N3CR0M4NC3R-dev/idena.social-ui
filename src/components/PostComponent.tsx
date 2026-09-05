@@ -1,7 +1,7 @@
-import { useReducer, type FocusEventHandler } from 'react';
-import { getChildPostIds, breakingChanges, type Post, type Tip } from '../logic/asyncUtils';
+import { useEffect, useReducer, type FocusEventHandler } from 'react';
+import { getChildPostIds, breakingChanges, type Post, type Tip, type PostTips } from '../logic/asyncUtils';
 import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus, getMessageLines, getShortDisplayTipAmount, likeEmoji } from '../logic/utils';
-import { initDomSettings, isPostOutletDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from '../App.exports';
+import { initDomSettings, initPostOutletDomSettings, initProfileRepliesDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from '../App.exports';
 import { useLocation, useNavigate } from 'react-router';
 import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
 import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
@@ -33,10 +33,12 @@ type PostComponentProps = {
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
-    tipsRef: React.RefObject<Record<string, { totalAmount: number, tips: Tip[] }>>,
+    tipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
     isPostOutlet?: boolean,
+    spotlightReplyPostId?: string,
+    spotlightDiscussionPostId?: string,
 };
 
 function PostComponent(props: PostComponentProps) {
@@ -70,11 +72,30 @@ function PostComponent(props: PostComponentProps) {
         postMediaAttachmentsRef,
         makePostsWith,
         isPostOutlet,
+        spotlightReplyPostId,
+        spotlightDiscussionPostId,
     } = props;
 
     const [, forceUpdate] = useReducer(x => x + 1, 0);
 
     const { key: locationKey } = location;
+
+    useEffect(() => {
+        if (spotlightReplyPostId && spotlightDiscussionPostId) {
+            const container = document.getElementById(`spotlight-discussion-${spotlightReplyPostId}-${spotlightDiscussionPostId}`) as HTMLElement;
+            const target = document.getElementById(`spotlight-comment-${spotlightReplyPostId}-${spotlightDiscussionPostId}`) as HTMLElement;
+
+            const desiredTargetOffsetTop = 80;
+
+            if (target.offsetTop < desiredTargetOffsetTop) {
+                const desiredScrollableAmount = desiredTargetOffsetTop - target.offsetTop;
+                const possibleScrollableAmount = container.scrollHeight - container.clientHeight;
+
+                const scrollAmount = possibleScrollableAmount > desiredScrollableAmount ? desiredScrollableAmount : possibleScrollableAmount;
+                container.scrollTop = -scrollAmount;
+            }
+        }
+    }, []);
 
     const setPostDomSettings = (childPostId: string, postDomSettings: Partial<PostDomSettings>, rerender?: boolean) => {
         const postDomSettingsUpdated = {
@@ -91,7 +112,14 @@ function PostComponent(props: PostComponentProps) {
         setBrowserStateHistorySettings({ postDomSettings: postDomSettingsUpdated }, rerender);
     }
 
-    const mainPostDomSettings = isPostOutlet ? isPostOutletDomSettings : initDomSettings;
+    let mainPostDomSettings;
+    if (isPostOutlet) {
+        mainPostDomSettings = initPostOutletDomSettings;
+    } else if (spotlightReplyPostId) {
+        mainPostDomSettings = initProfileRepliesDomSettings;
+    } else {
+        mainPostDomSettings = initDomSettings;
+    }
 
     if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId]?.[postId]) {
         setPostDomSettings(postId, mainPostDomSettings);
@@ -118,19 +146,27 @@ function PostComponent(props: PostComponentProps) {
     const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
     const showReplies = !postDomSettingsItem.repliesHidden;
     const showReplyInput = !postDomSettingsItem.replyInputHidden;
+    const showMaxReplies = postDomSettingsItem.showMaxReplies
+
     const isBreakingChangeDisabled = post.timestamp <= breakingChanges.v12.timestamp;
 
     const replyPosts = repliesToThisPost.map(replyPostId => postsRef.current[replyPostId]);
-    const replyLikes = replyPosts.filter(replyPost => replyPost.message === likeEmoji);
-    const replyComments = replyPosts.filter(replyPost => replyPost.message !== likeEmoji);
+    const replyLikes = replyPosts.filter(replyPost => replyPost.isLike);
+    const replyComments = replyPosts.filter(replyPost => !replyPost.isLike);
+
+    if (spotlightReplyPostId) {
+        const fromIndex = replyComments.findIndex(value => value.postId === spotlightReplyPostId);
+        const element = replyComments.splice(fromIndex, 1)[0];
+        replyComments.unshift(element);
+    }
 
     let totalNumberOfReplies = replyComments.length;
     const discussionPostsAll = replyComments.reduce((acc, curr) => {
         const discussParentId = discussPrefix + curr.postId;
         const discussionPostIds = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
         const discussionPosts = discussionPostIds.map(discussionPostId => postsRef.current[discussionPostId]);
-        const discussionPostLikes = discussionPosts.filter(discussionPost => discussionPost.message === likeEmoji && !!discussionPost.replyToPostId);
-        const discussionPostComments = discussionPosts.filter(discussionPost => discussionPost.message !== likeEmoji || (discussionPost.message === likeEmoji && !discussionPost.replyToPostId));
+        const discussionPostLikes = discussionPosts.filter(discussionPost => discussionPost.isLike && !!discussionPost.replyToPostId);
+        const discussionPostComments = discussionPosts.filter(discussionPost => !discussionPost.isLike || (discussionPost.isLike && !discussionPost.replyToPostId));
         totalNumberOfReplies += discussionPostComments.length;
         return { ...acc, [discussParentId]: { discussionPostLikes, discussionPostComments } };
     }, {}) as Record<string, { discussionPostLikes: Post[], discussionPostComments: Post[] }>;
@@ -166,6 +202,11 @@ function PostComponent(props: PostComponentProps) {
         const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].repliesHidden;
         setPostDomSettings(post.postId, { repliesHidden: newRepliesHidden }, true);
     };
+
+    const increaseShowMaxReplies = (increaseAmount: number) => {
+        const showMaxReplies = browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].showMaxReplies;
+        setPostDomSettings(post.postId, { showMaxReplies: showMaxReplies + increaseAmount }, true);
+    }
 
     const toggleReplyDiscussionHandler = (post: Post) => {
         if (isBreakingChangeDisabled) {
@@ -276,7 +317,7 @@ function PostComponent(props: PostComponentProps) {
             if (mouseClicked) {
                 const to = `/post/${postId}`;
                 if (to !== location.pathname) {
-                    navigate(to);
+                    navigate(to, { state: { spotlightReplyPostId, spotlightDiscussionPostId } });
                 }
             }
         }
@@ -359,10 +400,11 @@ function PostComponent(props: PostComponentProps) {
         </div>
         {showReplies && <div className="flex flex-col bg-stone-800">
             <ul>
-                {replyComments.map((replyPost) => {
+                {replyComments.slice(0, showMaxReplies).map((replyPost, index) => {
 
                     if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId]?.[replyPost.postId]) {
-                        setPostDomSettings(replyPost.postId, initDomSettings);
+                        const settings = replyPost.postId === spotlightReplyPostId && spotlightDiscussionPostId ? initProfileRepliesDomSettings : initDomSettings;
+                        setPostDomSettings(replyPost.postId, settings);
                     }
 
                     const postTips = tipsRef.current[replyPost.postId] ?? { totalAmount: 0, tips: [] };
@@ -391,10 +433,16 @@ function PostComponent(props: PostComponentProps) {
                     const discussReplyToPostId = postDomSettingsItem.discussReplyToPostId;
                     const discussReplyToPost = discussReplyToPostId && postsRef.current[discussReplyToPostId!];
 
+                    const isSpotlightReply = !!spotlightReplyPostId && index === 0;
+
+                    const addAttrs = {
+                        ...( isSpotlightReply && spotlightDiscussionPostId && { id: `spotlight-comment-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
+                    };
+
                     return (
                         <li key={replyPost.postId}>
                             <hr className="mx-2 text-gray-700" />
-                            <div className="mt-1.5 mb-2.5 flex flex-col">
+                            <div className={`mx-2 mt-1.5 mb-2 flex flex-col ${isSpotlightReply && !spotlightDiscussionPostId && 'bg-yellow-200/10'}`}>
                                 <div className="flex flex-row">
                                     <div className="w-11 flex-none flex flex-col">
                                         <div className="h-13 flex-none">
@@ -405,7 +453,7 @@ function PostComponent(props: PostComponentProps) {
                                     <div className="ml-1 mr-3 flex-1 flex flex-col overflow-hidden">
                                         <div className="flex-none flex flex-col gap-x-3">
                                             <div className="flex flex-row items-center">
-                                                <p className="text-[16px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${replyPost.poster}`)}>{posterDisplayAddress}</p>
+                                                <p className="text-[16px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)}>{posterDisplayAddress}</p>
                                                 <span className="ml-2 text-[11px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                             </div>
                                             <div className="flex-1"></div>
@@ -445,7 +493,7 @@ function PostComponent(props: PostComponentProps) {
                                     </div>
                                 </div>
                                 {showDiscussion && <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
-                                    <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
+                                    <ul {...addAttrs} id={`spotlight-discussion-${spotlightReplyPostId}-${spotlightDiscussionPostId}`} className="relative flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
                                         {discussionPostComments.length === 0 && <li className="mb-1"><p className="italic text-center text-[12px] text-gray-500">no comments yet</p></li>}
                                         {discussionPostComments.map((discussionPost) => {
                                             const postTips = tipsRef.current[discussionPost.postId] ?? { totalAmount: 0, tips: [] };
@@ -458,8 +506,14 @@ function PostComponent(props: PostComponentProps) {
                                             const replyToPost = postsRef.current[discussionPost.replyToPostId];
                                             const likesForDiscussionPost = discussionPostLikes.filter(like => like.replyToPostId === discussionPost.postId);
 
+                                            const isSpotlightDiscussionPost = discussionPost.postId === spotlightDiscussionPostId;
+
+                                            const addAttrs = {
+                                                ...( isSpotlightDiscussionPost && { id: `spotlight-comment-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
+                                            };
+
                                             return (
-                                                <li key={discussionPost.postId} className="hover:bg-stone-800">
+                                                <li {...addAttrs} className={`${isSpotlightDiscussionPost ? 'bg-yellow-200/10 hover:bg-yellow-200/15' : 'hover:bg-stone-800'}`}>
                                                     <div className="my-1.5 flex flex-col">
                                                         {replyToPost && <div className="flex flex-row">
                                                             <div className="w-8 flex justify-end items-end">
@@ -482,7 +536,7 @@ function PostComponent(props: PostComponentProps) {
                                                             <div className="flex-1 flex flex-col">
                                                                 <div className="mx-1 flex flex-row items-center overflow-hidden">
                                                                     <div className="flex-1">
-                                                                        <span className="text-[14px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${discussionPost.poster}`)}>{posterDisplayAddress}</span>
+                                                                        <span className="text-[14px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${discussionPost.poster}`)}>{posterDisplayAddress}</span>
                                                                         <span className="ml-1 text-[9px] align-[2px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                                                     </div>
                                                                     <div>
@@ -556,6 +610,7 @@ function PostComponent(props: PostComponentProps) {
                     );
                 })}
             </ul>
+            {replyComments.length > showMaxReplies && <div className="mx-2 mb-2"><p className="text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => increaseShowMaxReplies(10)}>show more replies</p></div>}
         </div>}
         <div className="mt-10"></div>
     </>);

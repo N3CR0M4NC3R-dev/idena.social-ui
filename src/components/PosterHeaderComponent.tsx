@@ -36,7 +36,7 @@ function PosterHeaderComponent(props: PosterHeaderComponentProps) {
             </div>
             <div className="mr-3 flex-1 flex flex-col overflow-hidden">
                 <div className="flex-none flex flex-col gap-x-3 items-start">
-                    <p className="text-[18px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${address}`)}>{getDisplayAddress(address)}</p>
+                    <p className="text-[18px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${address}`)}>{getDisplayAddress(address)}</p>
                     <div><p className="text-[11px]/4">{`Age: ${age}, Status: ${getIdentityStatus(state)}, Stake: ${stake}`}</p></div>
                     <div className="flex-1"></div>
                 </div>

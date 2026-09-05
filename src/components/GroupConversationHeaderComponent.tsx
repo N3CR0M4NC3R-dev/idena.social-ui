@@ -32,7 +32,7 @@ function GroupConversationHeaderComponent(props: GroupConversationHeaderComponen
                             <img src={`https://robohash.org/${conversationPartner.address}?set=set1`} />
                         </div>
                         <div className="mb-2 text-center">
-                            <p className="text-[10px] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/address/${conversationPartner.address}`)}>{getDisplayAddressVeryShort(conversationPartner.address)}</p>
+                            <p className="text-[10px] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${conversationPartner.address}`)}>{getDisplayAddressVeryShort(conversationPartner.address)}</p>
                         </div>
                         {!conversationPartner.pubkey && <div className="-mt-1 mb-2 text-center text-[11px]">
                             <p className="text-red-400">pubkey missing</p>

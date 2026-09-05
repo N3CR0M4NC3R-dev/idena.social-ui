@@ -2,10 +2,10 @@ import { type Post, type PostTips, type Tip } from './logic/asyncUtils';
 import { useLocation, useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from './App.exports';
-import { useReducer } from 'react';
 import SortPostsByComponent from './components/SortPostsByComponent';
 
-type LatestPostsProps = {
+type ProfilePostsProps = {
+    address: string,
     latestPosts: string[],
     latestActivity: string[],
     postsRef: React.RefObject<Record<string, Post>>,
@@ -33,12 +33,13 @@ type LatestPostsProps = {
     makePostsWith: string,
 };
 
-function LatestPosts() {
+function ProfilePosts() {
     const location = useLocation();
 
     const { key: locationKey } = location;
 
     const {
+        address,
         latestPosts,
         latestActivity,
         postsRef,
@@ -64,9 +65,7 @@ function LatestPosts() {
         tipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
-    } = useOutletContext() as LatestPostsProps;
-
-    const [, forceUpdate] = useReducer(x => x + 1, 0);
+    } = useOutletContext() as ProfilePostsProps;
 
     if (!browserStateHistoryRef.current[locationKey]?.sortPostsBy) {
         setBrowserStateHistorySettings({ sortPostsBy: 'latest-posts' });
@@ -74,43 +73,15 @@ function LatestPosts() {
 
     const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
 
-    const mainPostMediaAttachment = postMediaAttachmentsRef.current['post-main'];
-
-    const removeMediaHandler = (e: MouseEventLocal, location: string) => {
-        e?.stopPropagation();
-
-        postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [`post-${location}`]: undefined };
-        forceUpdate();
-    };
+    const filteredOrderedPosts = (sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).filter(postId => {
+        const post = postsRef.current[postId];
+        return post.poster === address;
+    });
 
     return (<>
-        <div className="mt-3 mb-6">
-            <textarea
-                id='post-input-main'
-                rows={4}
-                className="w-full field-sizing-content min-h-[104px] max-h-[520px] py-1 px-2 outline-1 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                placeholder="Write your post here..."
-                disabled={inputPostDisabled}
-            />
-            {mainPostMediaAttachment && <div className="mx-4 my-1">
-                <img className="max-h-120 max-w-100 size-auto rounded-sm" src={mainPostMediaAttachment.dataUrl} />
-            </div>}
-            <div className="flex flex-row gap-2">
-                <div className="flex-1 -mt-1.5">
-                    {mainPostMediaAttachment ? <>
-                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, 'main')}>Remove image</p>
-                    </> : <>
-                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, 'main', 'post')}>Add image</p>
-                    </>}
-                    <p id={"post-copytx-main"} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => !inputPostDisabled && copyPostTxHandler('main')}>Copy tx</p>
-                </div>
-                <p className="hidden sm:block text-right w-50 mt-0.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
-                <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={(e) => makePostsWith === 'rpc' ? handleOpenRpcMakePostModal(e, 'main') : submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
-            </div>
-        </div>
         <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
         <ul>
-            {(sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).map((postId) => (
+            {filteredOrderedPosts.map((postId: string) => (
                 <li key={postId}>
                     <PostComponent
                         postId={postId}
@@ -144,4 +115,4 @@ function LatestPosts() {
     </>);
 }
 
-export default LatestPosts;
+export default ProfilePosts;

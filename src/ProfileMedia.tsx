@@ -1,13 +1,11 @@
 import { type Post, type PostTips, type Tip } from './logic/asyncUtils';
-import { useLocation, useOutletContext } from 'react-router';
+import { useOutletContext } from 'react-router';
+import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
-import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from './App.exports';
-import { useReducer } from 'react';
-import SortPostsByComponent from './components/SortPostsByComponent';
+import { getSpotlightPostDetails } from './logic/utils';
 
-type LatestPostsProps = {
-    latestPosts: string[],
-    latestActivity: string[],
+type ProfileMediaProps = {
+    address: string,
     postsRef: React.RefObject<Record<string, Post>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
@@ -31,16 +29,13 @@ type LatestPostsProps = {
     tipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
+    profileActivityRef: React.RefObject<Record<string, ProfileActivity>>,
 };
 
-function LatestPosts() {
-    const location = useLocation();
-
-    const { key: locationKey } = location;
+function ProfileMedia() {
 
     const {
-        latestPosts,
-        latestActivity,
+        address,
         postsRef,
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
@@ -64,56 +59,24 @@ function LatestPosts() {
         tipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
-    } = useOutletContext() as LatestPostsProps;
-
-    const [, forceUpdate] = useReducer(x => x + 1, 0);
-
-    if (!browserStateHistoryRef.current[locationKey]?.sortPostsBy) {
-        setBrowserStateHistorySettings({ sortPostsBy: 'latest-posts' });
-    }
-
-    const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
-
-    const mainPostMediaAttachment = postMediaAttachmentsRef.current['post-main'];
-
-    const removeMediaHandler = (e: MouseEventLocal, location: string) => {
-        e?.stopPropagation();
-
-        postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [`post-${location}`]: undefined };
-        forceUpdate();
-    };
+        profileActivityRef,
+    } = useOutletContext() as ProfileMediaProps;
 
     return (<>
-        <div className="mt-3 mb-6">
-            <textarea
-                id='post-input-main'
-                rows={4}
-                className="w-full field-sizing-content min-h-[104px] max-h-[520px] py-1 px-2 outline-1 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                placeholder="Write your post here..."
-                disabled={inputPostDisabled}
-            />
-            {mainPostMediaAttachment && <div className="mx-4 my-1">
-                <img className="max-h-120 max-w-100 size-auto rounded-sm" src={mainPostMediaAttachment.dataUrl} />
-            </div>}
-            <div className="flex flex-row gap-2">
-                <div className="flex-1 -mt-1.5">
-                    {mainPostMediaAttachment ? <>
-                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, 'main')}>Remove image</p>
-                    </> : <>
-                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, 'main', 'post')}>Add image</p>
-                    </>}
-                    <p id={"post-copytx-main"} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => !inputPostDisabled && copyPostTxHandler('main')}>Copy tx</p>
-                </div>
-                <p className="hidden sm:block text-right w-50 mt-0.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
-                <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={(e) => makePostsWith === 'rpc' ? handleOpenRpcMakePostModal(e, 'main') : submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
-            </div>
-        </div>
-        <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
         <ul>
-            {(sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).map((postId) => (
-                <li key={postId}>
-                    <PostComponent
-                        postId={postId}
+            {profileActivityRef.current[address].media.map((mediaPostId: string) => {
+                const mediaPost = postsRef.current[mediaPostId];
+
+                const {
+                    replyPostId,
+                    discussionPostId,
+                    postItemKey,
+                    parentPost,
+                } = getSpotlightPostDetails(mediaPost, postsRef, discussPrefix);
+
+                return <li key={postItemKey}>
+                    {parentPost && <PostComponent
+                        postId={parentPost.postId}
                         postsRef={postsRef}
                         replyPostsTreeRef={replyPostsTreeRef}
                         deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
@@ -137,11 +100,13 @@ function LatestPosts() {
                         tipsRef={tipsRef}
                         postMediaAttachmentsRef={postMediaAttachmentsRef}
                         makePostsWith={makePostsWith}
-                    />
+                        spotlightReplyPostId={replyPostId}
+                        spotlightDiscussionPostId={discussionPostId}
+                    />}
                 </li>
-            ))}
+            })}
         </ul>
     </>);
 }
 
-export default LatestPosts;
+export default ProfileMedia;

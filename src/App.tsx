@@ -4,13 +4,13 @@ import { hexToUint8Array } from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { keccak256, sha3_256 } from 'js-sha3';
 import { encrypt } from 'eciesjs';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, saveReplyPostId, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, saveReplyPostId, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getPostIdFromChannelId, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, getDisplayAddress, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
 import menuWhiteSvg from './assets/menu-8-white.svg';
 import { Link, Outlet, useLocation } from 'react-router';
-import type { BrowserStateHistorySettings, EventTransaction, MouseEventLocal, PostMediaAttachment } from './App.exports';
+import { defaultProfileActivity, type BrowserStateHistorySettings, type EventTransaction, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 import ModalAddMediaComponent from './components/ModalAddMediaComponent';
@@ -38,7 +38,6 @@ const allMethods = [makePostMethod, sendTipMethod, sendMessageMethod];
 const thisChannelId = '';
 const discussPrefix = 'discuss:';
 const messagePrefix = 'message:';
-const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
@@ -195,7 +194,7 @@ function App() {
     const browserStateHistoryRef = useRef<Record<string, BrowserStateHistorySettings>>({});
     const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
     const copyTxHandlerEnabledRef = useRef<boolean>(true);
-    const tipsRef = useRef<Record<string, { totalAmount: number, tips: Tip[] }>>({});
+    const tipsRef = useRef<Record<string, PostTips>>({});
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
     const postLatestActivityRef = useRef({} as Record<string, number>);
     const latestMessagesForwardQueueRef = useRef([] as EventTransaction[]);
@@ -203,6 +202,7 @@ function App() {
     const [latestConversationActivity, setLatestConversationActivity] = useState<string[]>([]); // ['0x011', '0x022']
     const conversationsRef = useRef<Record<string, string[]>>({}); // { '0x011': ['messageId1', 'messageId2', 'messageId3'], }
     const messagesRef = useRef<Record<string, Message>>({});
+    const profileActivityRef = useRef<Record<string, ProfileActivity>>({});
 
     // modals
     const [modalOpen, setModalOpen] = useState<string>('');
@@ -752,11 +752,15 @@ function App() {
                             newPost!,
                             postsRef,
                             postLatestActivityRef,
-                            postChannelRegex,
                             discussPrefix,
                         );
 
+
                         postLatestActivityRef.current = { ...postLatestActivityRef.current, ...newPostLatestActivity };
+
+                        const profileActivity = { ...(profileActivityRef.current[newTip.tipper] ?? defaultProfileActivity) };
+                        profileActivity.tips = isRecurseForward ? [postId, ...profileActivity.tips] : [...profileActivity.tips, postId];
+                        profileActivityRef.current[newTip.tipper] = profileActivity;
 
                         continue;
                     }
@@ -785,7 +789,7 @@ function App() {
                     } = await getNewPosterAndPost(
                         transaction,
                         thisChannelId,
-                        postChannelRegex,
+                        discussPrefix,
                         rpcClientRef.current!,
                         postsRef,
                         postersRef,
@@ -804,9 +808,7 @@ function App() {
                     messagePromise && messagePromises.push(messagePromise);
                     mediaPromise && mediaPromises.push(mediaPromise);
 
-                    const isTopLevelPost = !newPost!.replyToPostId && newPost!.channelId === thisChannelId;
-
-                    if (isTopLevelPost) {
+                    if (newPost!.postLevel === 'Post') {
                         newLatestPosts.push(newPost!.postId);
                     }
 
@@ -815,7 +817,6 @@ function App() {
                         newPost!,
                         postsRef,
                         postLatestActivityRef,
-                        postChannelRegex,
                         discussPrefix,
                     );
 
@@ -830,7 +831,7 @@ function App() {
 
                     const updatedPosts: Record<string, Post> = {};
 
-                    if (postChannelRegex.test(newPost!.channelId)) {
+                    if (newPost!.postLevel === 'Comment') {
                         const discussionPostId = getPostIdFromChannelId(newPost!.timestamp, newPost!.channelId, discussPrefix);
                         const discussionPost = postsRef.current[discussionPostId];
                         const orphaned = !discussionPost || discussionPost.orphaned;
@@ -857,7 +858,7 @@ function App() {
                             newPost!.orphaned = true;
                         }
 
-                    } else if (newPost!.channelId === thisChannelId) {
+                    } else {
                         const replyToPost = postsRef.current[newPost!.replyToPostId];
 
                         saveReplyPostId(
@@ -898,9 +899,6 @@ function App() {
                             newDeOrphanedReplyPosts,
                             updatedPosts,
                         );
-
-                    } else {
-                        throw 'this should not happen';
                     }
 
                     postsRef.current = { ...postsRef.current, ...updatedPosts, ...newPosts };
@@ -908,6 +906,24 @@ function App() {
                     deOrphanedReplyPostsTreeRef.current = { ...deOrphanedReplyPostsTreeRef.current, ...newDeOrphanedReplyPosts };
                     forwardOrphanedReplyPostsTreeRef.current = { ...forwardOrphanedReplyPostsTreeRef.current, ...newForwardOrphanedReplyPosts };
                     backwardOrphanedReplyPostsTreeRef.current = { ...backwardOrphanedReplyPostsTreeRef.current, ...newBackwardOrphanedReplyPosts };
+
+                    const profileActivity = { ...(profileActivityRef.current[newPost!.poster] ?? defaultProfileActivity) };
+                    if (newPost!.isLike) {
+                        profileActivity.likes = isRecurseForward ? [newPost!.postId, ...profileActivity.likes] : [...profileActivity.likes, newPost!.postId];
+                    }
+                    if (newPost!.postLevel === 'Comment' && !newPost!.isLike) {
+                        profileActivity.comments = isRecurseForward ? [newPost!.postId, ...profileActivity.comments] : [...profileActivity.comments, newPost!.postId];
+                    }
+                    if (newPost!.postLevel === 'Reply' && !newPost!.isLike) {
+                        profileActivity.replies = isRecurseForward ? [newPost!.postId, ...profileActivity.replies] : [...profileActivity.replies, newPost!.postId];
+                    }
+                    if (newPost!.postLevel === 'Post' && !newPost!.isLike) {
+                        profileActivity.posts = isRecurseForward ? [newPost!.postId, ...profileActivity.posts] : [...profileActivity.posts, newPost!.postId];
+                    }
+                    if (newPost!.hasMedia) {
+                        profileActivity.media = isRecurseForward ? [newPost!.postId, ...profileActivity.media] : [...profileActivity.media, newPost!.postId];
+                    }
+                    profileActivityRef.current[newPost!.poster] = profileActivity;
                 }
 
                 await resolveNewPosters(posterPromises, postersRef);
@@ -1829,6 +1845,7 @@ function App() {
                         indexerApiUrlRef,
                         setMakePostsWith,
                         setIndexerApiUrl,
+                        profileActivityRef,
                     }}
                 />
             </div>
