@@ -20,6 +20,7 @@ import MenuComponent from './components/MenuComponent';
 import ModalRpcSendMessageComponent from './components/ModalRpcSendMessageComponent';
 import ScanBlocksComponent from './components/ScanBlocksComponent';
 import ModalSubmitPubkeyComponent from './components/ModalSubmitPubkeyComponent';
+import ScrollToTopComponent from './components/ScrollToTopComponent';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -119,7 +120,7 @@ function App() {
 
     const location = useLocation();
 
-    const { key: locationKey } = location;
+    const { key: locationKey, pathname } = location;
 
     // inputs for settings
     const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
@@ -1724,6 +1725,7 @@ function App() {
                         noMorePastBlocks={noMorePastBlocks}
                         pastBlockCaptured={pastBlockCaptured}
                         nodeAvailable={nodeAvailable}
+                        displayCurrentBlock={true}
                     />
                 </div>
             </div>
@@ -1765,6 +1767,7 @@ function App() {
                         noMorePastBlocks={noMorePastBlocks}
                         pastBlockCaptured={pastBlockCaptured}
                         nodeAvailable={nodeAvailable}
+                        displayCurrentBlock={true}
                     />
                 </div>
                 <Outlet
@@ -1848,6 +1851,20 @@ function App() {
                         profileActivityRef,
                     }}
                 />
+                {!['/settings'].includes(pathname) && <div className="mb-5">
+                    <ScanBlocksComponent
+                        currentBlockCaptured={currentBlockCaptured}
+                        scanningPastBlocks={scanningPastBlocks}
+                        setScanningPastBlocks={setScanningPastBlocks}
+                        noMorePastBlocks={noMorePastBlocks}
+                        pastBlockCaptured={pastBlockCaptured}
+                        nodeAvailable={nodeAvailable}
+                        displayCurrentBlock={false}
+                    />
+                </div>}
+                <div className="sticky bottom-4 text-right lg:hidden">
+                    <ScrollToTopComponent width={'w-14'} />
+                </div>
             </div>
             <div className="hidden lg:flex flex-1 justify-start">
                 <div className="min-w-[320px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
@@ -1877,6 +1894,11 @@ function App() {
                             <div><p>{currentAd?.burnAmount} iDNA</p></div>
                         </div>
                     </div>
+                    <div className="flex-1 content-end">
+                        <div className="sticky bottom-2">
+                            <ScrollToTopComponent />
+                        </div>
+                    </div >
                 </div>
             </div>
             <div onClick={(e) => e.stopPropagation()}>
