@@ -20,7 +20,7 @@ import MenuComponent from './components/MenuComponent';
 import ModalRpcSendMessageComponent from './components/ModalRpcSendMessageComponent';
 import ScanBlocksComponent from './components/ScanBlocksComponent';
 import ModalSubmitPubkeyComponent from './components/ModalSubmitPubkeyComponent';
-import ScrollToTopComponent from './components/ScrollToTopComponent';
+import ScrollToTopButtonComponent from './components/ScrollToTopButtonComponent';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -1863,7 +1863,7 @@ function App() {
                     />
                 </div>}
                 <div className="sticky bottom-4 text-right lg:hidden">
-                    <ScrollToTopComponent width={'w-14'} />
+                    <ScrollToTopButtonComponent width={'w-14'} />
                 </div>
             </div>
             <div className="hidden lg:flex flex-1 justify-start">
@@ -1896,7 +1896,7 @@ function App() {
                     </div>
                     <div className="flex-1 content-end">
                         <div className="sticky bottom-2">
-                            <ScrollToTopComponent />
+                            <ScrollToTopButtonComponent />
                         </div>
                     </div >
                 </div>
