@@ -31,10 +31,14 @@ function ScrollToTopComponent(props: ScrollToTopComponentProps) {
 
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        const scrollToTopButton = document.getElementById('scrollToTopButton') as HTMLElement;
+        scrollToTopButton.blur();
     };
 
     return (
         <img
+            id="scrollToTopButton"
             src={imgSrc}
             className={`m-2 inline-block hover:cursor-pointer ${width ?? 'w-20'} ${!isVisible ? 'invisible' : ''}`}
             onClick={() => scrollToTop()}

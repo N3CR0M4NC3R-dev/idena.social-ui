@@ -230,7 +230,7 @@ export function getMakePostTransactionPayload(makePostMethod: string, inputPost:
 }
 
 export function getSendMessageTransactionPayload(sendMessageMethod: string, inputMessage: string[], inputMessageHash: string) {
-    const txAmount = new Decimal(0.00001);
+    const txAmount = new Decimal(0.00002);
     const args = [
         {
             format: contractArgumentFormat.String,
