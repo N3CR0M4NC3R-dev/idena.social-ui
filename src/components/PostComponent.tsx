@@ -12,6 +12,7 @@ import cashGreenSvg from '../assets/cash-green.svg';
 import PosterHeaderComponent from './PosterHeaderComponent';
 
 type PostComponentProps = {
+    uniqueKey: string,
     postId: string,
     postsRef: React.RefObject<Record<string, Post>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
@@ -47,6 +48,7 @@ function PostComponent(props: PostComponentProps) {
     const navigate = useNavigate();
 
     const {
+        uniqueKey,
         postId,
         postsRef,
         replyPostsTreeRef,
@@ -81,29 +83,31 @@ function PostComponent(props: PostComponentProps) {
     const { key: locationKey } = location;
 
     useEffect(() => {
-        if (spotlightReplyPostId && spotlightDiscussionPostId) {
-            const container = document.getElementById(`spotlight-discussion-${spotlightReplyPostId}-${spotlightDiscussionPostId}`) as HTMLElement;
-            const target = document.getElementById(`spotlight-comment-${spotlightReplyPostId}-${spotlightDiscussionPostId}`) as HTMLElement;
+        setTimeout(() => {
+            if (spotlightReplyPostId && spotlightDiscussionPostId) {
+                const container = document.getElementById(`spotlight-discussion-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`) as HTMLElement;
+                const target = document.getElementById(`spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`) as HTMLElement;
 
-            const desiredTargetOffsetTop = 80;
+                const desiredTargetOffsetTop = 80;
 
-            if (target.offsetTop < desiredTargetOffsetTop) {
-                const desiredScrollableAmount = desiredTargetOffsetTop - target.offsetTop;
-                const possibleScrollableAmount = container.scrollHeight - container.clientHeight;
+                if (target.offsetTop < desiredTargetOffsetTop) {
+                    const desiredScrollableAmount = desiredTargetOffsetTop - target.offsetTop;
+                    const possibleScrollableAmount = container.scrollHeight - container.clientHeight;
 
-                const scrollAmount = possibleScrollableAmount > desiredScrollableAmount ? desiredScrollableAmount : possibleScrollableAmount;
-                container.scrollTop = -scrollAmount;
+                    const scrollAmount = possibleScrollableAmount > desiredScrollableAmount ? desiredScrollableAmount : possibleScrollableAmount;
+                    container.scrollTop = -scrollAmount;
+                }
             }
-        }
+        }, 0);
     }, []);
 
     const setPostDomSettings = (childPostId: string, postDomSettings: Partial<PostDomSettings>, rerender?: boolean) => {
         const postDomSettingsUpdated = {
             ...browserStateHistoryRef.current[locationKey]?.postDomSettings ?? {},
-            [postId]: {
-                ...browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId] ?? {},
+            [uniqueKey]: {
+                ...browserStateHistoryRef.current[locationKey]?.postDomSettings?.[uniqueKey] ?? {},
                 [childPostId]: {
-                    ...(browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId]?.[childPostId] ?? initDomSettings),
+                    ...(browserStateHistoryRef.current[locationKey]?.postDomSettings?.[uniqueKey]?.[childPostId] ?? initDomSettings),
                     ...postDomSettings,
                 }
             }
@@ -121,7 +125,7 @@ function PostComponent(props: PostComponentProps) {
         mainPostDomSettings = initDomSettings;
     }
 
-    if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId]?.[postId]) {
+    if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[uniqueKey]?.[postId]) {
         setPostDomSettings(postId, mainPostDomSettings);
     }
 
@@ -135,13 +139,13 @@ function PostComponent(props: PostComponentProps) {
     
     const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(post.message, true);
 
-    const postDomSettingsItem = browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][postId];
+    const postDomSettingsItem = browserStateHistoryRef.current[locationKey].postDomSettings?.[uniqueKey][postId];
 
     const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
 
     const messageLinesDisplay = showTruncatedMessageLines ? truncatedMessageLines : messageLines;
 
-    const postMediaAttachment = postMediaAttachmentsRef.current[`post-${post.postId}`];
+    const postMediaAttachment = postMediaAttachmentsRef.current[`post-${uniqueKey}-${post.postId}`];
 
     const repliesToThisPost = [ ...getChildPostIds(post.postId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(post.postId, deOrphanedReplyPostsTreeRef.current) ];
     const showReplies = !postDomSettingsItem.repliesHidden;
@@ -165,8 +169,8 @@ function PostComponent(props: PostComponentProps) {
         const discussParentId = discussPrefix + curr.postId;
         const discussionPostIds = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
         const discussionPosts = discussionPostIds.map(discussionPostId => postsRef.current[discussionPostId]);
-        const discussionPostLikes = discussionPosts.filter(discussionPost => discussionPost.isLike && !!discussionPost.replyToPostId);
-        const discussionPostComments = discussionPosts.filter(discussionPost => !discussionPost.isLike || (discussionPost.isLike && !discussionPost.replyToPostId));
+        const discussionPostLikes = discussionPosts.filter(discussionPost => discussionPost.isLike);
+        const discussionPostComments = discussionPosts.filter(discussionPost => !discussionPost.isLike);
         totalNumberOfReplies += discussionPostComments.length;
         return { ...acc, [discussParentId]: { discussionPostLikes, discussionPostComments } };
     }, {}) as Record<string, { discussionPostLikes: Post[], discussionPostComments: Post[] }>;
@@ -174,7 +178,7 @@ function PostComponent(props: PostComponentProps) {
     const toggleShowReplyInputHandler = (e: MouseEventLocal, post: Post) => {
         e?.stopPropagation();
 
-        const newReplyInputHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].replyInputHidden;
+        const newReplyInputHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[uniqueKey][post.postId].replyInputHidden;
         setPostDomSettings(post.postId, { replyInputHidden: newReplyInputHidden }, true);
 
         if (inputPostDisabled || isBreakingChangeDisabled) {
@@ -183,14 +187,14 @@ function PostComponent(props: PostComponentProps) {
 
         if (!newReplyInputHidden) {
             setTimeout(() => {
-                const replyToPostTextareaElement = document.getElementById(`post-input-${post.postId}`) as HTMLTextAreaElement;
+                const replyToPostTextareaElement = document.getElementById(`post-input-${uniqueKey}-${post.postId}`) as HTMLTextAreaElement;
                 replyToPostTextareaElement.focus();
             }, SET_NEW_POSTS_ADDED_DELAY);
         }
     };
 
     const toggleShowRepliesHandler = (e: MouseEventLocal, post: Post, replyPostIds: string[]) => {
-        const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].repliesHidden;
+        const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[uniqueKey][post.postId].repliesHidden;
 
         if (newRepliesHidden || replyPostIds.length < 10 || isPostOutlet) {
             e.stopPropagation();
@@ -199,12 +203,12 @@ function PostComponent(props: PostComponentProps) {
     };
 
     const toggleShowDiscussionHandler = (post: Post) => {
-        const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].repliesHidden;
+        const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[uniqueKey][post.postId].repliesHidden;
         setPostDomSettings(post.postId, { repliesHidden: newRepliesHidden }, true);
     };
 
     const increaseShowMaxReplies = (increaseAmount: number) => {
-        const showMaxReplies = browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].showMaxReplies;
+        const showMaxReplies = browserStateHistoryRef.current[locationKey].postDomSettings?.[uniqueKey][post.postId].showMaxReplies;
         setPostDomSettings(post.postId, { showMaxReplies: showMaxReplies + increaseAmount }, true);
     }
 
@@ -213,7 +217,7 @@ function PostComponent(props: PostComponentProps) {
             return;
         }
 
-        const postDomSettings = browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId];
+        const postDomSettings = browserStateHistoryRef.current[locationKey].postDomSettings?.[uniqueKey][post.postId];
 
         const newRepliesHidden = !postDomSettings.repliesHidden;
 
@@ -242,7 +246,7 @@ function PostComponent(props: PostComponentProps) {
         }
 
         setTimeout(() => {
-            const postTextareaElement = document.getElementById(`post-input-${post.postId}`) as HTMLTextAreaElement;
+            const postTextareaElement = document.getElementById(`post-input-${uniqueKey}-${post.postId}`) as HTMLTextAreaElement;
             postTextareaElement.focus();
         }, SET_NEW_POSTS_ADDED_DELAY);
     };
@@ -258,7 +262,7 @@ function PostComponent(props: PostComponentProps) {
                 navigate(to);
             }
         } else {
-            const newTextOverflowHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][post.postId].textOverflowHidden;
+            const newTextOverflowHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[uniqueKey][post.postId].textOverflowHidden;
             setPostDomSettings(post.postId, { textOverflowHidden: newTextOverflowHidden }, true);
         }
     };
@@ -370,7 +374,7 @@ function PostComponent(props: PostComponentProps) {
                     <div className="flex flex-row gap-2 items-end">
                         <div className="flex-1">
                             <textarea
-                                id={`post-input-${post.postId}`}
+                                id={`post-input-${uniqueKey}-${post.postId}`}
                                 rows={1}
                                 className="w-full field-sizing-content max-w-[408px] min-h-[29px] max-h-[520px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[14px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
                                 placeholder="Reply here..."
@@ -389,11 +393,11 @@ function PostComponent(props: PostComponentProps) {
                     </div>}
                     <div className="leading-[12px]">
                         {postMediaAttachment ? <>
-                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, post.postId)}>Remove image</p>
+                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, `${uniqueKey}-${post.postId}`)}>Remove image</p>
                         </> : <>
-                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, post.postId, 'post')}>Add image</p>
+                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, `${uniqueKey}-${post.postId}`, 'post')}>Add image</p>
                         </>}
-                        <p id={`post-copytx-${post.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(e, post.postId, post.postId)}>Copy tx</p>
+                        <p id={`post-copytx-${uniqueKey}-${post.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(e, `${uniqueKey}-${post.postId}`, post.postId)}>Copy tx</p>
                     </div>
                 </div>
             </>}
@@ -402,7 +406,7 @@ function PostComponent(props: PostComponentProps) {
             <ul>
                 {replyComments.slice(0, showMaxReplies).map((replyPost, index) => {
 
-                    if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[postId]?.[replyPost.postId]) {
+                    if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[uniqueKey]?.[replyPost.postId]) {
                         const settings = replyPost.postId === spotlightReplyPostId && spotlightDiscussionPostId ? initProfileRepliesDomSettings : initDomSettings;
                         setPostDomSettings(replyPost.postId, settings);
                     }
@@ -414,13 +418,13 @@ function PostComponent(props: PostComponentProps) {
                     const posterAge = replyPost.posterDetails_atTimeOfPost.age;
                     const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
                     const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(replyPost.message, true, 3);
-                    const postDomSettingsItem = browserStateHistoryRef.current[locationKey].postDomSettings?.[postId][replyPost.postId];
+                    const postDomSettingsItem = browserStateHistoryRef.current[locationKey].postDomSettings?.[uniqueKey][replyPost.postId];
 
                     const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
 
                     const messageLinesDisplay = showTruncatedMessageLines ? truncatedMessageLines : messageLines;
 
-                    const postMediaAttachment = postMediaAttachmentsRef.current[`post-${replyPost.postId}`];
+                    const postMediaAttachment = postMediaAttachmentsRef.current[`post-${uniqueKey}-${replyPost.postId}`];
 
                     const showDiscussion = !postDomSettingsItem.repliesHidden;
                     const discussParentId = discussPrefix + replyPost.postId;
@@ -436,7 +440,7 @@ function PostComponent(props: PostComponentProps) {
                     const isSpotlightReply = !!spotlightReplyPostId && index === 0;
 
                     const addAttrs = {
-                        ...( isSpotlightReply && spotlightDiscussionPostId && { id: `spotlight-comment-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
+                        ...( isSpotlightReply && spotlightDiscussionPostId && { id: `spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
                     };
 
                     return (
@@ -493,7 +497,7 @@ function PostComponent(props: PostComponentProps) {
                                     </div>
                                 </div>
                                 {showDiscussion && <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
-                                    <ul {...addAttrs} id={`spotlight-discussion-${spotlightReplyPostId}-${spotlightDiscussionPostId}`} className="relative flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
+                                    <ul {...addAttrs} id={`spotlight-discussion-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`} className="relative flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
                                         {discussionPostComments.length === 0 && <li className="mb-1"><p className="italic text-center text-[12px] text-gray-500">no comments yet</p></li>}
                                         {discussionPostComments.map((discussionPost) => {
                                             const postTips = tipsRef.current[discussionPost.postId] ?? { totalAmount: 0, tips: [] };
@@ -509,7 +513,7 @@ function PostComponent(props: PostComponentProps) {
                                             const isSpotlightDiscussionPost = discussionPost.postId === spotlightDiscussionPostId;
 
                                             const addAttrs = {
-                                                ...( isSpotlightDiscussionPost && { id: `spotlight-comment-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
+                                                ...( isSpotlightDiscussionPost && { id: `spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
                                             };
 
                                             return (
@@ -580,7 +584,7 @@ function PostComponent(props: PostComponentProps) {
                                             <div className="flex flex-row gap-2 items-end">
                                                 <div className="flex-1">
                                                     <textarea
-                                                        id={`post-input-${replyPost.postId}`}
+                                                        id={`post-input-${uniqueKey}-${replyPost.postId}`}
                                                         rows={2}
                                                         className="w-full field-sizing-content max-w-[385px] min-h-[26px] max-h-[312px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
                                                         placeholder="Comment here..."
@@ -597,11 +601,11 @@ function PostComponent(props: PostComponentProps) {
                                         </div>}
                                         <div className="leading-[12px]">
                                             {postMediaAttachment ? <>
-                                                <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, replyPost.postId)}>Remove image</p>
+                                                <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, `${uniqueKey}-${replyPost.postId}`)}>Remove image</p>
                                             </> : <>
-                                                <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, replyPost.postId, 'post')}>Add image</p>
+                                                <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, `${uniqueKey}-${replyPost.postId}`, 'post')}>Add image</p>
                                             </>}
-                                            <p id={`post-copytx-${replyPost.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(e, replyPost.postId, discussReplyToPostId, discussParentId)}>Copy tx</p>
+                                            <p id={`post-copytx-${uniqueKey}-${replyPost.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(e, `${uniqueKey}-${replyPost.postId}`, discussReplyToPostId, discussParentId)}>Copy tx</p>
                                         </div>
                                     </>}
                                 </div>}

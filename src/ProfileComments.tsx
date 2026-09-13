@@ -72,10 +72,16 @@ function ProfileComments() {
                     replyPostId,
                     postItemKey,
                     parentPost,
-                } = getSpotlightPostDetails(discussionPost, postsRef, discussPrefix);
+                } = getSpotlightPostDetails(discussionPost, postsRef);
+
+                const showPostComponent = !!parentPost;
+                if (!showPostComponent) {
+                    return null;
+                }
 
                 return <li key={postItemKey}>
-                    {parentPost && <PostComponent
+                    <PostComponent
+                        uniqueKey={postItemKey}
                         postId={parentPost.postId}
                         postsRef={postsRef}
                         replyPostsTreeRef={replyPostsTreeRef}
@@ -102,7 +108,7 @@ function ProfileComments() {
                         makePostsWith={makePostsWith}
                         spotlightReplyPostId={replyPostId}
                         spotlightDiscussionPostId={discussionPostId}
-                    />}
+                    />
                 </li>
             })}
         </ul>

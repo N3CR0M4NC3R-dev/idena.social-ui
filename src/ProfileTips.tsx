@@ -64,7 +64,8 @@ function ProfileTips() {
 
     return (<>
         <ul>
-            {profileActivityRef.current[address].tips.map((tipPostId: string) => {
+            {profileActivityRef.current[address].tips.map((tipPostIdTxHash: string) => {
+                const [tipPostId, txHash] = tipPostIdTxHash.split('|');
                 const post = postsRef.current[tipPostId];
 
                 const {
@@ -72,10 +73,18 @@ function ProfileTips() {
                     discussionPostId,
                     postItemKey,
                     parentPost,
-                } = getSpotlightPostDetails(post, postsRef, discussPrefix);
+                } = getSpotlightPostDetails(post, postsRef);
 
-                return <li key={postItemKey}>
-                    {parentPost && <PostComponent
+                const showPostComponent = parentPost && !post!.isLike;
+                if (!showPostComponent) {
+                    return null;
+                }
+
+                const postItemKeyUnique = `${postItemKey}-${txHash}`;
+
+                return <li key={postItemKeyUnique}>
+                    <PostComponent
+                        uniqueKey={postItemKeyUnique}
                         postId={parentPost.postId}
                         postsRef={postsRef}
                         replyPostsTreeRef={replyPostsTreeRef}
@@ -102,7 +111,7 @@ function ProfileTips() {
                         makePostsWith={makePostsWith}
                         spotlightReplyPostId={replyPostId}
                         spotlightDiscussionPostId={discussionPostId}
-                    />}
+                    />
                 </li>
             })}
         </ul>

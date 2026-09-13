@@ -72,10 +72,16 @@ function ProfileMedia() {
                     discussionPostId,
                     postItemKey,
                     parentPost,
-                } = getSpotlightPostDetails(mediaPost, postsRef, discussPrefix);
+                } = getSpotlightPostDetails(mediaPost, postsRef);
+
+                const showPostComponent = !!parentPost;
+                if (!showPostComponent) {
+                    return null;
+                }
 
                 return <li key={postItemKey}>
-                    {parentPost && <PostComponent
+                    <PostComponent
+                        uniqueKey={postItemKey}
                         postId={parentPost.postId}
                         postsRef={postsRef}
                         replyPostsTreeRef={replyPostsTreeRef}
@@ -102,7 +108,7 @@ function ProfileMedia() {
                         makePostsWith={makePostsWith}
                         spotlightReplyPostId={replyPostId}
                         spotlightDiscussionPostId={discussionPostId}
-                    />}
+                    />
                 </li>
             })}
         </ul>

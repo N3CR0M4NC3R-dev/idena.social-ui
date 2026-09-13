@@ -73,10 +73,18 @@ function ProfileLikes() {
                     discussionPostId,
                     postItemKey,
                     parentPost,
-                } = getSpotlightPostDetails(likedPost, postsRef, discussPrefix);
+                } = getSpotlightPostDetails(likedPost, postsRef);
 
-                return <li key={postItemKey}>
-                    {parentPost && <PostComponent
+                const showPostComponent = !!parentPost;
+                if (!showPostComponent) {
+                    return null;
+                }
+
+                const postItemKeyUnique = `${postItemKey}-${likePostId}`;
+
+                return <li key={postItemKeyUnique}>
+                    <PostComponent
+                        uniqueKey={postItemKeyUnique}
                         postId={parentPost.postId}
                         postsRef={postsRef}
                         replyPostsTreeRef={replyPostsTreeRef}
@@ -103,7 +111,7 @@ function ProfileLikes() {
                         makePostsWith={makePostsWith}
                         spotlightReplyPostId={replyPostId}
                         spotlightDiscussionPostId={discussionPostId}
-                    />}
+                    />
                 </li>
             })}
         </ul>

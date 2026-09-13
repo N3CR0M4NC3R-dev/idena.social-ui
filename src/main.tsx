@@ -16,6 +16,7 @@ import ProfileComments from './ProfileComments.tsx';
 import ProfileLikes from './ProfileLikes.tsx';
 import ProfileTips from './ProfileTips.tsx';
 import ProfileMedia from './ProfileMedia.tsx';
+import PostActivity from './PostActivity.tsx';
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
                     <Route index element={<LatestPosts />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/messages" element={<Messages />} />
+                    <Route path="/postactivity" element={<PostActivity />} />
                     <Route path="/post/:postId" element={<PostOutlet />} />
                     <Route path="/conversation/:conversationKey" element={<ConversationOutlet />} />
                     <Route path="/profile/:address" element={<Profile />}>

@@ -1,11 +1,12 @@
 import { type Post, type PostTips, type Tip } from './logic/asyncUtils';
-import { useOutletContext } from 'react-router';
-import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
+import { useNavigate, useOutletContext } from 'react-router';
+import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
 
-type ProfileRepliesProps = {
-    address: string,
+const sortFn = (a: string, b: string) => (b.split('-')[0] as unknown as number) - (a.split('-')[0] as unknown as number);
+
+type PostActivityProps = {
     postsRef: React.RefObject<Record<string, Post>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
@@ -29,13 +30,14 @@ type ProfileRepliesProps = {
     tipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
-    profileActivityRef: React.RefObject<Record<string, ProfileActivity>>,
+    postActivityRef: React.RefObject<string[]>
 };
 
-function ProfileReplies() {
+function PostActivity() {
+
+    const navigate = useNavigate();
 
     const {
-        address,
         postsRef,
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
@@ -59,28 +61,60 @@ function ProfileReplies() {
         tipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
-        profileActivityRef,
-    } = useOutletContext() as ProfileRepliesProps;
+        postActivityRef,
+    } = useOutletContext() as PostActivityProps;
+
+    const handleGoBack = () => {
+        navigate(-1);
+    };
 
     return (<>
+        <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
         <ul>
-            {profileActivityRef.current[address].replies.map((replyPostId: string) => {
+            {
+            // @ts-ignore: toSorted not recognized yet
+            postActivityRef.current.toSorted(sortFn).map((postActivity: string) => {
+                const [, postIdRaw, postType] = postActivity.split('-');
+                const postId = postType === 'tip' ? postIdRaw.split('|')[0] : postIdRaw;
+                const post = postsRef.current[postId];
+                const spotlightPost = post.isLike ? postsRef.current[post.replyToPostId] : post;
 
-                const replyPost = postsRef.current[replyPostId];
+                let notificationMessage;
+                if (postType === 'tip') {
+                    notificationMessage = `Your ${post.postLevel.toLowerCase()} has recieved a tip`;
+                } else if (post.isLike) {
+                    notificationMessage = `Your ${spotlightPost.postLevel.toLowerCase()} has recieved a like`;
+                } else if (postType === 'comment') {
+                    notificationMessage = 'Your reply has received a new comment';
+                } else if (postType === 'commentReply') {
+                    notificationMessage = `Your ${''} has received a reply comment`;
+                } else if (postType === 'reply') {
+                    notificationMessage = 'Your post has received a reply';
+                } else {
+                    notificationMessage = `You have recieved an interaction`;
+                }
 
                 const {
+                    replyPostId,
+                    discussionPostId,
                     postItemKey,
                     parentPost,
-                } = getSpotlightPostDetails(replyPost, postsRef);
+                } = getSpotlightPostDetails(spotlightPost, postsRef);
 
-                const showPostComponent = parentPost;
+                const showPostComponent = !!parentPost;
                 if (!showPostComponent) {
                     return null;
                 }
 
-                return <li key={postItemKey}>
+                const addedUniquity = postType === 'tip' ? `-${postIdRaw.split('|')[1]}` : post.isLike ? `-${post.postId}` : '';
+                const postItemKeyUnique = postItemKey + addedUniquity;
+
+                return <li key={postItemKeyUnique}>
+                    <div className="text-center text-[13px] bg-stone-700">
+                        <p>{notificationMessage}</p>
+                    </div>
                     <PostComponent
-                        uniqueKey={postItemKey}
+                        uniqueKey={postItemKeyUnique}
                         postId={parentPost.postId}
                         postsRef={postsRef}
                         replyPostsTreeRef={replyPostsTreeRef}
@@ -106,6 +140,7 @@ function ProfileReplies() {
                         postMediaAttachmentsRef={postMediaAttachmentsRef}
                         makePostsWith={makePostsWith}
                         spotlightReplyPostId={replyPostId}
+                        spotlightDiscussionPostId={discussionPostId}
                     />
                 </li>
             })}
@@ -113,4 +148,4 @@ function ProfileReplies() {
     </>);
 }
 
-export default ProfileReplies;
+export default PostActivity;

@@ -113,6 +113,7 @@ function LatestPosts() {
             {(sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).map((postId) => (
                 <li key={postId}>
                     <PostComponent
+                        uniqueKey={postId}
                         postId={postId}
                         postsRef={postsRef}
                         replyPostsTreeRef={replyPostsTreeRef}

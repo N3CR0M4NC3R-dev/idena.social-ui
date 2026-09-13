@@ -84,6 +84,7 @@ function ProfilePosts() {
             {filteredOrderedPosts.map((postId: string) => (
                 <li key={postId}>
                     <PostComponent
+                        uniqueKey={postId}
                         postId={postId}
                         postsRef={postsRef}
                         replyPostsTreeRef={replyPostsTreeRef}

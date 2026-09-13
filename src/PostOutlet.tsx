@@ -72,6 +72,7 @@ function PostOutlet() {
     return (<>
         <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
         <PostComponent
+            uniqueKey={postId!}
             postId={postId!}
             postsRef={postsRef}
             replyPostsTreeRef={replyPostsTreeRef}
