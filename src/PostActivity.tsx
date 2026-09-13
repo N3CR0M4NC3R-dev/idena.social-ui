@@ -87,7 +87,7 @@ function PostActivity() {
                 } else if (postType === 'comment') {
                     notificationMessage = 'Your reply has received a new comment';
                 } else if (postType === 'commentReply') {
-                    notificationMessage = `Your ${''} has received a reply comment`;
+                    notificationMessage = 'Your comment has received a reply comment';
                 } else if (postType === 'reply') {
                     notificationMessage = 'Your post has received a reply';
                 } else {
