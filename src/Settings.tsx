@@ -156,13 +156,13 @@ function Settings() {
             {makePostsWith === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Idena Web App for making posts. (Posting, liking, tipping is disabled)</p>}
             <div className="flex flex-row gap-2">
                 <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} />
-                <label htmlFor="notUseRpc" className="flex-none text-right">Idena Web App</label>
+                <label htmlFor="notUseRpc" className="flex-none text-right">Idena Web App <span className="text-[12px]">(No account? Get one at <a className="text-blue-400 hover:underline" href="https://app.idena.io" target="_blank">app.idena.io</a>)</span></label>
             </div>
             {makePostsWith === 'idena-app' && (<>
                 <div className="mb-4 flex flex-col ml-5 text-[14px]">
                     <p className="mb-1">Your Idena Address:</p>
                     <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
-                    {postersAddressInvalid && <p className="text-[11px] text-red-400">Invalid address. (Posting, liking, tipping is disabled)</p>}
+                    {postersAddressInvalid && <p className="text-[11px] text-red-400">Invalid address. (Posting, liking, tipping is disabled).</p>}
                     <div className="flex flex-row">
                         <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressApplied(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
                         {!inputPostersAddressApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}

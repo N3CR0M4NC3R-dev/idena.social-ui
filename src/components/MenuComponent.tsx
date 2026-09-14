@@ -21,13 +21,13 @@ function MenuComponent(props: MenuComponentProps) {
         <hr />
         <Link to="/" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={homeWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">HOME</span></div></Link>
         <hr />
-        <Link to="/settings" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={settingsWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">SETTINGS</span></div></Link>
-        <hr />
         <Link to={`/profile/${postersAddress}`} onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={profileWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">PROFILE</span></div></Link>
         <hr />
         <Link to="/messages" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={messagesWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">MESSAGES</span></div></Link>
         <hr />
         <Link to="/postactivity" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={notificationsWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">POST ACTIVITY</span></div></Link>
+        <hr />
+        <Link to="/settings" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={settingsWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">SETTINGS</span></div></Link>
         <hr />
     </>);
 }

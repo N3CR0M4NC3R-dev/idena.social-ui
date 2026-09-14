@@ -84,6 +84,9 @@ function LatestPosts() {
     };
 
     return (<>
+        <div className="mb-4">
+            {inputPostDisabled && <p className="mt-1 text-red-400 text-[13px]">Posting is disabled because there is a problem with your settings. Please adjust your settings and return to this page.</p>}
+        </div>
         <div className="mt-3 mb-6">
             <textarea
                 id='post-input-main'
