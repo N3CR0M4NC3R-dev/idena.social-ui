@@ -3,7 +3,7 @@ import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
 import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
 import heartGraySvg from '../assets/heart-gray.svg';
 import heartRedSvg from '../assets/heart-red.svg';
-import { initDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from "../App.exports";
+import { initDomSettings, type BrowserStateHistorySettings, type Conversation, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from "../App.exports";
 import { getChildPostIds, type Message, type Poster } from "../logic/asyncUtils";
 import { useLocation, useNavigate } from "react-router";
 import { useReducer } from "react";
@@ -16,7 +16,7 @@ type ConversationComponentProps = {
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     postersRef: React.RefObject<Record<string, Poster>>,
-    conversationsRef: React.RefObject<Record<string, string[]>>,
+    conversationsRef: React.RefObject<Record<string, Conversation>>,
     messagesRef: React.RefObject<Record<string, Message>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
@@ -171,9 +171,9 @@ function ConversationComponent(props: ConversationComponentProps) {
         }
     };
 
-    const conversation = conversationsRef.current[conversationKey].map((messageId) => messagesRef.current[messageId]).filter(message => !message.isLike);
-
-    const participants = conversation[0].participants;
+    const conversation = conversationsRef.current[conversationKey];
+    const messages = conversation.messages.map((messageId) => messagesRef.current[messageId]).filter(message => !message.isLike);
+    const participants = conversation.participants;
 
     const participantsExcludingSelf = participants.filter(item => item !== postersAddress);
     if (!participantsExcludingSelf.length) {
@@ -200,13 +200,13 @@ function ConversationComponent(props: ConversationComponentProps) {
             ? <OneOnOneConversationHeaderComponent conversationPartner={conversationPartners[0]} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />
             : <GroupConversationHeaderComponent conversationPartners={conversationPartners} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />}
             <div className="ml-3 flex gap-2">
-                <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({conversation.length})</span>
+                <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</span>
             </div>
         </div>
         {showReplies && <div className="bg-stone-800 pt-1 pb-2">
             <div className="mt-1.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
                 <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
-                    {conversation.map((message) => {
+                    {messages.map((message) => {
                         const posterDisplayAddress = getDisplayAddressShort(message.sender);
                         const posterStake = message.sendersDetails_atTimeOfMessage.stake;
                         const posterState = message.sendersDetails_atTimeOfMessage.state;

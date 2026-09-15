@@ -11,6 +11,7 @@ export type EventTransaction = {
     eventArgs2nd: any;
     method: any;
 };
+export type Conversation = { participants: string[], messages: string[] };
 
 export const initDomSettings = { textOverflowHidden: true, repliesHidden: true, replyInputHidden: true, showMaxReplies: 5 };
 export const initPostOutletDomSettings = { textOverflowHidden: false, repliesHidden: false, replyInputHidden: true, showMaxReplies: 10 };

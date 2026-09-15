@@ -1,12 +1,12 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
 import ConversationComponent from "./components/ConversationComponent";
 import type { Message, Poster } from "./logic/asyncUtils";
-import type { BrowserStateHistorySettings, MouseEventLocal, PostMediaAttachment } from "./App.exports";
+import type { BrowserStateHistorySettings, Conversation, MouseEventLocal, PostMediaAttachment } from "./App.exports";
 
 type ConversationOutletProps = {
     postersAddress: string,
     postersRef: React.RefObject<Record<string, Poster>>,
-    conversationsRef: React.RefObject<Record<string, string[]>>,
+    conversationsRef: React.RefObject<Record<string, Conversation>>,
     messagesRef: React.RefObject<Record<string, Message>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,

@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router";
 import { getPoster, getPosterWithIndexerApi, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, type Message, type Poster } from "./logic/asyncUtils";
-import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from "./App.exports";
+import { type BrowserStateHistorySettings, type Conversation, type MouseEventLocal, type PostMediaAttachment } from "./App.exports";
 import ConversationComponent from "./components/ConversationComponent";
 
 type MessagesProps = {
@@ -17,7 +17,7 @@ type MessagesProps = {
     rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>)>,
     latestConversationActivity: string[],
     postersAddress: string,
-    conversationsRef: React.RefObject<Record<string, string[]>>,
+    conversationsRef: React.RefObject<Record<string, Conversation>>,
     messagesRef: React.RefObject<Record<string, Message>>,
     browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
     setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,

@@ -1,16 +1,14 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
-import { hexToUint8Array } from 'idena-sdk-js-lite';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
-import { keccak256, sha3_256 } from 'js-sha3';
-import { encrypt } from 'eciesjs';
+import { sha3_256 } from 'js-sha3';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, saveReplyPostId, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, getDisplayAddress, getPostActivities, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
 import menuWhiteSvg from './assets/menu-8-white.svg';
 import { Link, Outlet, useLocation } from 'react-router';
-import { defaultProfileActivity, type BrowserStateHistorySettings, type EventTransaction, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
+import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 import ModalAddMediaComponent from './components/ModalAddMediaComponent';
@@ -200,8 +198,8 @@ function App() {
     const postLatestActivityRef = useRef({} as Record<string, number>);
     const latestMessagesForwardQueueRef = useRef([] as EventTransaction[]);
     const latestMessagesBackwardQueueRef = useRef([] as EventTransaction[]);
-    const [latestConversationActivity, setLatestConversationActivity] = useState<string[]>([]); // ['0x011', '0x022']
-    const conversationsRef = useRef<Record<string, string[]>>({}); // { '0x011': ['messageId1', 'messageId2', 'messageId3'], }
+    const [latestConversationActivity, setLatestConversationActivity] = useState<string[]>([]);
+    const conversationsRef = useRef<Record<string, Conversation>>({});
     const messagesRef = useRef<Record<string, Message>>({});
     const profileActivityRef = useRef<Record<string, ProfileActivity>>({});
     const postActivityRef = useRef<string[]>([]);
@@ -1165,14 +1163,10 @@ function App() {
 
                 for (let index = 0; index < newMessages.length; index++) {
                     const newMessage = newMessages[index] as Message;
-                    const conversationKey = newMessage.conversationKey;
-                    const conversation = isRecurseForward ? [ newMessage.messageId, ...(conversationsRef.current[conversationKey] ?? []) ] : [ ...(conversationsRef.current[conversationKey] ?? []), newMessage!.messageId ];
-                    conversationsRef.current = { ...conversationsRef.current, [conversationKey]: conversation };
-                    conversationKeys.push(conversationKey);
 
-                    const allParticipants = [newMessage.sender, ...newMessage.participants];
-                    for (let index = 0; index < allParticipants.length; index++) {
-                        const participantAddress = allParticipants[index];
+                    const participants = newMessage.participants;
+                    for (let index = 0; index < participants.length; index++) {
+                        const participantAddress = participants[index];
                         const participant = postersRef.current[participantAddress];
                         if (participant && !participant.pubkey) {
                             if (findPostsWithRef.current === 'indexer-api') {
@@ -1184,6 +1178,14 @@ function App() {
                             }
                         }
                     }
+
+                    const conversationKey = newMessage.conversationKey;
+                    
+                    const messages = isRecurseForward ? [ newMessage.messageId, ...(conversationsRef.current[conversationKey]?.messages ?? []) ] : [ ...(conversationsRef.current[conversationKey]?.messages ?? []), newMessage!.messageId ];
+                    const conversation = { participants, messages };
+                    conversationsRef.current = { ...conversationsRef.current, [conversationKey]: conversation };
+
+                    conversationKeys.push(conversationKey);
                 }
 
                 setLatestConversationActivity((currentValue) => {
@@ -1438,32 +1440,22 @@ function App() {
                 mediaType = [postMediaAttachment.file.type];
             }
 
-            // [participants, channelId, message, textPassword (AES-GCM encryption), replyToMessageId, media, mediaType, mediaPassword (AES-GCM encryption), tags]
-            const rawMessage = JSON.stringify([[postersAddress.toLowerCase(), ...recipients], '', inputText, textPassword, replyToMessageId ?? '', media, mediaType, mediaPassword, []]);
-            const rawMessageHash = keccak256(rawMessage);
-
-            const encodedMessage = new TextEncoder().encode(rawMessage);
-            const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
-            const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
-            const keyData = new Uint8Array(sha3_256.array(passwordyActual));
-            const myPrivateKey = await decryptAESGCM(encryptedPrivateKeyActual, keyData);
-            const { pubkey: myPubkey } = extractPubkeyAddressFromPrivateKey(myPrivateKey);
-            const myEncryptedMessage = await encrypt(hexToUint8Array(myPubkey), encodedMessage);
-            // @ts-ignore: Uint8Array.toBase64 not recognized yet
-            const mySerializedEncryptedMessage = myEncryptedMessage.toBase64();
-
-            const message = [mySerializedEncryptedMessage];
-
-            for (let index = 0; index < recipients.length; index++) {
-                const recipient = recipients[index];
-                const recipientDetails = postersRef.current[recipient];
-
-                const recipientEncryptedMessage = await encrypt(hexToUint8Array(recipientDetails.pubkey), encodedMessage);
-                // @ts-ignore: Uint8Array.toBase64 not recognized yet
-                const recipientSerializedEncryptedMessage = recipientEncryptedMessage.toBase64();
-
-                message.push(recipientSerializedEncryptedMessage);
-            }
+            const { message, rawMessageHash } = await encryptRecipientsMessage(
+                postersAddress,
+                recipients,
+                inputText,
+                textPassword,
+                media,
+                mediaType,
+                mediaPassword,
+                makePostsWith,
+                encryptedPrivateKeyFromNodeRef,
+                encryptedPrivateKey,
+                passwordFromNodeRef,
+                password,
+                postersRef,
+                replyToMessageId,
+            );
 
             messageTextareaElement.value = '';
 
@@ -1741,7 +1733,7 @@ function App() {
             <div className="hidden lg:flex flex-1 justify-end">
                 <div className="w-[200px] min-w-[200px] ml-2 mr-8 flex flex-col">
                     <div className="text-[28px] mb-3">
-                        <Link to="/">idena.social</Link>
+                        <Link to="/">Idena Social</Link>
                     </div>
                     <MenuComponent postersAddress={postersAddress} />
                     <div className="mb-3 text-gray-500">
@@ -1778,7 +1770,7 @@ function App() {
                 </div>
                 <div className="lg:hidden my-2">
                     <div className="text-[26px] mb-1">
-                        <Link to="/">idena.social</Link>
+                        <Link to="/">Idena Social</Link>
                     </div>
                     <div className="flex flex-row gap-3">
                         <div className="min-w-8">
