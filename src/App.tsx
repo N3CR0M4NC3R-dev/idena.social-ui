@@ -193,7 +193,8 @@ function App() {
     const browserStateHistoryRef = useRef<Record<string, BrowserStateHistorySettings>>({});
     const postMediaAttachmentsRef = useRef<Record<string, PostMediaAttachment | undefined>>({});
     const copyTxHandlerEnabledRef = useRef<boolean>(true);
-    const tipsRef = useRef<Record<string, PostTips>>({});
+    const tipsRef = useRef<Record<string, Tip>>({});
+    const postTipsRef = useRef<Record<string, PostTips>>({});
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
     const postLatestActivityRef = useRef({} as Record<string, number>);
     const latestMessagesForwardQueueRef = useRef([] as EventTransaction[]);
@@ -230,7 +231,7 @@ function App() {
         };
 
         rerender && forceUpdate();
-    }
+    };
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
         rpcClientRef.current = getRpcClient({ idenaNodeUrl, idenaNodeApiKey }, setNodeAvailable);
@@ -432,7 +433,7 @@ function App() {
 
             return () => clearInterval(recurseForwardIntervalId);
         } else {
-            recurseForwardIntervalId && clearInterval(recurseForwardIntervalId)
+            recurseForwardIntervalId && clearInterval(recurseForwardIntervalId);
         }
     }, [initialBlock, nodeAvailable]);
 
@@ -733,8 +734,22 @@ function App() {
                     const transaction = transactionsWithDetails[index];
 
                     if ([sendTipMethod].includes(transaction.method)) {
-                        const { postId, newTip, updatedPostTips, posterPromise } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, isRecurseForward, postersPromised, findPostsWithRef, indexerApiUrlRef);
-                        tipsRef.current = { ...tipsRef.current, [postId]: updatedPostTips };
+                        const { postId, newTip, posterPromise, continued } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, postersPromised, findPostsWithRef, indexerApiUrlRef);
+                        
+                        if (continued) {
+                            continue;
+                        }
+
+                        const existingPostTips = postTipsRef.current[postId!];
+
+                        const updatedPostTips: PostTips = {
+                            postId: postId!,
+                            totalAmount: (existingPostTips?.totalAmount ?? 0) + newTip!.amount,
+                            tips: isRecurseForward ? [ newTip!.txHash, ...(existingPostTips?.tips ?? []) ] : [ ...(existingPostTips?.tips ?? []), newTip!.txHash ],
+                        };
+
+                        tipsRef.current = { ...tipsRef.current, [newTip!.txHash]: newTip! };
+                        postTipsRef.current = { ...postTipsRef.current, [postId!]: updatedPostTips! };
 
                         posterPromise && posterPromises.push(posterPromise);
 
@@ -742,9 +757,9 @@ function App() {
 
                         // transient Post representation of a Tip
                         const newPost = {
-                            postId: newTip.txHash,
+                            postId: newTip!.txHash,
                             replyToPostId: postId,
-                            timestamp: newTip.timestamp,
+                            timestamp: newTip!.timestamp,
                         } as Post;
 
                         const newPostLatestActivity = getNewPostLatestActivity(
@@ -756,12 +771,12 @@ function App() {
 
                         postLatestActivityRef.current = { ...postLatestActivityRef.current, ...newPostLatestActivity };
 
-                        const profileActivity = { ...(profileActivityRef.current[newTip.tipper] ?? defaultProfileActivity) };
-                        profileActivity.tips = isRecurseForward ? [`${postId}|${newTip.txHash}`, ...profileActivity.tips] : [...profileActivity.tips, `${postId}|${newTip.txHash}`];
-                        profileActivityRef.current[newTip.tipper] = profileActivity;
+                        const profileActivity = { ...(profileActivityRef.current[newTip!.tipper] ?? defaultProfileActivity) };
+                        profileActivity.tips = isRecurseForward ? [`${postId}|${newTip!.txHash}`, ...profileActivity.tips] : [...profileActivity.tips, `${postId}|${newTip!.txHash}`];
+                        profileActivityRef.current[newTip!.tipper] = profileActivity;
 
-                        if (postsRef.current[postId]?.poster === postersAddress) {
-                            postActivityRef.current = [ ...postActivityRef.current, `${newTip.timestamp}-${postId}|${newTip.txHash}-tip` ];
+                        if (postsRef.current[postId!]?.poster === postersAddress) {
+                            postActivityRef.current = [ ...postActivityRef.current, `${newTip!.timestamp}-${postId}|${newTip!.txHash}-tip` ];
                         }
 
                         continue;
@@ -932,13 +947,13 @@ function App() {
                     let newPostActivities: string[] = [];
 
                     if (newPost!.poster === postersAddress) {
-                        const postTips = tipsRef.current[newPost!.postId];
+                        const postTips = postTipsRef.current[newPost!.postId];
 
                         if (postTips) {
                             const tips = postTips.tips;
 
                             for (let index = 0; index < tips.length; index++) {
-                                const tip = tips[index];
+                                const tip = tipsRef.current[tips[index]];
                                 newPostActivities = [ ...newPostActivities, `${tip.timestamp}-${tip.postId}|${tip.txHash}-tip` ];
                             }
                         }
@@ -1169,13 +1184,11 @@ function App() {
                         const participantAddress = participants[index];
                         const participant = postersRef.current[participantAddress];
                         if (participant && !participant.pubkey) {
-                            if (findPostsWithRef.current === 'indexer-api') {
-                                const pubkey = await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, participantAddress);
-                                participant.pubkey = pubkey ?? '';
-                            } else {
-                                const pubkey = await getPubkeyWithRpc(rpcClientRef.current!, participantAddress);
-                                participant.pubkey = pubkey ?? '';
-                            }
+                            const pubkey = findPostsWithRef.current === 'indexer-api'
+                                ? await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, participantAddress)
+                                : await getPubkeyWithRpc(rpcClientRef.current!, participantAddress);
+
+                            postersRef.current = { ...postersRef.current, [participantAddress]: { ...participant, pubkey } };
                         }
                     }
 
@@ -1194,7 +1207,7 @@ function App() {
                         for (let index = 0; index < conversationKeys.length; index++) {
                             const conversationKey = conversationKeys[index];
                             const currentValueExcluding = newLatestConversationActivity.filter(item => item !== conversationKey);
-                            newLatestConversationActivity = [ conversationKey, ...currentValueExcluding ]
+                            newLatestConversationActivity = [ conversationKey, ...currentValueExcluding ];
                         }
                     } else {
                         for (let index = 0; index < conversationKeys.length; index++) {
@@ -1212,8 +1225,8 @@ function App() {
             } finally {
                 recurse();
             }
-        }
-    }
+        };
+    };
 
     useEffect(() => {
         let intervalSubmittingPost: NodeJS.Timeout;
@@ -1318,7 +1331,7 @@ function App() {
                 }, 1000);
             });
         }
-    }
+    };
 
     const submitPostHandler = async (location: string, replyToPostId?: string, channelId?: string, storeTextIpfs?: boolean, storeMediaIpfs?: boolean) => {
         if (!nodeAvailable) {
@@ -1432,8 +1445,8 @@ function App() {
                 return;
             }
 
-            let textPassword = '';
-            let mediaPassword = '';
+            const textPassword = '';
+            const mediaPassword = '';
 
             if (postMediaAttachment?.ipfsUrl) {
                 media = [postMediaAttachment.ipfsUrl];
@@ -1480,7 +1493,7 @@ function App() {
                 }, 1000);
             });
         }
-    }
+    };
 
     const submitMessageHandler = async (location: string, recipients: string[], replyToMessageId?: string, storeTextIpfs?: boolean, storeMediaIpfs?: boolean) => {
         if (!nodeAvailable) {
@@ -1594,8 +1607,8 @@ function App() {
         const inputText = emoji;
         const media: string[] = [];
         const mediaType: string[] = [];
-        let textPassword = '';
-        let mediaPassword = '';
+        const textPassword = '';
+        const mediaPassword = '';
 
         const { message, rawMessageHash } = await encryptRecipientsMessage(
             postersAddress,
@@ -1615,7 +1628,7 @@ function App() {
         );
 
         await submitMessage(postersAddress, contractAddressCurrent, sendMessageMethod, message, rawMessageHash, makePostsWith, rpcClientRef.current!, callbackUrl);
-    }
+    };
 
     const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
         e.stopPropagation();
@@ -1623,8 +1636,9 @@ function App() {
         setModalOpen('likes');
     };
 
-    const handleOpenTipsModal = (e: MouseEventLocal, tips: Tip[]) => {
+    const handleOpenTipsModal = (e: MouseEventLocal, txHashArray: string[]) => {
         e.stopPropagation();
+        const tips = txHashArray.map(txHash => tipsRef.current[txHash]);
         modalTipsRef.current = [ ...tips ];
         setModalOpen('tips');
     };
@@ -1850,6 +1864,7 @@ function App() {
                         handleExpandImageModal,
                         handleSubmitPubkeyModal,
                         tipsRef,
+                        postTipsRef,
                         postMediaAttachmentsRef,
                         rpcClientRef,
                         encryptedPrivateKey,

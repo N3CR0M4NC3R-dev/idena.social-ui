@@ -29,19 +29,19 @@ function ModalSendTipComponent(props: ModalSendTipComponentProps) {
 
         await submitSendTipHandler(postId, postId, tipAmount);
         closeModal();
-    }
+    };
 
     const handleChangeTipAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
         setTipAmount(e.target.value);
         hasInsufficientFunds(e.target.value);
-    }
+    };
 
     const hasInsufficientFunds = (tipAmountParam?: string) => {
         const tipAmountNum = tipAmountParam ? parseFloat(tipAmountParam) : parseFloat(tipAmount);
         const idenaWalletBalanceNum = parseFloat(idenaWalletBalance);
         const insufficientFundsCalculated = tipAmountNum > idenaWalletBalanceNum;
         setInsufficientFunds(insufficientFundsCalculated);
-    }
+    };
 
     return (<>
         <div className="w-full sm:w-[500px] px-3">

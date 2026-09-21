@@ -1,4 +1,4 @@
-import { type Post, type PostTips, type Tip } from './logic/asyncUtils';
+import { type Post, type PostTips } from './logic/asyncUtils';
 import { useNavigate, useOutletContext } from 'react-router';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from './App.exports';
 import PostComponent from './components/PostComponent';
@@ -22,12 +22,12 @@ type PostActivityProps = {
     browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
     setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
-    handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
+    handleOpenTipsModal: (e: MouseEventLocal, likePosts: string[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
-    tipsRef: React.RefObject<Record<string, PostTips>>,
+    postTipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
     postActivityRef: React.RefObject<string[]>
@@ -58,7 +58,7 @@ function PostActivity() {
         handleOpenAddMediaModal,
         handleOpenRpcMakePostModal,
         handleExpandImageModal,
-        tipsRef,
+        postTipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
         postActivityRef,
@@ -73,77 +73,77 @@ function PostActivity() {
         <ul>
             {
             // @ts-ignore: toSorted not recognized yet
-            postActivityRef.current.toSorted(sortFn).map((postActivity: string) => {
-                const [, postIdRaw, postType] = postActivity.split('-');
-                const postId = postType === 'tip' ? postIdRaw.split('|')[0] : postIdRaw;
-                const post = postsRef.current[postId];
-                const spotlightPost = post.isLike ? postsRef.current[post.replyToPostId] : post;
+                postActivityRef.current.toSorted(sortFn).map((postActivity: string) => {
+                    const [, postIdRaw, postType] = postActivity.split('-');
+                    const postId = postType === 'tip' ? postIdRaw.split('|')[0] : postIdRaw;
+                    const post = postsRef.current[postId];
+                    const spotlightPost = post.isLike ? postsRef.current[post.replyToPostId] : post;
 
-                let notificationMessage;
-                if (postType === 'tip') {
-                    notificationMessage = `Your ${post.postLevel.toLowerCase()} has recieved a tip`;
-                } else if (post.isLike) {
-                    notificationMessage = `Your ${spotlightPost.postLevel.toLowerCase()} has recieved a like`;
-                } else if (postType === 'comment') {
-                    notificationMessage = 'Your reply has received a new comment';
-                } else if (postType === 'commentReply') {
-                    notificationMessage = 'Your comment has received a reply comment';
-                } else if (postType === 'reply') {
-                    notificationMessage = 'Your post has received a reply';
-                } else {
-                    notificationMessage = `You have recieved an interaction`;
-                }
+                    let notificationMessage;
+                    if (postType === 'tip') {
+                        notificationMessage = `Your ${post.postLevel.toLowerCase()} has recieved a tip`;
+                    } else if (post.isLike) {
+                        notificationMessage = `Your ${spotlightPost.postLevel.toLowerCase()} has recieved a like`;
+                    } else if (postType === 'comment') {
+                        notificationMessage = 'Your reply has received a new comment';
+                    } else if (postType === 'commentReply') {
+                        notificationMessage = 'Your comment has received a reply comment';
+                    } else if (postType === 'reply') {
+                        notificationMessage = 'Your post has received a reply';
+                    } else {
+                        notificationMessage = `You have recieved an interaction`;
+                    }
 
-                const {
-                    replyPostId,
-                    discussionPostId,
-                    postItemKey,
-                    parentPost,
-                } = getSpotlightPostDetails(spotlightPost, postsRef);
+                    const {
+                        replyPostId,
+                        discussionPostId,
+                        postItemKey,
+                        parentPost,
+                    } = getSpotlightPostDetails(spotlightPost, postsRef);
 
-                const showPostComponent = !!parentPost;
-                if (!showPostComponent) {
-                    return null;
-                }
+                    const showPostComponent = !!parentPost;
+                    if (!showPostComponent) {
+                        return null;
+                    }
 
-                const addedUniquity = postType === 'tip' ? `-${postIdRaw.split('|')[1]}` : post.isLike ? `-${post.postId}` : '';
-                const postItemKeyUnique = postItemKey + addedUniquity;
+                    const addedUniquity = postType === 'tip' ? `-${postIdRaw.split('|')[1]}` : post.isLike ? `-${post.postId}` : '';
+                    const postItemKeyUnique = postItemKey + addedUniquity;
 
-                return <li key={postItemKeyUnique}>
-                    <div className="text-center text-[13px] bg-stone-700">
-                        <p>{notificationMessage}</p>
-                    </div>
-                    <PostComponent
-                        uniqueKey={postItemKeyUnique}
-                        postId={parentPost.postId}
-                        postsRef={postsRef}
-                        replyPostsTreeRef={replyPostsTreeRef}
-                        deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
-                        discussPrefix={discussPrefix}
-                        SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
-                        inputPostDisabled={inputPostDisabled}
-                        copyPostTxHandler={copyPostTxHandler}
-                        submitPostHandler={submitPostHandler}
-                        submitLikeHandler={submitLikeHandler}
-                        submittingPost={submittingPost}
-                        submittingLike={submittingLike}
-                        submittingTip={submittingTip}
-                        browserStateHistoryRef={browserStateHistoryRef}
-                        setBrowserStateHistorySettings={setBrowserStateHistorySettings}
-                        handleOpenLikesModal={handleOpenLikesModal}
-                        handleOpenTipsModal={handleOpenTipsModal}
-                        handleOpenSendTipModal={handleOpenSendTipModal}
-                        handleOpenAddMediaModal={handleOpenAddMediaModal}
-                        handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
-                        handleExpandImageModal={handleExpandImageModal}
-                        tipsRef={tipsRef}
-                        postMediaAttachmentsRef={postMediaAttachmentsRef}
-                        makePostsWith={makePostsWith}
-                        spotlightReplyPostId={replyPostId}
-                        spotlightDiscussionPostId={discussionPostId}
-                    />
-                </li>
-            })}
+                    return <li key={postItemKeyUnique}>
+                        <div className="text-center text-[13px] bg-stone-700">
+                            <p>{notificationMessage}</p>
+                        </div>
+                        <PostComponent
+                            uniqueKey={postItemKeyUnique}
+                            postId={parentPost.postId}
+                            postsRef={postsRef}
+                            replyPostsTreeRef={replyPostsTreeRef}
+                            deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
+                            discussPrefix={discussPrefix}
+                            SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
+                            inputPostDisabled={inputPostDisabled}
+                            copyPostTxHandler={copyPostTxHandler}
+                            submitPostHandler={submitPostHandler}
+                            submitLikeHandler={submitLikeHandler}
+                            submittingPost={submittingPost}
+                            submittingLike={submittingLike}
+                            submittingTip={submittingTip}
+                            browserStateHistoryRef={browserStateHistoryRef}
+                            setBrowserStateHistorySettings={setBrowserStateHistorySettings}
+                            handleOpenLikesModal={handleOpenLikesModal}
+                            handleOpenTipsModal={handleOpenTipsModal}
+                            handleOpenSendTipModal={handleOpenSendTipModal}
+                            handleOpenAddMediaModal={handleOpenAddMediaModal}
+                            handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
+                            handleExpandImageModal={handleExpandImageModal}
+                            postTipsRef={postTipsRef}
+                            postMediaAttachmentsRef={postMediaAttachmentsRef}
+                            makePostsWith={makePostsWith}
+                            spotlightReplyPostId={replyPostId}
+                            spotlightDiscussionPostId={discussionPostId}
+                        />
+                    </li>;
+                })}
         </ul>
     </>);
 }

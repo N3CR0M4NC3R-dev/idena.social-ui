@@ -1,4 +1,4 @@
-import { type Post, type PostTips, type Tip } from './logic/asyncUtils';
+import { type Post, type PostTips } from './logic/asyncUtils';
 import { useOutletContext } from 'react-router';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
@@ -21,12 +21,12 @@ type ProfileMediaProps = {
     browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
     setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
-    handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
+    handleOpenTipsModal: (e: MouseEventLocal, likePosts: string[]) => void,
     handleOpenSendTipModal: (e: MouseEventLocal, tipToPost: Post) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
     handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
-    tipsRef: React.RefObject<Record<string, PostTips>>,
+    postTipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
     profileActivityRef: React.RefObject<Record<string, ProfileActivity>>,
@@ -56,7 +56,7 @@ function ProfileMedia() {
         handleOpenAddMediaModal,
         handleOpenRpcMakePostModal,
         handleExpandImageModal,
-        tipsRef,
+        postTipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
         profileActivityRef,
@@ -103,13 +103,13 @@ function ProfileMedia() {
                         handleOpenAddMediaModal={handleOpenAddMediaModal}
                         handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
                         handleExpandImageModal={handleExpandImageModal}
-                        tipsRef={tipsRef}
+                        postTipsRef={postTipsRef}
                         postMediaAttachmentsRef={postMediaAttachmentsRef}
                         makePostsWith={makePostsWith}
                         spotlightReplyPostId={replyPostId}
                         spotlightDiscussionPostId={discussionPostId}
                     />
-                </li>
+                </li>;
             })}
         </ul>
     </>);

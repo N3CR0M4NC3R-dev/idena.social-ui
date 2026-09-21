@@ -115,8 +115,7 @@ function Messages() {
                 const poster = await (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current, candidate, true) : getPosterWithIndexerApi(indexerApiUrlRef.current, candidate));
 
                 if (poster) {
-                    postersRef.current[candidate] = poster;
-                    recipient = poster;
+                    postersRef.current = { ...postersRef.current, [candidate]: poster };
                 }
             }
 
@@ -126,13 +125,12 @@ function Messages() {
             }
 
             if (!recipient.pubkey) {
-                if (findPostsWithRef.current === 'indexer-api') {
-                    const pubkey = await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, recipient.address);
-                    postersRef.current[candidate].pubkey = pubkey ?? '';
-                } else {
-                    const pubkey = await getPubkeyWithRpc(rpcClientRef.current, recipient.address);
-                    postersRef.current[candidate].pubkey = pubkey ?? '';
-                }
+                const pubkey = findPostsWithRef.current === 'indexer-api'
+                    ? await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, recipient.address)
+                    : await getPubkeyWithRpc(rpcClientRef.current, recipient.address);
+
+                recipient = { ...recipient, pubkey };
+                postersRef.current = { ...postersRef.current, [candidate]: recipient };
 
                 if (!recipient.pubkey) {
                     setAddressInvalid('pubkey missing');
@@ -150,7 +148,7 @@ function Messages() {
         } finally {
             setLoadingNewRecipient(false);
         }
-    }
+    };
 
     const removeMediaHandler = (e: MouseEventLocal, location: string) => {
         e?.stopPropagation();
@@ -165,7 +163,7 @@ function Messages() {
             return;
         }
         copyMessageTxHandler(location, recipients, replyToMessageId);
-    }
+    };
 
     const localSubmitMessageHandler = async (location: string, replyToMessageId?: string) => {
         if (!recipients.length) {
@@ -176,11 +174,11 @@ function Messages() {
         setRecipients([]);
 
         makePostsWith === 'rpc' ? handleOpenRpcSendMessageModal(location, recipients, replyToMessageId) : submitMessageHandler(location, recipients, replyToMessageId);
-    }
+    };
 
     const removeRecipient = (recipient: string) => {
         setRecipients(recipients.filter((item) => item !== recipient));
-    }
+    };
 
     return (<>
         <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
@@ -253,7 +251,7 @@ function Messages() {
                     submittingMessage={submittingMessage}
                     submittingLike={submittingLike}
                     messagePrefix={messagePrefix}
-                />
+                />;
             })}
         </div>
     </>);

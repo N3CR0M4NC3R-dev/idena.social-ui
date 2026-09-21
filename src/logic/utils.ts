@@ -115,7 +115,7 @@ export function sanitizeStr(str: string) {
 }
 
 export function numToUint8Array(num: number, uint8ArrayLength: number) {
-    let arr = new Uint8Array(uint8ArrayLength);
+    const arr = new Uint8Array(uint8ArrayLength);
 
     for (let i = 0; i < 8; i++) {
         arr[i] = num % 256;
@@ -196,12 +196,12 @@ export function getBase64FromDataUrl(dataUrl: string) {
 }
 
 export function getTextAndMediaForPost(postTextareaElement: HTMLTextAreaElement, postMediaAttachment?: PostMediaAttachment) {
-    let inputText = postTextareaElement.value ?? '';
+    const inputText = postTextareaElement.value ?? '';
 
     const { base64Media, base64MediaType } = postMediaAttachment ? getBase64FromDataUrl(postMediaAttachment.dataUrl) : {};
 
-    let media = base64Media ? [base64Media] : [];
-    let mediaType = base64MediaType ? [base64MediaType] : [];
+    const media = base64Media ? [base64Media] : [];
+    const mediaType = base64MediaType ? [base64MediaType] : [];
 
     return { inputText, media, mediaType };
 }
@@ -320,34 +320,34 @@ export function getSpotlightPostDetails(spotlightPost: Post, postsRef: React.Ref
     let parentPost;
 
     switch (spotlightPost?.postLevel) {
-        case 'Post': {
-            parentPostId = spotlightPost.postId;
-            parentPost = spotlightPost;
-            postItemKey = parentPostId;
-            break;
-        }
-        case 'Reply': {
-            replyPostId = spotlightPost.postId;
-            replyPost = postsRef.current[replyPostId];
-            parentPostId = replyPost?.replyToPostId;
-            parentPost = postsRef.current[parentPostId];
-            postItemKey = `${parentPostId}-${replyPostId}`;
-            break;
-        }
-        case 'Comment': {
-            discussionPostId = spotlightPost.postId;
-            const discussionPost = postsRef.current[discussionPostId];
-            replyPostId = discussionPost.channelPostId;
-            replyPost = postsRef.current[replyPostId];
-            parentPostId = replyPost?.replyToPostId;
-            parentPost = postsRef.current[parentPostId];
-            postItemKey = `${parentPostId}-${replyPostId}-${discussionPostId}`;
-            break;
-        }
-        default: {
-            // this shouldn't happen.
-            break;
-        }
+    case 'Post': {
+        parentPostId = spotlightPost.postId;
+        parentPost = spotlightPost;
+        postItemKey = parentPostId;
+        break;
+    }
+    case 'Reply': {
+        replyPostId = spotlightPost.postId;
+        replyPost = postsRef.current[replyPostId];
+        parentPostId = replyPost?.replyToPostId;
+        parentPost = postsRef.current[parentPostId];
+        postItemKey = `${parentPostId}-${replyPostId}`;
+        break;
+    }
+    case 'Comment': {
+        discussionPostId = spotlightPost.postId;
+        const discussionPost = postsRef.current[discussionPostId];
+        replyPostId = discussionPost.channelPostId;
+        replyPost = postsRef.current[replyPostId];
+        parentPostId = replyPost?.replyToPostId;
+        parentPost = postsRef.current[parentPostId];
+        postItemKey = `${parentPostId}-${replyPostId}-${discussionPostId}`;
+        break;
+    }
+    default: {
+        // this shouldn't happen.
+        break;
+    }
     }
 
     return { replyPostId, discussionPostId, postItemKey, parentPost };
@@ -356,7 +356,7 @@ export function getSpotlightPostDetails(spotlightPost: Post, postsRef: React.Ref
 export function getPostActivities(post: Post, postersAddress: string, postsRef: React.RefObject<Record<string, Post>>) {
     const replyToPost = postsRef.current[post.replyToPostId];
 
-    let newPostActivities: string[] = []
+    let newPostActivities: string[] = [];
 
     if (replyToPost?.poster === postersAddress && post.postLevel === 'Reply') {
         newPostActivities = [ ...newPostActivities, `${post.timestamp}-${post.postId}-reply` ];

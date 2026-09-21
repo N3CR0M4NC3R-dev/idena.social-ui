@@ -45,7 +45,7 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
             await addMediaHandler(attachmentId, file, ipfsUrl);
             closeModal();
         }
-    }
+    };
 
     const storeToIpfsHandler = async (e: MouseEventLocal) => {
         e.stopPropagation();
@@ -64,7 +64,7 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
             alert('something went wrong with storeToIpfs.');
             return;
         };
-    }
+    };
 
     const localAddMediaHandler = async (e: React.ChangeEvent<HTMLInputElement>, attachmentId: string) => {
         e?.stopPropagation();
@@ -75,7 +75,7 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
             await addMediaHandler(attachmentId, file);
             closeModal();
         }
-    }
+    };
 
     return (<>
         <div className="w-full sm:w-[500px] px-3">

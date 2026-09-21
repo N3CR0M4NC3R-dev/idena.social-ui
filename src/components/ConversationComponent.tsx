@@ -85,20 +85,24 @@ function ConversationComponent(props: ConversationComponentProps) {
         }
     };
 
+    const getPostDomSettings = (conversationKey: string): PostDomSettings => {
+        return browserStateHistoryRef.current[locationKey]?.postDomSettings?.[conversationKey]?.[conversationKey] ?? ({ ...initDomSettings, ...(isConversationOutlet && { repliesHidden: false }) });
+    };
+
     const setPostDomSettings = (conversationKey: string, postDomSettings: Partial<PostDomSettings>, rerender?: boolean) => {
         const postDomSettingsUpdated = {
             ...browserStateHistoryRef.current[locationKey]?.postDomSettings ?? {},
             [conversationKey]: {
                 ...browserStateHistoryRef.current[locationKey]?.postDomSettings?.[conversationKey] ?? {},
                 [conversationKey]: {
-                    ...(browserStateHistoryRef.current[locationKey]?.postDomSettings?.[conversationKey]?.[conversationKey] ?? initDomSettings),
+                    ...getPostDomSettings(conversationKey),
                     ...postDomSettings,
                 }
             }
         };
 
         setBrowserStateHistorySettings({ postDomSettings: postDomSettingsUpdated }, rerender);
-    }
+    };
 
     const setDiscussReplyToPostIdHandler = (conversationKey: string, discussReplyToPostId?: string) => {
         setPostDomSettings(conversationKey, { discussReplyToPostId }, true);
@@ -122,7 +126,7 @@ function ConversationComponent(props: ConversationComponentProps) {
 
     const localCopyMessageTxHandler = async (location: string, recipients: string[], replyToMessageId?: string) => {
         copyMessageTxHandler(location, recipients, replyToMessageId);
-    }
+    };
 
     const localSubmitMessageHandler = async (location: string, recipients: string[], replyToMessageId?: string) => {
         if (inputPostDisabled || messageSettingsInvalid) {
@@ -140,7 +144,7 @@ function ConversationComponent(props: ConversationComponentProps) {
         if (conversation) {
             setDiscussReplyToPostIdHandler(location);
         }
-    }
+    };
 
     const localSubmitLikeHandler = async (location: string, recipients: string[], replyToMessageId: string) => {
         if (inputPostDisabled || messageSettingsInvalid) {
@@ -148,12 +152,12 @@ function ConversationComponent(props: ConversationComponentProps) {
         }
 
         await submitMessageLikeHandler(likeEmoji, location, recipients, replyToMessageId);
-    }
+    };
 
     const toggleShowConversationHandler = (e: MouseEventLocal, conversationKey: string) => {
         e.stopPropagation();
 
-        const newRepliesHidden = !browserStateHistoryRef.current[locationKey].postDomSettings?.[conversationKey][conversationKey].repliesHidden;
+        const newRepliesHidden = !getPostDomSettings(conversationKey).repliesHidden;
         setPostDomSettings(conversationKey, { repliesHidden: newRepliesHidden }, true);
 
         if (!newRepliesHidden) {
@@ -181,12 +185,7 @@ function ConversationComponent(props: ConversationComponentProps) {
     }
     const conversationPartners = participantsExcludingSelf.map(participant => postersRef.current[participant]);
 
-    if (!browserStateHistoryRef.current[locationKey]?.postDomSettings?.[conversationKey]?.[conversationKey]) {
-        const domSettings = { ...initDomSettings, ...(isConversationOutlet && { repliesHidden: false }) };
-        setPostDomSettings(conversationKey, domSettings);
-    } 
-
-    const postDomSettingsItem = browserStateHistoryRef.current[locationKey].postDomSettings?.[conversationKey][conversationKey];
+    const postDomSettingsItem = getPostDomSettings(conversationKey);
     const discussReplyToPostId = postDomSettingsItem.discussReplyToPostId;
     const discussReplyToPost = discussReplyToPostId ? messagesRef.current[discussReplyToPostId!] : undefined;
 
@@ -197,8 +196,8 @@ function ConversationComponent(props: ConversationComponentProps) {
     return <>
         <div className="flex flex-col pt-3 pb-2 bg-stone-800 hover:cursor-pointer" onClick={() => handleConversationClick(conversationKey)}>
             {conversationPartners.length === 1
-            ? <OneOnOneConversationHeaderComponent conversationPartner={conversationPartners[0]} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />
-            : <GroupConversationHeaderComponent conversationPartners={conversationPartners} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />}
+                ? <OneOnOneConversationHeaderComponent conversationPartner={conversationPartners[0]} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />
+                : <GroupConversationHeaderComponent conversationPartners={conversationPartners} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />}
             <div className="ml-3 flex gap-2">
                 <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</span>
             </div>
@@ -267,7 +266,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                                             <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] -ml-0.5 mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)} /></div>
                                             {replyLikes.length ?
                                                 <div className="text-red-400 text-left whitespace-nowrap"><img src={heartRedSvg} className={'h-5 p-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === message.messageId ? ' bg-red-400/30' : '')} onClick={() => localSubmitLikeHandler(conversationKey, participantsExcludingSelf, message.messageId)} /><a className="text-red-400 ml-[1px] align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{replyLikes.length}</a></div>
-                                            :
+                                                :
                                                 <div className="text-gray-500 text-left"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === message.messageId ? ' bg-red-400/30' : '')} onClick={() => localSubmitLikeHandler(conversationKey, participantsExcludingSelf, message.messageId)} /></div>
                                             }
                                         </div>
