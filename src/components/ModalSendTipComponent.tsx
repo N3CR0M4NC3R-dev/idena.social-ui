@@ -1,10 +1,9 @@
 
 import { useState } from 'react';
 import type { MouseEventLocal } from '../App.exports';
-import type { Post } from '../logic/asyncUtils';
 
 type ModalSendTipComponentProps = {
-    modalSendTipRef: React.RefObject<Post | undefined>,
+    modalSendTipRef: React.RefObject<{ location: string, postId: string } | undefined>,
     idenaWalletBalance: string,
     submitSendTipHandler: (location: string, tipToPostId: string, tipAmount: string) => Promise<void>,
     closeModal: () => void,
@@ -25,9 +24,10 @@ function ModalSendTipComponent(props: ModalSendTipComponentProps) {
     const localSubmitTipHandler = async (e?: MouseEventLocal) => {
         e?.stopPropagation();
 
+        const location = modalSendTipRef.current?.location as string;
         const postId = modalSendTipRef.current?.postId as string;
 
-        await submitSendTipHandler(postId, postId, tipAmount);
+        await submitSendTipHandler(location, postId, tipAmount);
         closeModal();
     };
 

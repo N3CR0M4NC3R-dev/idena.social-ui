@@ -209,7 +209,7 @@ function App() {
     const [modalOpen, setModalOpen] = useState<string>('');
     const modalLikePostsRef = useRef<Post[]>([]);
     const modalTipsRef = useRef<Tip[]>([]);
-    const modalSendTipRef = useRef<Post>(undefined);
+    const modalSendTipRef = useRef<{ location: string, postId: string }>(undefined);
     const modalAddMediaRef = useRef<string>('');
     const modalRpcMakePostRef = useRef<{ location: string, replyToPostId?: string, channelId?: string }>({ location: '' });
     const modalRpcSendMessageRef = useRef<{ location: string, recipients: string[], replyToMessageId?: string }>({ location: '', recipients: [] });
@@ -1643,7 +1643,7 @@ function App() {
         setModalOpen('tips');
     };
 
-    const handleOpenSendTipModal = (e: MouseEventLocal, tipToPost: Post) => {
+    const handleOpenSendTipModal = (e: MouseEventLocal, location: string, tipToPost: Post) => {
         e.stopPropagation();
 
         const isBreakingChangeDisabled = tipToPost.timestamp <= breakingChanges.v12.timestamp;
@@ -1660,7 +1660,7 @@ function App() {
             setIdenaWalletBalance(getBalanceResult.balance);
         })();
 
-        modalSendTipRef.current = { ...tipToPost };
+        modalSendTipRef.current = { location, postId: tipToPost.postId };
         setModalOpen('sendTip');
     };
 
