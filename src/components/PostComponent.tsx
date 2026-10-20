@@ -1,6 +1,6 @@
 import { useEffect, useReducer, type FocusEventHandler } from 'react';
-import { getChildPostIds, breakingChanges, type Post, type PostTips } from '../logic/asyncUtils';
-import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus, getMessageLines, getShortDisplayTipAmount, likeEmoji } from '../logic/utils';
+import { getChildPostIds, breakingChanges, type Post, type PostTips, type Poster } from '../logic/asyncUtils';
+import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus, getMessageLines, getProfilePic, getShortDisplayTipAmount, likeEmoji } from '../logic/utils';
 import { initDomSettings, initPostOutletDomSettings, initProfileRepliesDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from '../App.exports';
 import { useLocation, useNavigate } from 'react-router';
 import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
@@ -10,6 +10,7 @@ import heartRedSvg from '../assets/heart-red.svg';
 import cashGraySvg from '../assets/cash-gray.svg';
 import cashGreenSvg from '../assets/cash-green.svg';
 import PosterHeaderComponent from './PosterHeaderComponent';
+import ObjectUrlImageComponent from './ObjectUrlImageComponent';
 
 type PostComponentProps = {
     uniqueKey: string,
@@ -20,6 +21,7 @@ type PostComponentProps = {
     discussPrefix: string,
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
+    submitting: boolean,
     copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
@@ -33,10 +35,11 @@ type PostComponentProps = {
     handleOpenSendTipModal: (e: MouseEventLocal, location: string, tipToPost: Post) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
+    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
     postTipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
+    postersRef: React.RefObject<Record<string, Poster>>,
     isPostOutlet?: boolean,
     spotlightReplyPostId?: string,
     spotlightDiscussionPostId?: string,
@@ -56,6 +59,7 @@ function PostComponent(props: PostComponentProps) {
         discussPrefix,
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
+        submitting,
         copyPostTxHandler,
         submitPostHandler,
         submitLikeHandler,
@@ -73,6 +77,7 @@ function PostComponent(props: PostComponentProps) {
         postTipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
+        postersRef,
         isPostOutlet,
         spotlightReplyPostId,
         spotlightDiscussionPostId,
@@ -135,6 +140,7 @@ function PostComponent(props: PostComponentProps) {
     const posterStake = post.posterDetails_atTimeOfPost.stake;
     const posterState = post.posterDetails_atTimeOfPost.state;
     const posterAge = post.posterDetails_atTimeOfPost.age;
+    const posterPic = getProfilePic(postersRef.current[post.poster], posterState);
 
     const { displayDate, displayTime } = getDisplayDateTime(post.timestamp);
     
@@ -182,7 +188,7 @@ function PostComponent(props: PostComponentProps) {
         const newReplyInputHidden = !getPostDomSettings(post.postId).replyInputHidden;
         setPostDomSettings(post.postId, { replyInputHidden: newReplyInputHidden }, true);
 
-        if (inputPostDisabled || isBreakingChangeDisabled) {
+        if (inputPostDisabled || submitting || isBreakingChangeDisabled) {
             return;
         }
 
@@ -242,7 +248,7 @@ function PostComponent(props: PostComponentProps) {
     const setDiscussReplyToPostIdHandler = (post: Post, discussReplyToPostId?: string) => {
         setPostDomSettings(post.postId, { discussReplyToPostId }, true);
 
-        if (inputPostDisabled || isBreakingChangeDisabled) {
+        if (inputPostDisabled || submitting || isBreakingChangeDisabled) {
             return;
         }
 
@@ -278,7 +284,7 @@ function PostComponent(props: PostComponentProps) {
     const localCopyPostTxHandler = async (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => {
         e.stopPropagation();
 
-        if (inputPostDisabled || isBreakingChangeDisabled) {
+        if (inputPostDisabled || submitting || isBreakingChangeDisabled) {
             return;
         }
 
@@ -300,7 +306,7 @@ function PostComponent(props: PostComponentProps) {
     const localSubmitLikeHandler = async (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => {
         e.stopPropagation();
 
-        if (inputPostDisabled || isBreakingChangeDisabled) {
+        if (inputPostDisabled || submitting || isBreakingChangeDisabled) {
             return;
         }
 
@@ -337,12 +343,12 @@ function PostComponent(props: PostComponentProps) {
 
     return (<>
         <div className={`flex flex-col pt-3 bg-stone-800 ${!isPostOutlet ? 'hover:cursor-pointer' : ''}`} onMouseDown={handlePostMouseDown} onClick={handlePostClick}>
-            <PosterHeaderComponent address={post.poster} age={posterAge} state={posterState} stake={posterStake} />
+            <PosterHeaderComponent address={post.poster} age={posterAge} state={posterState} stake={posterStake} pic={posterPic} />
             <div className="flex-1 px-4 py-2 text-[17px] text-wrap leading-5">
                 <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(post, e)}>view more</a></span>}</p>
             </div>
             {post.image && <div className="mx-4 my-2">
-                <img className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-sm hover:cursor-pointer" src={post.image} onClick={(e) => handleExpandImageModal(e, post.image!, post.cid)} />
+                <ObjectUrlImageComponent className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-sm hover:cursor-pointer" file={post.image} onClick={(e) => handleExpandImageModal(e, post.image!, post.cid)} />
             </div>}
             <div className="flex flex-row ml-2 mr-3 mb-1.5 text-[12px]">
                 <div className="w-22">
@@ -379,18 +385,18 @@ function PostComponent(props: PostComponentProps) {
                                 rows={1}
                                 className="w-full field-sizing-content max-w-[408px] min-h-[29px] max-h-[520px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[14px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
                                 placeholder="Reply here..."
-                                disabled={inputPostDisabled}
+                                disabled={inputPostDisabled || submitting}
                                 onFocus={replyInputOnFocusHandler}
                                 onBlur={replyInputOnBlurHandler}
                                 onClick={(e) => e.stopPropagation()}
                             />
                         </div>
                         <div>
-                            <button className="h-8 w-17 mb-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={(e) => localSubmitPostHandler(e, `${uniqueKey}-${post.postId}`, post.postId)}>{submittingPost ===`${uniqueKey}-${post.postId}` ? '...' : 'Post!'}</button>
+                            <button className="h-8 w-17 mb-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || submitting} onClick={(e) => localSubmitPostHandler(e, `${uniqueKey}-${post.postId}`, post.postId)}>{submittingPost ===`${uniqueKey}-${post.postId}` ? '...' : 'Post!'}</button>
                         </div>
                     </div>
                     {postMediaAttachment && <div className="my-1">
-                        <img className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-sm" src={postMediaAttachment.dataUrl} />
+                        <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-sm" file={postMediaAttachment.file} />
                     </div>}
                     <div className="leading-[12px]">
                         {postMediaAttachment ? <>
@@ -412,6 +418,7 @@ function PostComponent(props: PostComponentProps) {
                     const posterStake = replyPost.posterDetails_atTimeOfPost.stake;
                     const posterState = replyPost.posterDetails_atTimeOfPost.state;
                     const posterAge = replyPost.posterDetails_atTimeOfPost.age;
+                    const posterPic = getProfilePic(postersRef.current[replyPost.poster], posterState);
                     const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
                     const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(replyPost.message, true, 3);
                     const postDomSettingsItem = getPostDomSettings(replyPost.postId);
@@ -446,7 +453,7 @@ function PostComponent(props: PostComponentProps) {
                                 <div className="flex flex-row">
                                     <div className="w-11 flex-none flex flex-col">
                                         <div className="h-13 flex-none">
-                                            <img src={`https://robohash.org/${replyPost.poster}?set=set1`} />
+                                            <ObjectUrlImageComponent file={posterPic} />
                                         </div>
                                         <div className="flex-1"></div>
                                     </div>
@@ -464,7 +471,7 @@ function PostComponent(props: PostComponentProps) {
                                     <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-[12px] text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>view more</a></span>}</p>
                                 </div>
                                 {replyPost.image && <div className="ml-12 mr-4 my-1">
-                                    <img className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-sm hover:cursor-pointer" src={replyPost.image} onClick={(e) => handleExpandImageModal(e, replyPost.image!, replyPost.cid)} />
+                                    <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-sm hover:cursor-pointer" file={replyPost.image} onClick={(e) => handleExpandImageModal(e, replyPost.image!, replyPost.cid)} />
                                 </div>}
                                 <div className="w-full pt-2 px-4 flex flex-row text-[12px]">
                                     <div className="w-26">
@@ -501,9 +508,12 @@ function PostComponent(props: PostComponentProps) {
                                             const posterStake = discussionPost.posterDetails_atTimeOfPost.stake;
                                             const posterState = discussionPost.posterDetails_atTimeOfPost.state;
                                             const posterAge = discussionPost.posterDetails_atTimeOfPost.age;
+                                            const posterPic = getProfilePic(postersRef.current[discussionPost.poster], posterState);
                                             const { displayDate, displayTime } = getDisplayDateTime(discussionPost.timestamp);
                                             const { messageLines } = getMessageLines(discussionPost.message);
                                             const replyToPost = postsRef.current[discussionPost.replyToPostId];
+                                            const replyToPostPosterState = replyToPost?.posterDetails_atTimeOfPost.state;
+                                            const replyToPostPosterPic = getProfilePic(postersRef.current[replyToPost?.poster], replyToPostPosterState);
                                             const likesForDiscussionPost = discussionPostLikes.filter(like => like.replyToPostId === discussionPost.postId);
 
                                             const isSpotlightDiscussionPost = discussionPost.postId === spotlightDiscussionPostId;
@@ -520,7 +530,7 @@ function PostComponent(props: PostComponentProps) {
                                                                 <div className="h-2.5 w-4 border-t-1 border-l-1 border-gray-500"></div>
                                                             </div>
                                                             <div className="flex-1 flex flex-row mr-3">
-                                                                <div className="w-5"><img src={`https://robohash.org/${replyToPost.poster}?set=set1`} /></div>
+                                                                <div className="w-5"><ObjectUrlImageComponent file={replyToPostPosterPic} /></div>
                                                                 <div className="flex-1 text-nowrap overflow-hidden">
                                                                     <p className="max-w-[120px] text-[12px] text-gray-500">{getMessageLines(replyToPost.message).messageLines[0]}</p>
                                                                 </div>
@@ -529,7 +539,7 @@ function PostComponent(props: PostComponentProps) {
                                                         <div className="flex flex-row">
                                                             <div className="w-9 flex-none flex flex-col">
                                                                 <div className="h-11 flex-none">
-                                                                    <img src={`https://robohash.org/${discussionPost.poster}?set=set1`} />
+                                                                    <ObjectUrlImageComponent file={posterPic} />
                                                                 </div>
                                                                 <div className="flex-1"></div>
                                                             </div>
@@ -547,7 +557,7 @@ function PostComponent(props: PostComponentProps) {
                                                                     <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                                 </div>
                                                                 {discussionPost.image && <div className="my-1 mx-1">
-                                                                    <img className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm hover:cursor-pointer" src={discussionPost.image} onClick={(e) => handleExpandImageModal(e, discussionPost.image!, discussionPost.cid)} />
+                                                                    <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm hover:cursor-pointer" file={discussionPost.image} onClick={(e) => handleExpandImageModal(e, discussionPost.image!, discussionPost.cid)} />
                                                                 </div>}
                                                             </div>
                                                             <div className="pt-0.5 mr-1 text-[12px] flex flex-col gap-0.5">
@@ -584,16 +594,16 @@ function PostComponent(props: PostComponentProps) {
                                                         rows={2}
                                                         className="w-full field-sizing-content max-w-[385px] min-h-[26px] max-h-[312px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
                                                         placeholder="Comment here..."
-                                                        disabled={inputPostDisabled}
+                                                        disabled={inputPostDisabled || submitting}
                                                     />
                                                 </div>
                                                 <div>
-                                                    <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled} onClick={(e) => localSubmitPostHandler(e, `${uniqueKey}-${replyPost.postId}`, discussReplyToPostId, discussParentId)}>{submittingPost === `${uniqueKey}-${replyPost.postId}` ? '...' : 'Post!'}</button>
+                                                    <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || submitting} onClick={(e) => localSubmitPostHandler(e, `${uniqueKey}-${replyPost.postId}`, discussReplyToPostId, discussParentId)}>{submittingPost === `${uniqueKey}-${replyPost.postId}` ? '...' : 'Post!'}</button>
                                                 </div>
                                             </div>
                                         </div>
                                         {postMediaAttachment && <div className="my-1">
-                                            <img className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm" src={postMediaAttachment.dataUrl} />
+                                            <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm" file={postMediaAttachment.file} />
                                         </div>}
                                         <div className="leading-[12px]">
                                             {postMediaAttachment ? <>

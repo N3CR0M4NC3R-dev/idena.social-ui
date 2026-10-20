@@ -12,6 +12,7 @@ type ConversationOutletProps = {
     browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
     setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     inputPostDisabled: boolean,
+    submitting: boolean,
     messageSettingsInvalid: boolean,
     copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
     submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>,
@@ -22,7 +23,7 @@ type ConversationOutletProps = {
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Message[]) => void,
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
+    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
     submittingMessage: string,
     submittingLike: string,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
@@ -43,6 +44,7 @@ function ConversationOutlet() {
         browserStateHistoryRef,
         setBrowserStateHistorySettings,
         inputPostDisabled,
+        submitting,
         messageSettingsInvalid,
         copyMessageTxHandler,
         submitMessageHandler,
@@ -79,6 +81,7 @@ function ConversationOutlet() {
             browserStateHistoryRef={browserStateHistoryRef}
             setBrowserStateHistorySettings={setBrowserStateHistorySettings}
             inputPostDisabled={inputPostDisabled}
+            submitting={submitting}
             messageSettingsInvalid={messageSettingsInvalid}
             copyMessageTxHandler={copyMessageTxHandler}
             submitMessageHandler={submitMessageHandler}

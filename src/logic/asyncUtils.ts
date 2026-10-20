@@ -7,6 +7,10 @@ import { BlockBody, CallContractAttachment, contractArgumentFormat, hexToUint8Ar
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
 import type { EventTransaction } from "../App.exports";
 import { keccak256, sha3_256 } from "js-sha3";
+import { cacheTip } from "./tipsStore";
+import { cachePoster, isPosterMissingOrStale } from "./postersStore";
+import { cachePost } from "./postsStore";
+import { cacheMessage } from "./messagesStore";
 
 export const breakingChanges = {
     v3: { timestamp: 1767578641 },
@@ -39,14 +43,16 @@ export type Post = {
     posterDetails_atTimeOfPost: { stake: number, state: string, age: number },
     channelId: string,
     channelPostId: string,
-    message?: string,
+    message: string,
+    messageResolved: boolean,
+    media: string,
+    mediaResolved: boolean,
     txHash: string,
     replyToPostId: string,
     postLevel: 'Post' | 'Reply' | 'Comment',
     isLike: boolean,
-    hasMedia: boolean,
-    image?: string,
-    video?: string,
+    image?: File,
+    video?: File,
     cid?: string,
     orphaned: boolean,
 };
@@ -58,10 +64,13 @@ export type Message = {
     participants: string[], // includes sender
     conversationKey: string,
     channelId: string,
-    message?: string,
+    message: string,
+    messageResolved: boolean,
+    media: string,
+    mediaResolved: boolean,
     replyToMessageId: string,
-    image?: string,
-    video?: string,
+    image?: File,
+    video?: File,
     cid?: string,
     tags: string[],
     textPassword: string,
@@ -71,7 +80,7 @@ export type Message = {
     orphaned: boolean,
 };
 
-export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string };
+export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, robohash1?: File, robohash5?: File, fetchedAt: number };
 export type Tip = { postId: string, txHash: string, timestamp: number, tipper: string, tipperDetails_atTimeOfTip: { stake: number, state: string, age: number }, amount: number, burnAmount: number };
 export type PostTips = { postId: string, totalAmount: number, tips: string[] };
 
@@ -299,6 +308,25 @@ export const getRawTxWithIdenaIndexerApi = async (indexerApiUrl: string, txHash:
     }
 };
 
+export const getTxWithIdenaIndexerApi = async (indexerApiUrl: string, txHash: string) => {
+    try {
+        const path = `api/Transaction/${txHash}`;
+
+        const response = await fetch(`${indexerApiUrl}/${path}`);
+
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const responseBody = await response.json();
+
+        return responseBody;
+    } catch (error: unknown) {
+        console.error(error);
+        return { error };
+    }
+};
+
 export const getAddressWithIndexerApi = async (indexerApiUrl: string, posterAddress: string) => {
     try {
         const path = `api/Address/${posterAddress}`;
@@ -370,57 +398,11 @@ export const getChildPostIds = (parentId: string, postsTreeRef: Record<string, s
     return childPostIds;
 };
 
-type GetTransactionDetailsRpcInput = { txHash: string, timestamp: number, blockHeight?: number };
-export const getTransactionDetailsRpc = async (
-    transactions: GetTransactionDetailsRpcInput[],
-    contractAddress: string,
-    methods: string[],
-    rpcClient: RpcClient,
-) => {
-    const transactionReceipts = await Promise.all(transactions.map((transaction) => rpcClient('bcn_txReceipt', [transaction.txHash])));
-
-    const filteredReceipts = transactionReceipts.filter((receipt) =>
-        (receipt.error && (() => { throw 'rpc unavailable'; })()) ||
-        receipt.result &&
-        receipt.result.success === true &&
-        receipt.result.contract === contractAddress.toLowerCase() &&
-        methods.includes(receipt.result.method)
-    );
-
-    const reducedTxs = transactions.reduce((acc, curr) => ({ ...acc, [curr.txHash]: curr }), {}) as Record<string, GetTransactionDetailsRpcInput>;
-    const transactionDetails = filteredReceipts.map(receipt => ({ eventArgs: receipt.result.events?.[0]?.args, eventArgs2nd: receipt.result.events?.[1]?.args, method: receipt.result.method, ...reducedTxs[receipt.result.txHash] }));
-
-    return transactionDetails;
-};
-
-type GetTransactionDetailsIndexerApiInput = { txHash: string, timestamp: number, blockHeight?: number };
-export const getTransactionDetailsIndexerApi = async (
-    transactions: GetTransactionDetailsIndexerApiInput[],
-    indexerApiUrl: string,
-) => {
-    const transactionReceipts = await Promise.all(transactions.map((transaction) => getTxEventsWithIdenaIndexerApi(indexerApiUrl, transaction.txHash, 10)));
-
-    const filteredReceipts = transactionReceipts.map((tx, index) => ({ ...tx, txHash: transactions[index].txHash })).filter((receipt) =>
-        (receipt.error && (() => { throw 'indexer api unavailable'; })()) ||
-        receipt.result
-    );
-
-    const reducedTxs = transactions.reduce((acc, curr) => ({ ...acc, [curr.txHash]: curr }), {}) as Record<string, GetTransactionDetailsIndexerApiInput>;
-    const transactionDetails = filteredReceipts.map(receipt => ({ eventArgs: receipt.result?.[0]?.data, eventArgs2nd: receipt.result?.[1]?.data, method: receipt.result?.[0]?.eventName, ...reducedTxs[receipt.txHash] }));
-
-    return transactionDetails;
-};
-
-export const getNewPosterAndPost = async (
-    transaction: { txHash: string, eventArgs: string[], eventArgs2nd: string[], timestamp: number, blockHeight?: number },
+export const getNewPost = async (
+    transaction: EventTransaction,
     thisChannelId: string,
     discussPrefix: string,
-    rpcClient: RpcClient,
     postsRef: React.RefObject<Record<string, Post>>,
-    postersRef: React.RefObject<Record<string, Poster>>,
-    postersPromised: string[],
-    findPostsWithRef: React.RefObject<string>,
-    indexerApiUrlRef: React.RefObject<string>,
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = transaction;
 
@@ -452,7 +434,12 @@ export const getNewPosterAndPost = async (
         return { continued: true };
     }
 
-    const postIdRaw = hexToDecimal(eventArgs[1]);
+    let postIdRaw;
+    try {
+        postIdRaw = hexToDecimal(eventArgs[1]);
+    } catch (error) {
+        return { continued: true };
+    }
 
     let postId = postIdRaw;
 
@@ -467,12 +454,17 @@ export const getNewPosterAndPost = async (
     } else if (preV12) {
         postId = breakingChanges.v12.postIdPrefix + postId;
     }
-    
+
     if (postsRef.current[postId]) {
-        return { continued: true };
+        return { continued: 'already-captured' };
     }
 
-    const replyToPostIdRaw = preV3 ? hexToDecimal(hex2str(eventArgs[4])) : hex2str(eventArgs[4]);
+    let replyToPostIdRaw = '';
+    try {
+        replyToPostIdRaw = preV3 ? hexToDecimal(hex2str(eventArgs[4])) : hex2str(eventArgs[4]);
+    } catch (error) {
+        return { continued: true };
+    }
 
     let replyToPostId = '';
 
@@ -505,24 +497,25 @@ export const getNewPosterAndPost = async (
         }
     }
 
-    const posterDetails_atTimeOfPost = !preV9 ? {
-        stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
-        state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
-        age: Number(hexToDecimal(eventArgs2nd[3])),
-    } : {
-        stake: NaN,
-        state: 'Unknown',
-        age: NaN,
-    };
+    let posterDetails_atTimeOfPost;
+    try {
+        posterDetails_atTimeOfPost = !preV9 ? {
+            stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
+            state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
+            age: Number(hexToDecimal(eventArgs2nd[3])),
+        } : {
+            stake: NaN,
+            state: 'Unknown',
+            age: NaN,
+        };
+    } catch (error) {
+        return { continued: true };
+    }
 
     const postLevel = isDiscussionComment ? 'Comment' : replyToPostId ? 'Reply' : 'Post';
     const channelPostId = isDiscussionComment ? getPostIdFromChannelId(timestamp, channelId, discussPrefix) : '';
     
     const isLike = message === likeEmoji && !!replyToPostId;
-    const hasMedia = !!(media && mediaType);
-
-    const messagePromise = message && getMessage(postId, message, rpcClient);
-    const mediaPromise = hasMedia && getMedia(postId, media, rpcClient);
 
     const newPost = {
         timestamp,
@@ -535,21 +528,20 @@ export const getNewPosterAndPost = async (
         replyToPostId,
         postLevel,
         isLike,
-        hasMedia,
+        message,
+        messageResolved: false,
+        media,
+        mediaResolved: false,
         orphaned: false,
     } as Post;
 
-    let posterPromise: Promise<Poster> | undefined;
+    await cachePost(newPost);
 
-    if (!postersRef.current[poster] && !postersPromised.includes(poster)) {
-        postersPromised.push(poster);
-        posterPromise = (findPostsWithRef.current === 'rpc' ? getPoster(rpcClient, poster) : getPosterWithIndexerApi(indexerApiUrlRef.current, poster)) as Promise<Poster>;
-    }
-
-    return { newPost, posterPromise, mediaPromise, messagePromise };
+    return { newPost };
 };
 
-const getMessage = async (id: string, message: string, rpcClient: RpcClient, textPassword?: string) => {
+export type MessagePromise = Promise<{ id: string, message: string }>;
+export const getMessage = async (id: string, message: string, rpcClient: RpcClient, textPassword?: string): MessagePromise => {
     if (message.startsWith('ipfs://')) {
         const cid = message.split('ipfs://')[1];
         const { result: getCidResult } = await rpcClient('ipfs_get', [cid], true);
@@ -571,20 +563,20 @@ const getMessage = async (id: string, message: string, rpcClient: RpcClient, tex
     return { id, message };
 };
 
+export type MediaPromise = Promise<{ id: string, image: File | undefined, video: File | undefined, mediaType: string, cid: string }>;
 export const getMedia = async (id: string, media: string, rpcClient: RpcClient, mediaPassword?: string) => {
-    let image = '';
-    let video = '';
+    let image: File | undefined;
+    let video: File | undefined;
     let mediaType = '';
     let cid = '';
-    let blob;
 
     if (media.startsWith('ipfs://')) {
         cid = media.split('ipfs://')[1];
         const { result: getCidResult } = await rpcClient('ipfs_get', [cid], true);
 
         if (!getCidResult) {
-            image = ErrorLoadingMedia;
-            return { id, image, video, mediaType, blob, cid };
+            image = await getErrorLoadingMediaFile();
+            return { id, image, video, mediaType, cid };
         }
 
         let bytes;
@@ -595,43 +587,46 @@ export const getMedia = async (id: string, media: string, rpcClient: RpcClient, 
         } else {
             bytes = hexToUint8Array(getCidResult);
         }
-        ({ image, video, mediaType, blob } = await getMediaFromHex(bytes));
+        ({ image, video, mediaType } = await getMediaFromHex(bytes));
     } else {
         // @ts-ignore: Uint8Array.fromBase64 not recognized yet
         const bytes = Uint8Array.fromBase64(media);
-        ({ image, video, mediaType, blob } = await getMediaFromHex(bytes));
+        ({ image, video, mediaType } = await getMediaFromHex(bytes));
     }
 
-    return { id, image, video, mediaType, blob, cid };
+    return { id, image, video, mediaType, cid };
 };
 
 const getMediaFromHex = async (bytes: Uint8Array) => {
-    let image = '';
-    let video = '';
+    let image: File | undefined;
+    let video: File | undefined;
     let mediaType = '';
 
     const bytesCopy = new Uint8Array(bytes);
     mediaType = await getMediaTypeFromBuffer(bytes) ?? '';
 
     const blob = new Blob([bytesCopy], { type: mediaType || 'application/octet-stream' });
-    const objectUrl = URL.createObjectURL(blob);
+    const file = new File([blob], '', { type: blob.type });
+    const objectUrl = URL.createObjectURL(file);
 
     if (supportedImageTypes.includes(mediaType)) {
         const validImage = await isValidImageUrlCheck(objectUrl);
         if (validImage) {
-            image = objectUrl;
+            image = file;
         } else {
-            image = ErrorLoadingMedia;
+            image = await getErrorLoadingMediaFile();
             mediaType = 'image/png';
         }
     } else if (supportedVideoTypes.includes(mediaType)) {
-        video = objectUrl;
+        video = file;
     } else {
-        image = ErrorLoadingMedia;
+        image = await getErrorLoadingMediaFile();
         mediaType = 'image/png';
     }
 
-    return { image, video, mediaType, blob };
+    URL.revokeObjectURL(objectUrl);
+
+    return { image, video, mediaType };
 };
 
 const getMediaTypeFromBuffer = async (bytes: Uint8Array) => {
@@ -651,16 +646,12 @@ const getMediaTypeFromBuffer = async (bytes: Uint8Array) => {
     return;
 };
 
-const isValidImageUrlCheck = (url: string, wait = 2000): Promise<boolean> => {
+const isValidImageUrlCheck = (url: string, wait = 10000): Promise<boolean> => {
     return new Promise((resolve) => {
         const img = new Image();
-        let complete = false;
 
         const process = (validImageUrl: boolean) => {
-            if (complete) {
-                return;
-            }
-            complete = true;
+            clearTimeout(timer);
 
             img.onload = null;
             img.onerror = null;
@@ -668,35 +659,38 @@ const isValidImageUrlCheck = (url: string, wait = 2000): Promise<boolean> => {
             resolve(validImageUrl);
         };
 
-        const timer = setTimeout(() => process(false), wait);
-
-        img.onload = () => {
-            clearTimeout(timer);
-            process(true);
-        };
-
-        img.onerror = () => {
-            clearTimeout(timer);
+        const timer = setTimeout(() => {
+            img.onload = null;
+            img.onerror = null;
+            // removing src aborts the in-flight image request
+            img.removeAttribute('src');
             process(false);
-        };
+        }, wait);
+
+        img.onload = () => process(true);
+
+        img.onerror = () => process(false);
 
         img.src = url;
     });
 };
 
+export const getErrorLoadingMediaFile = async () => {
+    const response = await fetch(ErrorLoadingMedia);
+    const blob = await response.blob();
+    const errorLoadingMediaFile = new File([blob], 'error-loading-media.png', { type: 'image/png' });
+
+    return errorLoadingMediaFile;
+};
+
 export const processTip = async (
-    transaction: { txHash: string, eventArgs: string[], eventArgs2nd: string[], timestamp: number, blockHeight?: number },
-    rpcClient: RpcClient,
+    transaction: EventTransaction,
     tipsRef: React.RefObject<Record<string, Tip>>,
-    postersRef: React.RefObject<Record<string, Poster>>,
-    postersPromised: string[],
-    findPostsWithRef: React.RefObject<string>,
-    indexerApiUrlRef: React.RefObject<string>,
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = transaction;
 
     if (tipsRef.current[txHash]) {
-        return { continued: true };
+        return { continued: 'already-captured' };
     }
 
     const preV9 = timestamp < breakingChanges.v9.timestamp;
@@ -707,7 +701,14 @@ export const processTip = async (
     const tipper = eventArgs[0];
 
     const postIdEventArg = preV9 ? eventArgs[1] : eventArgs[2];
-    const postIdRaw = hexToDecimal(postIdEventArg);
+
+    let postIdRaw;
+    try {
+        postIdRaw = hexToDecimal(postIdEventArg);
+    } catch (error) {
+        return { continued: true };
+    }
+
     let postId;
 
     if (preV9) {
@@ -730,15 +731,20 @@ export const processTip = async (
 
     const burnAmount = sentAmount - amount;
 
-    const tipperDetails_atTimeOfTip = !preV9 ? {
-        stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
-        state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
-        age: Number(hexToDecimal(eventArgs2nd[3])),
-    } : {
-        stake: NaN,
-        state: 'Unknown',
-        age: NaN,
-    };
+    let tipperDetails_atTimeOfTip;
+    try {
+        tipperDetails_atTimeOfTip = !preV9 ? {
+            stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
+            state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
+            age: Number(hexToDecimal(eventArgs2nd[3])),
+        } : {
+            stake: NaN,
+            state: 'Unknown',
+            age: NaN,
+        };
+    } catch (error) {
+        return { continued: true };
+    }
 
     const newTip = {
         postId,
@@ -750,17 +756,35 @@ export const processTip = async (
         burnAmount,
     };
 
-    let posterPromise: Promise<Poster> | undefined;
+    await cacheTip(newTip);
 
-    if (!postersRef.current[tipper] && !postersPromised.includes(tipper)) {
-        postersPromised.push(tipper);
-        posterPromise = (findPostsWithRef.current === 'rpc' ? getPoster(rpcClient, tipper) : getPosterWithIndexerApi(indexerApiUrlRef.current, tipper)) as Promise<Poster>;
-    }
-
-    return { postId, newTip, posterPromise };
+    return { newTip };
 };
 
-export const getPoster = async (rpcClient: RpcClient, posterAddress: string, skipStateUpdate?: boolean) => {
+const postersPromised: Record<string, boolean> = {};
+export const getPosterPromise = (
+    address: string,
+    postersRef: React.RefObject<Record<string, Poster>>,
+    useIndexer: boolean,
+    rpcClient?: RpcClient,
+    indexerApiUrlRef?: React.RefObject<string>,
+) => {
+    const poster = postersRef.current[address];
+    if (isPosterMissingOrStale(poster) && !postersPromised[address]) {
+        postersPromised[address] = true;
+        const posterPromise = (useIndexer ? getPosterWithIndexerApi(indexerApiUrlRef!.current, address) : getPosterWithRpc(rpcClient!, address)) as Promise<Poster>;
+        return posterPromise
+            .then((newPoster) => {
+                postersRef.current = { ...postersRef.current, [address]: newPoster };
+                cachePoster(newPoster);
+                return newPoster;
+            })
+            .finally(() => postersPromised[address] = false);
+    }
+    return poster;
+};
+
+export const getPosterWithRpc = async (rpcClient: RpcClient, posterAddress: string, skipStateUpdate?: boolean) => {
     const { result: getDnaIdentityResult, error: getDnaIdentityError } = await rpcClient('dna_identity', [posterAddress], skipStateUpdate);
 
     if (!skipStateUpdate && getDnaIdentityError) {
@@ -773,7 +797,9 @@ export const getPoster = async (rpcClient: RpcClient, posterAddress: string, ski
 
     const { address, stake, age, pubkey, state } = getDnaIdentityResult;
 
-    return { address, stake, age, pubkey, state };
+    const [ robohash1, robohash5 ] = await Promise.all([getRobohash(address, '1'), getRobohash(address, '5')]);
+
+    return { address, stake, age, pubkey, state, robohash1, robohash5, fetchedAt: Date.now() };
 };
 
 export const getPosterWithIndexerApi = async (indexerApiUrl: string, posterAddress: string) => {
@@ -795,13 +821,33 @@ export const getPosterWithIndexerApi = async (indexerApiUrl: string, posterAddre
         resolvedPromises[2] = { result: 0 };
     }
 
-    const { result: { address, stake } } = resolvedPromises[0];
+    const { result: { address: addressRaw, stake } } = resolvedPromises[0];
     const { result: { state } } = resolvedPromises[1];
     const { result: age } = resolvedPromises[2];
 
+    const address = addressRaw.toLowerCase();
+
     const pubkey = await getPubkeyWithIdenaIndexerApi(indexerApiUrl, posterAddress) ?? '';
 
-    return { address: address.toLowerCase(), stake, age, pubkey, state };
+    const [ robohash1, robohash5 ] = await Promise.all([getRobohash(address, '1'), getRobohash(address, '5')]);
+
+    return { address, stake, age, pubkey, state, robohash1, robohash5, fetchedAt: Date.now() };
+};
+
+export const getRobohash = async (address: string, setNumber: string) => {
+    try {
+        const profilePicResponse = await fetch(`https://robohash.org/${address}?set=set${setNumber}`);
+
+        if (!profilePicResponse.ok) {
+            return undefined;
+        }
+
+        const blob = await profilePicResponse.blob();
+
+        return new File([blob], `robohash${setNumber}-${address}`, { type: blob.type });
+    } catch {
+        return undefined;
+    }
 };
 
 export const processMessage = async (
@@ -811,11 +857,6 @@ export const processMessage = async (
     postersAddress: string,
     messagesRef: React.RefObject<Record<string, Message>>,
     thisChannelId: string,
-    postersRef: React.RefObject<Record<string, Poster>>,
-    rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>) | undefined>,
-    postersPromised: string[],
-    findPostsWithRef: React.RefObject<string>,
-    indexerApiUrlRef: React.RefObject<string>,
 ) => {
     const { txHash, eventArgs, eventArgs2nd, timestamp } = message;
 
@@ -825,7 +866,12 @@ export const processMessage = async (
 
     const sender = eventArgs[0];
 
-    const newMessageId = hexToDecimal(eventArgs[1]);
+    let newMessageId;
+    try {
+        newMessageId = hexToDecimal(eventArgs[1]);
+    } catch (error) {
+        return { continued: true };
+    }
 
     const messageEventRaw = hex2str(eventArgs[2]);
 
@@ -890,8 +936,8 @@ export const processMessage = async (
 
     const [ participantsRaw, channelId, inputText, textPassword, replyToMessageId, mediaArray, mediaTypeArray, mediaPassword, tags ] = JSON.parse(messageDecoded!);
 
-    const media = mediaArray[0];
-    const mediaType = mediaTypeArray[0];
+    const media = mediaArray[0] ?? '';
+    const mediaType = mediaTypeArray[0] ?? '';
 
     const sanitizedInputText = sanitizeStr(inputText);
 
@@ -900,7 +946,7 @@ export const processMessage = async (
     }
 
     if (messagesRef.current[newMessageId]) {
-        return { continued: true };
+        return { continued: 'already-captured' };
     }
 
     if (channelId !== thisChannelId) {
@@ -948,31 +994,19 @@ export const processMessage = async (
         }
     }
 
-    for (let index = 0; index < participantsRaw.length; index++) {
-        const participant = participantsRaw[index];
-
-        const existingPoster = postersRef.current[participant];
-
-        if (!existingPoster) {
-            const poster = await (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current!, participant, true) : getPosterWithIndexerApi(indexerApiUrlRef.current, participant));
-
-            if (poster) {
-                postersRef.current = { ...postersRef.current, [participant]: poster };
-            }
-        }
-    }
-
     const participants = participantsRaw.map((item: string) => item.toLowerCase()).sort();
     const conversationKey = keccak256(participants.join('-'));
 
-    const sendersDetails_atTimeOfMessage = {
-        stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
-        state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
-        age: Number(hexToDecimal(eventArgs2nd[3])),
-    };
-
-    const messagePromise = sanitizedInputText && getMessage(newMessageId, sanitizedInputText, rpcClientRef.current!, textPassword);
-    const mediaPromise = (media && mediaType) && getMedia(newMessageId, media, rpcClientRef.current!, mediaPassword);
+    let sendersDetails_atTimeOfMessage;
+    try {
+        sendersDetails_atTimeOfMessage = {
+            stake: eventArgs2nd[1] === '0x' ? 0 : Number(dna2num(parseInt(eventArgs2nd[1], 16)).toFixed(0)),
+            state: identityStateConversion[Number(hexToDecimal(eventArgs2nd[2]))],
+            age: Number(hexToDecimal(eventArgs2nd[3])),
+        };
+    } catch (error) {
+        return { continued: true };
+    }
 
     const isLike = sanitizedInputText === likeEmoji && !!replyToMessageId;
 
@@ -980,6 +1014,10 @@ export const processMessage = async (
         timestamp,
         txHash,
         messageId: newMessageId,
+        message: sanitizedInputText,
+        messageResolved: false,
+        media,
+        mediaResolved: false,
         sender,
         participants,
         conversationKey,
@@ -992,14 +1030,9 @@ export const processMessage = async (
         isLike,
     } as Message;
 
-    let posterPromise: Promise<Poster> | undefined;
+    await cacheMessage(newMessage, postersAddress, encryptedPrivateKey, password);
 
-    if (!postersRef.current[sender] && !postersPromised.includes(sender)) {
-        postersPromised.push(sender);
-        posterPromise = (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current!, sender) : getPosterWithIndexerApi(indexerApiUrlRef.current, sender)) as Promise<Poster>;
-    }
-
-    return { newMessage, posterPromise, mediaPromise, messagePromise };
+    return { newMessage };
 };
 
 export const saveReplyPostId = (
@@ -1064,22 +1097,6 @@ export const deOrphanReplyPosts = (
         newDeOrphanedReplyPosts[newKey] = childDetails.deOrphanedId;
         newPosts[childDetails.deOrphanedId] = { ...postsRef[childDetails.deOrphanedId], orphaned: false };
     }
-};
-
-export const getBlockHeightFromTxHash = async (txHash: string, rpcClient: RpcClient) => {
-    const { result: getTransactionResult, error: getTransactionError } = await rpcClient('bcn_transaction', [txHash]);
-
-    if (getTransactionError) {
-        throw 'rpc unavailable';
-    }
-
-    const { result: getBlockByHashResult, error: getBlockByHashError } = await rpcClient('bcn_block', [getTransactionResult.blockHash]);
-
-    if (getBlockByHashError) {
-        throw 'rpc unavailable';
-    }
-
-    return getBlockByHashResult.height;
 };
 
 export const copyPostTx = async (
@@ -1371,34 +1388,61 @@ export const getNewPostLatestActivity = (
     return newPostLatestActivity;
 };
 
-export const resolveNewPosters = async (posterPromises: any[], postersRef: any) => {
-    const postersResolved = await Promise.all(posterPromises);
-    let newPosters = {};
-    for (let index = 0; index < postersResolved.length; index++) {
-        const posterResolved = postersResolved[index];
-        newPosters = { ...newPosters, [posterResolved.address]: posterResolved };
-    }
-
-    postersRef.current = { ...postersRef.current, ...newPosters };
-};
-
-export const resolveNewMessages = async (messagePromises: any[], postsRef?: any, messagesRef?: any) => {
-    const itemsRef = postsRef ?? messagesRef;
-    const messages = await Promise.all(messagePromises);
-    for (let index = 0; index < messages.length; index++) {
-        const { id, ...messagesPropsWithoutId } = messages[index];
-        const updatedPost = { ...itemsRef.current[id], ...messagesPropsWithoutId };
-        itemsRef.current = { ...itemsRef.current, [id]: updatedPost };
+export const resolveNewTextForPosts = async (
+    textPromises: MessagePromise[],
+    postsRef: React.RefObject<Record<string, Post>>,
+) => {
+    const texts = await Promise.all(textPromises);
+    for (let index = 0; index < texts.length; index++) {
+        const { id, ...messagesPropsWithoutId } = texts[index];
+        const updatedPost = { ...postsRef!.current[id], ...messagesPropsWithoutId, messageResolved: true };
+        await cachePost(updatedPost as Post);
+        postsRef!.current = { ...postsRef!.current, [id]: updatedPost };
     }
 };
 
-export const resolveNewMedia = async (mediaPromises: any[], postsRef?: any, messagesRef?: any) => {
-    const itemsRef = postsRef ?? messagesRef;
+export const resolveNewTextForMessages = async (
+    textPromises: MessagePromise[],
+    postersAddress: string,
+    encryptedPrivateKey: string,
+    password: string,
+    messagesRef: React.RefObject<Record<string, Message>>,
+) => {
+    const texts = await Promise.all(textPromises);
+    for (let index = 0; index < texts.length; index++) {
+        const { id, ...messagesPropsWithoutId } = texts[index];
+        const updatedMessage = { ...messagesRef!.current[id], ...messagesPropsWithoutId, messageResolved: true };
+        await cacheMessage(updatedMessage, postersAddress, encryptedPrivateKey, password);
+        messagesRef!.current = { ...messagesRef!.current, [id]: updatedMessage };
+    }
+};
+
+export const resolveNewMediaForPosts = async (
+    mediaPromises: MediaPromise[],
+    postsRef: React.RefObject<Record<string, Post>>,
+) => {
     const media = await Promise.all(mediaPromises);
     for (let index = 0; index < media.length; index++) {
-        const { id, blob, ...mediaPropsWithoutIdAndBlob } = media[index];
-        const updatedPost = { ...itemsRef.current[id], ...mediaPropsWithoutIdAndBlob };
-        itemsRef.current = { ...itemsRef.current, [id]: updatedPost };
+        const { id, ...messagesPropsWithoutId } = media[index];
+        const updatedPost = { ...postsRef!.current[id], ...messagesPropsWithoutId, mediaResolved: true };
+        await cachePost(updatedPost as Post);
+        postsRef!.current = { ...postsRef!.current, [id]: updatedPost };
+    }
+};
+
+export const resolveNewMediaForMessages = async (
+    mediaPromises: MediaPromise[],
+    postersAddress: string,
+    encryptedPrivateKey: string,
+    password: string,
+    messagesRef: React.RefObject<Record<string, Message>>,
+) => {
+    const media = await Promise.all(mediaPromises);
+    for (let index = 0; index < media.length; index++) {
+        const { id, ...messagesPropsWithoutId } = media[index];
+        const updatedMessage = { ...messagesRef!.current[id], ...messagesPropsWithoutId, mediaResolved: true };
+        await cacheMessage(updatedMessage, postersAddress, encryptedPrivateKey, password);
+        messagesRef!.current = { ...messagesRef!.current, [id]: updatedMessage };
     }
 };
 
@@ -1503,10 +1547,7 @@ export const encryptRecipientsMessage = async (
     media: string[],
     mediaType: string[],
     mediaPassword: string,
-    makePostsWith: string,
-    encryptedPrivateKeyFromNodeRef: React.RefObject<string>,
     encryptedPrivateKey: string,
-    passwordFromNodeRef: React.RefObject<string>,
     password: string,
     postersRef: React.RefObject<Record<string, Poster>>,
     replyToMessageId?: string,
@@ -1515,18 +1556,9 @@ export const encryptRecipientsMessage = async (
     const rawMessage = JSON.stringify([[postersAddress.toLowerCase(), ...recipients], '', inputText, textPassword, replyToMessageId ?? '', media, mediaType, mediaPassword, []]);
     const rawMessageHash = keccak256(rawMessage);
 
-    const encodedMessage = new TextEncoder().encode(rawMessage);
+    const { encryptedMessage, encodedMessage } = await encryptTextWithPrivateKey(rawMessage, encryptedPrivateKey, password);
 
-    const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
-    const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
-    const keyData = new Uint8Array(sha3_256.array(passwordyActual));
-    const myPrivateKey = await decryptAESGCM(encryptedPrivateKeyActual, keyData);
-    const { pubkey: myPubkey } = extractPubkeyAddressFromPrivateKey(myPrivateKey);
-    const myEncryptedMessage = await encrypt(hexToUint8Array(myPubkey), encodedMessage);
-    // @ts-ignore: Uint8Array.toBase64 not recognized yet
-    const mySerializedEncryptedMessage = myEncryptedMessage.toBase64();
-
-    const message = [mySerializedEncryptedMessage];
+    const message = [encryptedMessage];
 
     for (let index = 0; index < recipients.length; index++) {
         const recipient = recipients[index];
@@ -1540,4 +1572,24 @@ export const encryptRecipientsMessage = async (
     }
 
     return { message, rawMessageHash };
+};
+
+export const encryptTextWithPrivateKey = async (text: string, encryptedPrivateKey: string, password: string) => {
+    const encodedMessage = new TextEncoder().encode(text);
+    const keyData = new Uint8Array(sha3_256.array(password));
+    const myPrivateKey = await decryptAESGCM(encryptedPrivateKey, keyData);
+    const { pubkey: myPubkey } = extractPubkeyAddressFromPrivateKey(myPrivateKey);
+    const myEncryptedMessage = await encrypt(hexToUint8Array(myPubkey), encodedMessage);
+    // @ts-ignore: Uint8Array.toBase64 not recognized yet
+    return { encryptedMessage: myEncryptedMessage.toBase64(), encodedMessage };
+};
+
+export const decryptTextWithPrivateKey = async (text: string, encryptedPrivateKey: string, password: string) => {
+    const keyData = new Uint8Array(sha3_256.array(password));
+    const myPrivateKey = await decryptAESGCM(encryptedPrivateKey, keyData);
+    const myPrivateKeyBytes = hexToUint8Array(myPrivateKey);
+    // @ts-ignore: Uint8Array.fromBase64 not recognized yet
+    const encryptedMessage = Uint8Array.fromBase64(text);
+    const myMessageDecrypted = await decrypt(myPrivateKeyBytes, encryptedMessage);
+    return (new TextDecoder()).decode(myMessageDecrypted);
 };

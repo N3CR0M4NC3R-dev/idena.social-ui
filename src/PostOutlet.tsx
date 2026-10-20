@@ -1,5 +1,5 @@
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
-import type { Post, PostTips } from "./logic/asyncUtils";
+import type { Post, Poster, PostTips } from "./logic/asyncUtils";
 import PostComponent from "./components/PostComponent";
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from "./App.exports";
 
@@ -7,11 +7,13 @@ type PostOutletProps = {
     latestPosts: string[],
     latestActivity: string[],
     postsRef: React.RefObject<Record<string, Post>>,
+    postersRef: React.RefObject<Record<string, Poster>>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     discussPrefix: string,
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
+    submitting: boolean,
     copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
@@ -25,7 +27,7 @@ type PostOutletProps = {
     handleOpenSendTipModal: (e: MouseEventLocal, location: string, tipToPost: Post) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
+    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
     postTipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
@@ -38,6 +40,7 @@ function PostOutlet() {
 
     const {
         postsRef,
+        postersRef,
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
         discussPrefix,
@@ -46,6 +49,7 @@ function PostOutlet() {
         submittingTip,
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
+        submitting,
         copyPostTxHandler,
         submitPostHandler,
         submitLikeHandler,
@@ -75,11 +79,13 @@ function PostOutlet() {
             uniqueKey={postId!}
             postId={postId!}
             postsRef={postsRef}
+            postersRef={postersRef}
             replyPostsTreeRef={replyPostsTreeRef}
             deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
             discussPrefix={discussPrefix}
             SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
             inputPostDisabled={inputPostDisabled}
+            submitting={submitting}
             copyPostTxHandler={copyPostTxHandler}
             submitPostHandler={submitPostHandler}
             submitLikeHandler={submitLikeHandler}

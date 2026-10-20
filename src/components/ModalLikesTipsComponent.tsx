@@ -1,12 +1,14 @@
 
 import type { MouseEventLocal } from '../App.exports';
-import type { Message, Post, Tip } from '../logic/asyncUtils';
-import { getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus } from '../logic/utils';
+import type { Message, Post, Poster, Tip } from '../logic/asyncUtils';
+import { getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus, getProfilePic } from '../logic/utils';
 import { useNavigate } from 'react-router';
+import ObjectUrlImageComponent from './ObjectUrlImageComponent';
 
 type ModalLikesTipsComponentProps = {
     heading: string,
     modalItemsRef: React.RefObject<Post[] | Tip[] | Message[]>,
+    postersRef: React.RefObject<Record<string, Poster>>,
     closeModal: () => void,
 };
 
@@ -15,6 +17,7 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
     const {
         heading,
         modalItemsRef,
+        postersRef,
         closeModal,
     } = props;
 
@@ -40,6 +43,7 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                     const posterStake = posterDetails.stake;
                     const posterState = posterDetails.state;
                     const posterAge = posterDetails.age;
+                    const posterPic = getProfilePic(postersRef.current[address], posterState);
 
                     const { displayDate, displayTime } = getDisplayDateTime(item.timestamp);
                     const detail = (item as Post | Message).message ?? getDisplayTipAmount((item as Tip).amount) + ' iDNA';
@@ -49,7 +53,7 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                             <div className="flex flex-row">
                                 <div className="w-6 flex-none flex flex-col">
                                     <div className="flex-none">
-                                        <img src={`https://robohash.org/${address}?set=set1`} />
+                                        <ObjectUrlImageComponent file={posterPic} />
                                     </div>
                                     <div className="flex-1"></div>
                                 </div>

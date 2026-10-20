@@ -1,5 +1,5 @@
 import type { MouseEventLocal } from "../App.exports";
-import { getIdentityStatus } from "../logic/utils";
+import { getIdentityStatus, getProfilePic } from "../logic/utils";
 import type { Poster } from "../logic/asyncUtils";
 import PosterHeaderComponent from "./PosterHeaderComponent";
 
@@ -21,6 +21,7 @@ function OneOnOneConversationHeaderComponent(props: OneOnOneConversationHeaderCo
             age={conversationPartner.age}
             state={getIdentityStatus(conversationPartner.state)}
             stake={parseInt(conversationPartner.stake)}
+            pic={getProfilePic(conversationPartner)}
         />
         {!conversationPartner.pubkey && <div className="ml-3 flex gap-2">
             <span className="text-[11px] text-red-400">pubkey missing</span>

@@ -1,4 +1,4 @@
-import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessageLines, likeEmoji } from "../logic/utils";
+import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessageLines, getProfilePic, likeEmoji } from "../logic/utils";
 import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
 import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
 import heartGraySvg from '../assets/heart-gray.svg';
@@ -9,6 +9,7 @@ import { useLocation, useNavigate } from "react-router";
 import { useReducer } from "react";
 import OneOnOneConversationHeaderComponent from "./OneOnOneConversationHeaderComponent";
 import GroupConversationHeaderComponent from "./GroupConversationHeaderComponent";
+import ObjectUrlImageComponent from "./ObjectUrlImageComponent";
 
 type ConversationComponentProps = {
     conversationKey: string,
@@ -22,6 +23,7 @@ type ConversationComponentProps = {
     browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
     setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
     inputPostDisabled: boolean,
+    submitting: boolean,
     messageSettingsInvalid: boolean,
     copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
     submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>,
@@ -32,7 +34,7 @@ type ConversationComponentProps = {
     handleOpenLikesModal: (e: MouseEventLocal, likePosts: Message[]) => void,
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
+    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
     submittingMessage: string,
     submittingLike: string,
     messagePrefix: string,
@@ -56,6 +58,7 @@ function ConversationComponent(props: ConversationComponentProps) {
         browserStateHistoryRef,
         setBrowserStateHistorySettings,
         inputPostDisabled,
+        submitting,
         messageSettingsInvalid,
         copyMessageTxHandler,
         submitMessageHandler,
@@ -107,7 +110,7 @@ function ConversationComponent(props: ConversationComponentProps) {
     const setDiscussReplyToPostIdHandler = (conversationKey: string, discussReplyToPostId?: string) => {
         setPostDomSettings(conversationKey, { discussReplyToPostId }, true);
 
-        if (inputPostDisabled || messageSettingsInvalid) {
+        if (inputPostDisabled || submitting || messageSettingsInvalid) {
             return;
         }
 
@@ -129,7 +132,7 @@ function ConversationComponent(props: ConversationComponentProps) {
     };
 
     const localSubmitMessageHandler = async (location: string, recipients: string[], replyToMessageId?: string) => {
-        if (inputPostDisabled || messageSettingsInvalid) {
+        if (inputPostDisabled || submitting || messageSettingsInvalid) {
             return;
         }
 
@@ -147,7 +150,7 @@ function ConversationComponent(props: ConversationComponentProps) {
     };
 
     const localSubmitLikeHandler = async (location: string, recipients: string[], replyToMessageId: string) => {
-        if (inputPostDisabled || messageSettingsInvalid) {
+        if (inputPostDisabled || submitting || messageSettingsInvalid) {
             return;
         }
 
@@ -210,9 +213,11 @@ function ConversationComponent(props: ConversationComponentProps) {
                         const posterStake = message.sendersDetails_atTimeOfMessage.stake;
                         const posterState = message.sendersDetails_atTimeOfMessage.state;
                         const posterAge = message.sendersDetails_atTimeOfMessage.age;
+                        const posterPic = getProfilePic(postersRef.current[message.sender], posterState);
                         const { displayDate, displayTime } = getDisplayDateTime(message.timestamp);
                         const { messageLines } = getMessageLines(message.message);
                         const replyToMessage = messagesRef.current[message.replyToMessageId];
+                        const replyToMessagePosterPic = getProfilePic(postersRef.current[replyToMessage?.sender], replyToMessage?.sendersDetails_atTimeOfMessage.state);
                         const awaitingReplyToMessage = message.replyToMessageId && !replyToMessage;
 
                         const messageParentId = messagePrefix + message.messageId;
@@ -228,7 +233,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                                             <div className="h-2.5 w-4 border-t-1 border-l-1 border-gray-500"></div>
                                         </div>
                                         <div className="flex-1 flex flex-row mr-3">
-                                            <div className="w-5">{!awaitingReplyToMessage && <img src={`https://robohash.org/${replyToMessage?.sender}?set=set1`} />}</div>
+                                            <div className="w-5">{!awaitingReplyToMessage && <ObjectUrlImageComponent file={replyToMessagePosterPic} />}</div>
                                             <div className="flex-1 text-nowrap overflow-hidden">
                                                 {awaitingReplyToMessage ?
                                                     <p className="max-w-[120px] text-[12px] text-gray-500">Reply to message loading...</p>
@@ -241,7 +246,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                                     <div className="flex flex-row">
                                         <div className="w-9 flex-none flex flex-col">
                                             <div className="h-11 flex-none">
-                                                <img src={`https://robohash.org/${message.sender}?set=set1`} />
+                                                <ObjectUrlImageComponent file={posterPic} />
                                             </div>
                                             <div className="flex-1"></div>
                                         </div>
@@ -259,7 +264,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                                                 <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                             </div>
                                             {message.image && <div className="my-1 mx-1">
-                                                <img className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm hover:cursor-pointer" src={message.image} onClick={(e) => handleExpandImageModal(e, message.image!, message.cid)} />
+                                                <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm hover:cursor-pointer" file={message.image} onClick={(e) => handleExpandImageModal(e, message.image!, message.cid)} />
                                             </div>}
                                         </div>
                                         <div className="pt-0.5 mr-1 text-[12px] flex flex-col gap-0.5">
@@ -291,16 +296,16 @@ function ConversationComponent(props: ConversationComponentProps) {
                                     rows={2}
                                     className="w-full field-sizing-content max-w-[385px] min-h-[26px] max-h-[312px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
                                     placeholder="Comment here..."
-                                    disabled={inputPostDisabled || messageSettingsInvalid}
+                                    disabled={inputPostDisabled || submitting || messageSettingsInvalid}
                                 />
                             </div>
                             <div>
-                                <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || messageSettingsInvalid} onClick={() => localSubmitMessageHandler(conversationKey, participantsExcludingSelf, discussReplyToPostId)}>{submittingMessage === conversationKey ? '...' : 'Send!'}</button>
+                                <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || submitting ||messageSettingsInvalid} onClick={() => localSubmitMessageHandler(conversationKey, participantsExcludingSelf, discussReplyToPostId)}>{submittingMessage === conversationKey ? '...' : 'Send!'}</button>
                             </div>
                         </div>
                     </div>
                     {postMediaAttachment && <div className="my-1">
-                        <img className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm" src={postMediaAttachment.dataUrl} />
+                        <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm" file={postMediaAttachment.file} />
                     </div>}
                     <div className="leading-[12px]">
                         {postMediaAttachment ? <>

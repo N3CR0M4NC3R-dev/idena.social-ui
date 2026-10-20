@@ -2,13 +2,13 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { sha3_256 } from 'js-sha3';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPosterAndPost, saveReplyPostId, deOrphanReplyPosts, getBlockHeightFromTxHash, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getTransactionDetailsRpc, getTransactionDetailsIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewPosters, resolveNewMessages, resolveNewMedia, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips } from './logic/asyncUtils';
-import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, getDisplayAddress, getPostActivities, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi } from './logic/asyncUtils';
+import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
 import menuWhiteSvg from './assets/menu-8-white.svg';
-import { Link, Outlet, useLocation } from 'react-router';
-import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
+import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 import ModalAddMediaComponent from './components/ModalAddMediaComponent';
@@ -19,6 +19,12 @@ import ModalRpcSendMessageComponent from './components/ModalRpcSendMessageCompon
 import ScanBlocksComponent from './components/ScanBlocksComponent';
 import ModalSubmitPubkeyComponent from './components/ModalSubmitPubkeyComponent';
 import ScrollToTopButtonComponent from './components/ScrollToTopButtonComponent';
+import { loadPostsCache } from './logic/postsStore';
+import { loadTipsCache } from './logic/tipsStore';
+import { loadMessagesCache } from './logic/messagesStore';
+import { loadPostersCache } from './logic/postersStore';
+import { cacheIgnore, loadIgnoresCache, type IgnoreItem } from './logic/ignoreStore';
+import { addBlocksCapturedRange, clearBlocksCapturedRange, getBlocksCapturedRange, getBlocksCapturedRangeOverlapping } from './logic/blocksCapturedStore';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -117,6 +123,7 @@ Modal.setAppElement('#root');
 function App() {
 
     const location = useLocation();
+    const navigate = useNavigate();
 
     const { key: locationKey, pathname } = location;
 
@@ -167,7 +174,7 @@ function App() {
     const [initialBlockTimestamp, setInitialBlockTimestamp] = useState<number>(0);
     const [pastBlockCaptured, setPastBlockCaptured] = useState<number>(0);
     const pastBlockCapturedRef = useRef(pastBlockCaptured);
-    const partialPastBlockCapturedRef = useRef(0);
+    const partialPastBlockCapturedRef = useRef({ lastBlockHeight: 0, lastValidTxHash: '' });
     const [currentBlockCaptured, setCurrentBlockCaptured] = useState<number>(0);
     const currentBlockCapturedRef = useRef(currentBlockCaptured);
     const [scanningPastBlocks, setScanningPastBlocks] = useState<boolean>(false);
@@ -185,6 +192,7 @@ function App() {
     const backwardOrphanedReplyPostsTreeRef = useRef({} as Record<string, string>);
     const continuationTokenRef = useRef(undefined as undefined | string);
     const pastContractAddressRef = useRef(contractAddressCurrent);
+    const [submitting, setSubmitting] = useState<boolean>(false);
     const [submittingPost, setSubmittingPost] = useState<string>('');
     const [submittingLike, setSubmittingLike] = useState<string>('');
     const [submittingTip, setSubmittingTip] = useState<string>('');
@@ -197,13 +205,21 @@ function App() {
     const postTipsRef = useRef<Record<string, PostTips>>({});
     const [idenaWalletBalance, setIdenaWalletBalance] = useState<string>('0');
     const postLatestActivityRef = useRef({} as Record<string, number>);
-    const latestMessagesForwardQueueRef = useRef([] as EventTransaction[]);
-    const latestMessagesBackwardQueueRef = useRef([] as EventTransaction[]);
+    const latestMessagesForwardQueueRef = useRef([] as (EventTransaction | TransactionCached)[]);
+    const latestMessagesBackwardQueueRef = useRef([] as (EventTransaction | TransactionCached)[]);
     const [latestConversationActivity, setLatestConversationActivity] = useState<string[]>([]);
     const conversationsRef = useRef<Record<string, Conversation>>({});
     const messagesRef = useRef<Record<string, Message>>({});
     const profileActivityRef = useRef<Record<string, ProfileActivity>>({});
     const postActivityRef = useRef<string[]>([]);
+
+    // indexeddb cache of posts, posters, tips, messages
+    const [cacheLoaded, setCacheLoaded] = useState<boolean>(false);
+    const cachedPostsRef = useRef<Record<string, Post>>({});
+    const cachedTipsRef = useRef<Record<string, Tip>>({});
+    const cachedIgnoresRef = useRef<Record<string, IgnoreItem>>({});
+    const [messagesCacheLoaded, setMessagesCacheLoaded] = useState<boolean>(false);
+    const cachedMessagesRef = useRef<Record<string, Message>>({});
 
     // modals
     const [modalOpen, setModalOpen] = useState<string>('');
@@ -213,7 +229,7 @@ function App() {
     const modalAddMediaRef = useRef<string>('');
     const modalRpcMakePostRef = useRef<{ location: string, replyToPostId?: string, channelId?: string }>({ location: '' });
     const modalRpcSendMessageRef = useRef<{ location: string, recipients: string[], replyToMessageId?: string }>({ location: '', recipients: [] });
-    const modalExpandImageRef = useRef<{ dataUrl?: string, cid?: string }>({});
+    const modalExpandImageRef = useRef<{ image?: File, cid?: string }>({});
     const modalSubmitPubkeyRef = useRef<{ address: string }>({ address: '' });
 
     // miscellaneous
@@ -247,9 +263,6 @@ function App() {
                 alert('Your node is still syncing! Please try again after syncing has completed.');
                 return;
             }
-
-            localStorage.setItem('nodeUrl', idenaNodeUrl);
-            localStorage.setItem('nodeKey', idenaNodeApiKey);
 
             if (!initialBlock) {
                 const { result: getLastBlockResult } = findPostsWith === 'indexer-api' ? await getLastBlockWithIdenaIndexerApi(indexerApiUrl) : await rpcClientRef.current!('bcn_lastBlock', []);
@@ -291,10 +304,37 @@ function App() {
     };
 
     useEffect(() => {
-        if (inputNodeApplied) {
-            setRpcClient(nodeUrl, nodeKey, setNodeAvailable);
+        setRpcClient(nodeUrl, nodeKey, setNodeAvailable);
+
+        if (!cacheLoaded) {
+            Promise.all([
+                loadPostsCache(),
+                loadTipsCache(),
+                loadPostersCache(),
+                loadIgnoresCache(),
+            ]).then(([cachedPosts, cachedTips, cachedPosters, cachedIgnores]) => {
+                cachedPostsRef.current = { ...cachedPostsRef.current, ...cachedPosts };
+                cachedTipsRef.current = { ...cachedTipsRef.current, ...cachedTips };
+                postersRef.current = { ...postersRef.current, ...cachedPosters };
+                cachedIgnoresRef.current = { ...cachedIgnoresRef.current, ...cachedIgnores };
+                setCacheLoaded(true);
+            });
         }
-    }, [inputNodeApplied]);
+    }, []);
+
+    useEffect(() => {
+        const canUseIdenaApp = makePostsWith === 'idena-app' && !credentialsInvalid;
+        const canUseRpc = makePostsWith === 'rpc' && !viewOnlyNode;
+
+        if (nodeAvailable && (canUseIdenaApp || canUseRpc)) {
+            const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+            const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
+            loadMessagesCache(postersAddress, encryptedPrivateKeyActual, passwordyActual).then((cachedMessages) => {
+                cachedMessagesRef.current = { ...cachedMessagesRef.current, ...cachedMessages };
+                setMessagesCacheLoaded(true);
+            });
+        }
+    }, [postersAddress, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode]);
 
     useEffect(() => {
         if (!inputPostersAddressApplied || makePostsWith !== 'idena-app') {
@@ -420,7 +460,7 @@ function App() {
     useEffect(() => {
         let recurseForwardIntervalId: NodeJS.Timeout | undefined;
 
-        if (initialBlock && nodeAvailable) {
+        if (initialBlock && nodeAvailable && cacheLoaded) {
             (async function recurseForward() {
                 if (nodeAvailableRef.current) {
                     const recurseDirection = 'forward';
@@ -435,13 +475,13 @@ function App() {
         } else {
             recurseForwardIntervalId && clearInterval(recurseForwardIntervalId);
         }
-    }, [initialBlock, nodeAvailable]);
+    }, [initialBlock, nodeAvailable, cacheLoaded]);
 
     type RecurseBackward = (time: number) => Promise<void>;
     useEffect(() => {
         let recurseBackwardIntervalId: NodeJS.Timeout | undefined;
 
-        if (scanningPastBlocks && initialBlock && nodeAvailable) {
+        if (scanningPastBlocks && initialBlock && initialBlockTimestamp && nodeAvailable && cacheLoaded) {
             const timeNow = Math.floor(Date.now() / 1000);
             const ttl = timeNow + SCAN_PAST_POSTS_TTL;
 
@@ -450,7 +490,7 @@ function App() {
                     const recurseDirection = 'backward';
                     const contentSource = findPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
                     const contractAddress = pastContractAddressRef!.current;
-                    const pendingBlock = pastBlockCapturedRef.current ? (partialPastBlockCapturedRef.current ? partialPastBlockCapturedRef.current : pastBlockCapturedRef.current - 1) : initialBlock - 1;
+                    const pendingBlock = pastBlockCapturedRef.current ? (partialPastBlockCapturedRef.current?.lastBlockHeight || pastBlockCapturedRef.current - 1) : initialBlock;
                     recurseBackwardIntervalId = setTimeout(postScannerFactory(recurseDirection, contentSource, recurseBackward, setPastBlockCaptured, pastBlockCapturedRef, contractAddress, pendingBlock), SCANNING_INTERVAL);
                 } else {
                     setScanningPastBlocks(false);
@@ -461,7 +501,7 @@ function App() {
         } else {
             recurseBackwardIntervalId && clearInterval(recurseBackwardIntervalId);
         }
-    }, [scanningPastBlocks, initialBlock, nodeAvailable]);
+    }, [scanningPastBlocks, initialBlock, initialBlockTimestamp, nodeAvailable, cacheLoaded]);
 
     const validatePostersAddress = () => {
         setPostersAddress(inputPostersAddress);
@@ -547,6 +587,10 @@ function App() {
     };
 
     const handleInputFindPostsWithToggle = (value: string) => {
+        if (scanningPastBlocks) {
+            alert('Cannot change while scanning past blocks. Please wait and try again.');
+            return;
+        }
         setFindPostsWith(value);
         localStorage.setItem('findPostsWith', value);
 
@@ -564,6 +608,8 @@ function App() {
                 setInputIdenaIndexerApiUrl(initIndexerApiUrl);
                 setIndexerApiUrl(initIndexerApiUrl);
             }
+
+            clearBlocksCapturedRange().then(() => navigate(0));
         }
     };
 
@@ -576,55 +622,72 @@ function App() {
         contractAddress: string,
         pendingBlock?: number,
     ) => {
+        const isRecurseForward = recurseDirection === 'forward';
+        const isContentSourceRpc = contentSource === 'rpc';
+
+        const isRecurseForwardWithRpcOnly = isRecurseForward && isContentSourceRpc;
+        const isRecurseForwardWithIndexerApi = isRecurseForward && !isContentSourceRpc;
+        const isRecurseBackwardWithRpcOnly = !isRecurseForward && isContentSourceRpc;
+        const isRecurseBackwardWithIndexerApi = !isRecurseForward && !isContentSourceRpc;
+
+        // The ref is updated for immediate effect, the state is updated for the rerender.
+        const setBlockCapturedRefState = (block: number) => {
+            blockCapturedRef.current = block;
+            setBlockCaptured(block);
+        };
+
         return async function postFinder() {
-            const isRecurseForward = recurseDirection === 'forward';
-            const isContentSourceRpc = contentSource === 'rpc';
-
-            const isRecurseForwardWithRpcOnly = isRecurseForward && isContentSourceRpc;
-            const isRecurseForwardWithIndexerApi = isRecurseForward && !isContentSourceRpc;
-            const isRecurseBackwardWithRpcOnly = !isRecurseForward && isContentSourceRpc;
-            const isRecurseBackwardWithIndexerApi = !isRecurseForward && !isContentSourceRpc;
-
-            // The ref is updated for immediate effect, the state is updated for the rerender.
-            const setBlockCapturedRefState = (block: number) => {
-                blockCapturedRef.current = block;
-                setBlockCaptured(block);
-            };
-
             try {
-                let transactions = [];
+                
+                let transactions: PostFinderTransaction[] = [];
+
+                let cachedEndBlockHeight;
 
                 if (isRecurseForwardWithRpcOnly || isRecurseBackwardWithRpcOnly) {
-                    const { result: getBlockByHeightResult, error } = await rpcClientRef.current!('bcn_blockAt', [pendingBlock!]);
-
-                    if (error) {
-                        throw 'rpc unavailable';
-                    }
-
-                    if (getBlockByHeightResult === null) {
-                        throw 'no block';
-                    }
-                    
-                    if (getBlockByHeightResult.transactions === null) {
-                        setBlockCapturedRefState(pendingBlock!);
-
-                        if (isRecurseBackwardWithRpcOnly) {
-                            if (getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
-                                pastContractAddressRef!.current = contractAddress1;
-                            } else if (getBlockByHeightResult.timestamp < breakingChanges.v9.timestamp) {
-                                pastContractAddressRef!.current = contractAddress2;
-                            } else if (getBlockByHeightResult.timestamp < breakingChanges.v10.timestamp) {
-                                pastContractAddressRef!.current = contractAddress3;
-                            } else if (getBlockByHeightResult.timestamp < breakingChanges.v11.timestamp) {
-                                pastContractAddressRef!.current = contractAddress4;
-                            } else if (getBlockByHeightResult.timestamp < breakingChanges.v12.timestamp) {
-                                pastContractAddressRef!.current = contractAddress5;
-                            }
-                        }
+                    const cachedRange = isRecurseBackwardWithRpcOnly && await getBlocksCapturedRange(pendingBlock!);
+                    if (cachedRange) {
+                        cachedEndBlockHeight = cachedRange.end_block_height;
+                        transactions = cachedRange.transactions
+                            .map(transaction => {
+                                const [ txHash, timestampStr ] = transaction.split('-');
+                                return { txHash, timestamp: parseInt(timestampStr) };
+                            })
+                            .filter((item) => item.timestamp < initialBlockTimestamp);
+                    } else if (isRecurseBackwardWithRpcOnly && pendingBlock === initialBlock) {
+                        // Note that recurse forward starts at the initial block. We also start recurse backward at initial block for the opportunity to capture a cached range (if existing).
                         throw 'no transactions';
-                    }
+                    } else {
+                        const { result: getBlockByHeightResult, error } = await rpcClientRef.current!('bcn_blockAt', [pendingBlock!]);
 
-                    transactions = getBlockByHeightResult.transactions.map((txHash: string) => ({ txHash, timestamp: getBlockByHeightResult.timestamp, blockHeight: getBlockByHeightResult.height }));
+                        if (error) {
+                            throw 'rpc unavailable';
+                        }
+
+                        if (getBlockByHeightResult === null) {
+                            throw 'no block';
+                        }
+                        
+                        if (getBlockByHeightResult.transactions === null) {
+                            setBlockCapturedRefState(pendingBlock!);
+
+                            if (isRecurseBackwardWithRpcOnly) {
+                                if (getBlockByHeightResult.timestamp < breakingChanges.v5.timestamp) {
+                                    pastContractAddressRef!.current = contractAddress1;
+                                } else if (getBlockByHeightResult.timestamp < breakingChanges.v9.timestamp) {
+                                    pastContractAddressRef!.current = contractAddress2;
+                                } else if (getBlockByHeightResult.timestamp < breakingChanges.v10.timestamp) {
+                                    pastContractAddressRef!.current = contractAddress3;
+                                } else if (getBlockByHeightResult.timestamp < breakingChanges.v11.timestamp) {
+                                    pastContractAddressRef!.current = contractAddress4;
+                                } else if (getBlockByHeightResult.timestamp < breakingChanges.v12.timestamp) {
+                                    pastContractAddressRef!.current = contractAddress5;
+                                }
+                            }
+                            throw 'no transactions';
+                        }
+
+                        transactions = getBlockByHeightResult.transactions.map((txHash: string) => ({ txHash, timestamp: getBlockByHeightResult.timestamp, blockHeight: getBlockByHeightResult.height }));
+                    }
                 } else if (isRecurseForwardWithIndexerApi) {
                     const { result: getBlockByHeightResult, error: getBlockByHeightError } = await getBlockAtWithIdenaIndexerApi(indexerApiUrl, pendingBlock!);
 
@@ -655,60 +718,77 @@ function App() {
                     if (continuationTokenRef!.current === 'finished processing') {
                         throw 'no more transactions';
                     }
-                    const { result, continuationToken, error } = await getPastTxsWithIdenaIndexerApi(indexerApiUrl, pastContractAddressRef!.current, INDEXER_API_ITEMS_LIMIT, continuationTokenRef!.current);
-                    
-                    if (error) {
-                        throw 'indexer api unavailable';
-                    }
 
-                    transactions = result
-                        ?.filter((balanceUpdate: any) => balanceUpdate.type === 'CallContract' && allMethods.includes(balanceUpdate.txReceipt.method) && balanceUpdate.from === balanceUpdate.address && balanceUpdate.txReceipt.success === true)
-                        .map((balanceUpdate: any) => ({ txHash: balanceUpdate.hash, timestamp: getTimestampFromIndexerApi(balanceUpdate.timestamp) }))
-                    ?? [];
+                    const lastBlockHeight = partialPastBlockCapturedRef.current?.lastBlockHeight;
+                    const cachedRange = lastBlockHeight ? await getBlocksCapturedRangeOverlapping(partialPastBlockCapturedRef.current?.lastBlockHeight) : undefined;
+                    let cachedRangeInvalidated = false;
 
-                    if (!continuationTokenRef!.current) {
-                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < initialBlockTimestamp);
-                    }
+                    if (cachedRange) {
+                        const txIndexStart = cachedRange.transactions.findIndex((item) => item.startsWith(partialPastBlockCapturedRef.current.lastValidTxHash));
+                        const txsRemaining = txIndexStart >= 0 ? cachedRange.transactions.slice(txIndexStart + 1) : [];
 
-                    const isCurrentContract = pastContractAddressRef!.current === contractAddressCurrent;
-                    const isContractAddress5 = pastContractAddressRef!.current === contractAddress5;
-                    const isContractAddress4 = pastContractAddressRef!.current === contractAddress4;
-                    const isContractAddress3 = pastContractAddressRef!.current === contractAddress3;
-                    const isContractAddress2 = pastContractAddressRef!.current === contractAddress2;
-                    const isContractAddress1 = pastContractAddressRef!.current === contractAddress1;
-
-                    if (isContractAddress5) {
-                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v12.timestamp);
-                    } else if (isContractAddress4) {
-                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v11.timestamp);
-                    } else if (isContractAddress3) {
-                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v10.timestamp);
-                    } else if (isContractAddress2) {
-                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v9.timestamp);
-                    } else if (isContractAddress1) {
-                        transactions = transactions.filter((balanceUpdate: any) => balanceUpdate.timestamp < breakingChanges.v5.timestamp);
-                    }
-
-                    if (continuationToken) {
-                        continuationTokenRef!.current = continuationToken;
-                    } else {
-                        if (isCurrentContract) {
-                            pastContractAddressRef!.current = contractAddress5;
-                            continuationTokenRef!.current = undefined;
-                        } else if (isContractAddress5) {
-                            pastContractAddressRef!.current = contractAddress4;
-                            continuationTokenRef!.current = undefined;
-                        } else if (isContractAddress4) {
-                            pastContractAddressRef!.current = contractAddress3;
-                            continuationTokenRef!.current = undefined;
-                        } else if (isContractAddress3) {
-                            pastContractAddressRef!.current = contractAddress2;
-                            continuationTokenRef!.current = undefined;
-                        } else if (isContractAddress2) {
-                            pastContractAddressRef!.current = contractAddress1;
-                            continuationTokenRef!.current = undefined;
+                        if (txsRemaining.length < INDEXER_API_ITEMS_LIMIT) {
+                            cachedRangeInvalidated = true;
                         } else {
-                            continuationTokenRef!.current = 'finished processing';
+                            const continuationDetails = cachedRange.indexer_api_continuation_details!;
+
+                            const rawTransactions = [ ...txsRemaining, ...continuationDetails.nextBlockTransactions ];
+
+                            transactions = rawTransactions
+                                .map((item: string) => {
+                                    const [ txHash, timestampStr ] = item.split('-');
+                                    return { txHash, timestamp: parseInt(timestampStr) };
+                                })
+                                .filter((item) => item.timestamp < initialBlockTimestamp);
+
+                            pastContractAddressRef!.current = continuationDetails.contract;
+                            continuationTokenRef!.current = continuationDetails.continuationToken;
+                        }
+                    }
+
+                    if (!cachedRange || cachedRangeInvalidated) {
+                        const { result, continuationToken, error } = await getPastTxsWithIdenaIndexerApi(indexerApiUrl, pastContractAddressRef!.current, INDEXER_API_ITEMS_LIMIT, continuationTokenRef!.current);
+                        
+                        if (error) {
+                            throw 'indexer api unavailable';
+                        }
+
+                        const filteredBalanceUpdates = result ? filterIndexerApiBalanceUpdates(result, allMethods) : [];
+
+                        transactions = filterTransactionsByCutoffTimestamp(
+                            pastContractAddressRef!.current,
+                            filteredBalanceUpdates,
+                            [
+                                { contract: contractAddressCurrent, timestamp: initialBlockTimestamp },
+                                { contract: contractAddress5, timestamp: breakingChanges.v12.timestamp },
+                                { contract: contractAddress4, timestamp: breakingChanges.v11.timestamp },
+                                { contract: contractAddress3, timestamp: breakingChanges.v10.timestamp },
+                                { contract: contractAddress2, timestamp: breakingChanges.v9.timestamp },
+                                { contract: contractAddress1, timestamp: breakingChanges.v5.timestamp },
+                            ],
+                        );
+
+                        if (continuationToken) {
+                            continuationTokenRef!.current = continuationToken;
+                        } else {
+                            const nextContract = getNextContract(
+                                pastContractAddressRef!.current, 
+                                [
+                                    contractAddressCurrent,
+                                    contractAddress5,
+                                    contractAddress4,
+                                    contractAddress3,
+                                    contractAddress2,
+                                    contractAddress1,
+                                ]
+                            );
+
+                            if (nextContract) {
+                                pastContractAddressRef!.current = nextContract;
+                                continuationTokenRef!.current = undefined;
+                            } else {
+                                continuationTokenRef!.current = 'finished processing';
+                            }
                         }
                     }
 
@@ -716,49 +796,136 @@ function App() {
                     throw 'this should not happen';
                 }
 
-                const transactionsWithDetails: EventTransaction[] = isContentSourceRpc ?
-                    await getTransactionDetailsRpc(transactions, contractAddress, allMethods, rpcClientRef.current!)
-                    :
-                    await getTransactionDetailsIndexerApi(transactions, indexerApiUrl);
+                const transactionsWithDetailsPromises = [];
 
-                let lastValidTransaction;
+                for (let index = 0; index < transactions.length; index++) {
+                    const transaction = transactions[index];
+
+                    if (cachedIgnoresRef.current[transaction.txHash]) {
+                        continue;
+                    } else if (cachedPostsRef.current[transaction.txHash]) {
+                        const cachedItem = cachedPostsRef.current[transaction.txHash];
+                        const item = {
+                            txHash: cachedItem.txHash,
+                            timestamp: cachedItem.timestamp,
+                            method: makePostMethod,
+                            blockHeight: transaction.blockHeight,
+                            cachedItem,
+                        };
+                        transactionsWithDetailsPromises.push(item);
+                    } else if (cachedTipsRef.current[transaction.txHash]) {
+                        const cachedItem = cachedTipsRef.current[transaction.txHash];
+                        const item = {
+                            txHash: cachedItem.txHash,
+                            timestamp: cachedItem.timestamp,
+                            method: sendTipMethod,
+                            blockHeight: transaction.blockHeight,
+                            cachedItem,
+                        };
+                        transactionsWithDetailsPromises.push(item);
+                    } else if (cachedMessagesRef.current[transaction.txHash]) {
+                        const cachedItem = cachedMessagesRef.current[transaction.txHash];
+                        const item = {
+                            txHash: cachedItem.txHash,
+                            timestamp: cachedItem.timestamp,
+                            method: sendMessageMethod,
+                            blockHeight: transaction.blockHeight,
+                            cachedItem,
+                        };
+                        transactionsWithDetailsPromises.push(item);
+                    } else if (isContentSourceRpc) {
+                        const promisedItem = rpcClientRef.current!('bcn_txReceipt', [transaction.txHash]).then(receipt => {
+                            const conditional = (receipt.error && (() => { throw 'rpc unavailable'; })()) ||
+                                receipt.result &&
+                                receipt.result.success === true &&
+                                receipt.result.contract === contractAddress.toLowerCase() &&
+                                allMethods.includes(receipt.result.method);
+                            if (!conditional) {
+                                return;
+                            }
+                            return {
+                                eventArgs: receipt.result.events?.[0]?.args,
+                                eventArgs2nd: receipt.result.events?.[1]?.args,
+                                method: receipt.result.method,
+                                txHash: transaction.txHash,
+                                timestamp: transaction.timestamp,
+                                blockHeight: transaction.blockHeight,
+                            };
+                        });
+                        transactionsWithDetailsPromises.push(promisedItem);
+                    } else {
+                        const promisedItem = getTxEventsWithIdenaIndexerApi(indexerApiUrl, transaction.txHash, 10).then(receipt => {
+                            const conditional = (receipt.error && (() => { throw 'indexer api unavailable'; })()) || receipt.result;
+                            if (!conditional) {
+                                return;
+                            }
+                            return {
+                                eventArgs: receipt.result?.[0]?.data,
+                                eventArgs2nd: receipt.result?.[1]?.data,
+                                method: receipt.result?.[0]?.eventName,
+                                txHash: transaction.txHash,
+                                timestamp: transaction.timestamp,
+                                blockHeight: transaction.blockHeight,
+                            };
+                        });
+                        transactionsWithDetailsPromises.push(promisedItem);
+                    }
+                }
+
+                const transactionsWithDetails: (EventTransaction | TransactionCached)[] = (await Promise.all(transactionsWithDetailsPromises)).filter(item => !!item);
 
                 const newLatestPosts: string[] = [];
 
-                const postersPromised: string[] = [];
                 const posterPromises = [];
                 const messagePromises = [];
                 const mediaPromises = [];
 
+                let transactionsAccepted: (EventTransaction | TransactionCached)[] = [];
+
                 for (let index = 0; index < transactionsWithDetails.length; index++) {
                     const transaction = transactionsWithDetails[index];
+                    const cachedTx = (transaction as TransactionCached).cachedItem;
 
                     if ([sendTipMethod].includes(transaction.method)) {
-                        const { postId, newTip, posterPromise, continued } = await processTip(transaction, rpcClientRef.current!, tipsRef, postersRef, postersPromised, findPostsWithRef, indexerApiUrlRef);
-                        
+
+                        const { newTip, continued } = cachedTx ? { newTip: (cachedTx as Tip) } : await processTip(transaction as EventTransaction, tipsRef);
+
                         if (continued) {
+                            if (continued === 'already-captured') {
+                                transactionsAccepted = [ ...transactionsAccepted, transaction ];
+                            } else {
+                                await cacheIgnore({ txHash: transaction.txHash, method: transaction.method, reason: 'non-compliance' });
+                            }
                             continue;
                         }
 
-                        const existingPostTips = postTipsRef.current[postId!];
+                        transactionsAccepted = [ ...transactionsAccepted, transaction ];
+
+                        const posterPromise = getPosterPromise(
+                            newTip!.tipper,
+                            postersRef,
+                            findPostsWithRef.current === 'indexer-api',
+                            rpcClientRef.current!,
+                            indexerApiUrlRef,
+                        );
+
+                        const existingPostTips = postTipsRef.current[newTip!.postId];
 
                         const updatedPostTips: PostTips = {
-                            postId: postId!,
+                            postId: newTip!.postId,
                             totalAmount: (existingPostTips?.totalAmount ?? 0) + newTip!.amount,
                             tips: isRecurseForward ? [ newTip!.txHash, ...(existingPostTips?.tips ?? []) ] : [ ...(existingPostTips?.tips ?? []), newTip!.txHash ],
                         };
 
                         tipsRef.current = { ...tipsRef.current, [newTip!.txHash]: newTip! };
-                        postTipsRef.current = { ...postTipsRef.current, [postId!]: updatedPostTips! };
+                        postTipsRef.current = { ...postTipsRef.current, [newTip!.postId]: updatedPostTips! };
 
                         posterPromise && posterPromises.push(posterPromise);
-
-                        lastValidTransaction = transaction;
 
                         // transient Post representation of a Tip
                         const newPost = {
                             postId: newTip!.txHash,
-                            replyToPostId: postId,
+                            replyToPostId: newTip!.postId,
                             timestamp: newTip!.timestamp,
                         } as Post;
 
@@ -772,54 +939,63 @@ function App() {
                         postLatestActivityRef.current = { ...postLatestActivityRef.current, ...newPostLatestActivity };
 
                         const profileActivity = { ...(profileActivityRef.current[newTip!.tipper] ?? defaultProfileActivity) };
-                        profileActivity.tips = isRecurseForward ? [`${postId}|${newTip!.txHash}`, ...profileActivity.tips] : [...profileActivity.tips, `${postId}|${newTip!.txHash}`];
+                        profileActivity.tips = isRecurseForward ? [`${newTip!.postId}|${newTip!.txHash}`, ...profileActivity.tips] : [...profileActivity.tips, `${newTip!.postId}|${newTip!.txHash}`];
                         profileActivityRef.current[newTip!.tipper] = profileActivity;
 
-                        if (postsRef.current[postId!]?.poster === postersAddress) {
-                            postActivityRef.current = [ ...postActivityRef.current, `${newTip!.timestamp}-${postId}|${newTip!.txHash}-tip` ];
+                        if (postsRef.current[newTip!.postId!]?.poster === postersAddress) {
+                            postActivityRef.current = [ ...postActivityRef.current, `${newTip!.timestamp}-${newTip!.postId}|${newTip!.txHash}-tip` ];
                         }
 
                         continue;
                     }
 
                     if ([sendMessageMethod].includes(transaction.method)) {
-
                         if (transaction.timestamp > breakingChanges.v12.timestamp) {
                             if (isRecurseForward) {
                                 latestMessagesForwardQueueRef.current = [ ...latestMessagesForwardQueueRef.current, transaction ];
                             } else {
                                 latestMessagesBackwardQueueRef.current = [ ...latestMessagesBackwardQueueRef.current, transaction ];
                             }
+                        } else {
+                            await cacheIgnore({ txHash: transaction.txHash, method: transaction.method, reason: 'non-compliance' });
                         }
 
-                        lastValidTransaction = transaction;
+                        transactionsAccepted = [ ...transactionsAccepted, transaction ];
 
                         continue;
                     }
 
                     const {
                         newPost,
-                        posterPromise,
-                        mediaPromise,
-                        messagePromise,
                         continued,
-                    } = await getNewPosterAndPost(
-                        transaction,
+                    } = cachedTx ? { newPost: (cachedTx as Post) } : await getNewPost(
+                        transaction as EventTransaction,
                         thisChannelId,
                         discussPrefix,
-                        rpcClientRef.current!,
                         postsRef,
-                        postersRef,
-                        postersPromised,
-                        findPostsWithRef,
-                        indexerApiUrlRef,
                     );
 
                     if (continued) {
+                        if (continued === 'already-captured') {
+                            transactionsAccepted = [ ...transactionsAccepted, transaction ];
+                        } else {
+                            await cacheIgnore({ txHash: transaction.txHash, method: transaction.method, reason: 'non-compliance' });
+                        }
                         continue;
                     }
 
-                    lastValidTransaction = transaction;
+                    transactionsAccepted = [ ...transactionsAccepted, transaction ];
+
+                    const messagePromise = newPost!.message && !newPost!.messageResolved && getMessage(newPost!.postId, newPost!.message, rpcClientRef.current!);
+                    const mediaPromise = newPost!.media && !newPost!.mediaResolved && getMedia(newPost!.postId, newPost!.media, rpcClientRef.current!);
+
+                    const posterPromise = getPosterPromise(
+                        newPost!.poster,
+                        postersRef,
+                        findPostsWithRef.current === 'indexer-api',
+                        rpcClientRef.current!,
+                        indexerApiUrlRef,
+                    );
 
                     posterPromise && posterPromises.push(posterPromise);
                     messagePromise && messagePromises.push(messagePromise);
@@ -938,7 +1114,7 @@ function App() {
                     if (newPost!.postLevel === 'Post' && !newPost!.isLike) {
                         profileActivity.posts = isRecurseForward ? [newPost!.postId, ...profileActivity.posts] : [...profileActivity.posts, newPost!.postId];
                     }
-                    if (newPost!.hasMedia) {
+                    if (newPost!.media) {
                         profileActivity.media = isRecurseForward ? [newPost!.postId, ...profileActivity.media] : [...profileActivity.media, newPost!.postId];
                     }
                     profileActivityRef.current[newPost!.poster] = profileActivity;
@@ -966,15 +1142,15 @@ function App() {
                     const updatedDeorphanedPostsArray = Object.keys(updatedDeorphanedPosts);
                     for (let index = 0; index < updatedDeorphanedPostsArray.length; index++) {
                         const post = updatedDeorphanedPosts[updatedDeorphanedPostsArray[index]];
-                        newPostActivities = [ ...newPostActivities, ...getPostActivities(post, postersAddress, postsRef) ];
+                        newPostActivities = post ? [ ...newPostActivities, ...getPostActivities(post, postersAddress, postsRef) ] : newPostActivities;
                     }
 
                     postActivityRef.current = [ ...postActivityRef.current, ...newPostActivities ];
                 }
 
-                await resolveNewPosters(posterPromises, postersRef);
-                await resolveNewMessages(messagePromises, postsRef);
-                await resolveNewMedia(mediaPromises, postsRef);
+                await Promise.all(posterPromises);
+                await resolveNewTextForPosts(messagePromises, postsRef);
+                await resolveNewMediaForPosts(mediaPromises, postsRef);
 
                 setLatestPosts((currentLatestPosts) => {
                     const latestPostsUpdated = isRecurseForward ? [...newLatestPosts!, ...currentLatestPosts] : [...currentLatestPosts, ...newLatestPosts!];
@@ -991,32 +1167,77 @@ function App() {
                     return latestPostsUpdated;
                 });
 
+                const lastValidTransaction = transactionsAccepted[transactionsAccepted.length - 1];
                 let lastBlockHeight;
 
                 if (isRecurseForward || isRecurseBackwardWithRpcOnly) {
-                    lastBlockHeight = pendingBlock!;
-                    partialPastBlockCapturedRef.current = 0;
+                    lastBlockHeight = cachedEndBlockHeight ?? pendingBlock!;
+                    partialPastBlockCapturedRef.current = { lastBlockHeight: 0, lastValidTxHash: '' };
                     setBlockCapturedRefState(lastBlockHeight);
                 }
 
                 if (isRecurseBackwardWithIndexerApi && lastValidTransaction) {
-                    lastBlockHeight = lastValidTransaction.blockHeight ?? (await getBlockHeightFromTxHash(lastValidTransaction.txHash, rpcClientRef.current!));
-                    partialPastBlockCapturedRef.current = lastBlockHeight;
+                    const { result: getTxResult, error: getTxError } = await getTxWithIdenaIndexerApi(indexerApiUrl, lastValidTransaction.txHash);
+
+                    if (!getTxError && getTxResult) {
+                        lastBlockHeight = getTxResult.blockHeight;
+                    } else {
+                        throw 'indexer api unavailable';
+                    }
+
+                    partialPastBlockCapturedRef.current = { lastBlockHeight, lastValidTxHash: lastValidTransaction.txHash };
                     setBlockCapturedRefState(lastBlockHeight);
                 }
 
-                if (!isRecurseForward && lastBlockHeight <= firstBlock) {
+                if (!isRecurseForward && lastBlockHeight) {
+                    let endBlock = lastBlockHeight;
+                    let filteredTransactionsAccepted = transactionsAccepted;
+                    let filteredTransactionsNextBlock: (EventTransaction | TransactionCached)[] = [];
+
+                    if (isRecurseBackwardWithIndexerApi && lastValidTransaction) {
+                        endBlock++;
+                        filteredTransactionsAccepted = filteredTransactionsAccepted.filter((transaction) => transaction.timestamp > lastValidTransaction.timestamp);
+                        const nextBlockTxsLength = transactionsAccepted.length - filteredTransactionsAccepted.length;
+                        filteredTransactionsNextBlock = nextBlockTxsLength ? transactionsAccepted.slice(-nextBlockTxsLength) : [];
+                    }
+
+                    const firstBlockCaptured = initialBlock - 1;
+                    if (endBlock <= firstBlockCaptured) {
+                        const filterFn = (tx: EventTransaction | TransactionCached) => `${tx.txHash}-${tx.timestamp}}`;
+                        const transactionTxHashArray = filteredTransactionsAccepted.map(filterFn);
+                        const nextBlockTransactionTxHashArray = filteredTransactionsNextBlock.map(filterFn);
+                        const indexerApiContinuationDetails = isRecurseBackwardWithIndexerApi ? { nextBlockTransactions: nextBlockTransactionTxHashArray, contract: pastContractAddressRef.current, continuationToken: continuationTokenRef.current } : undefined;
+                        await addBlocksCapturedRange(firstBlockCaptured, endBlock, transactionTxHashArray, indexerApiContinuationDetails);
+                    }
+                }
+
+                if (!isRecurseForward && lastBlockHeight && lastBlockHeight <= firstBlock) {
                     throw 'no more transactions';
                 }
 
                 if (isRecurseForward) {
+                    const transactionTxHashArray = transactionsAccepted.map((transaction) => `${transaction.txHash}-${transaction.timestamp}`);
+                    await addBlocksCapturedRange(pendingBlock!, pendingBlock! - 1, transactionTxHashArray);
                     (recurse as RecurseForward)();
                 } else {
                     (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
                 }
             } catch(error) {
                 console.error(error);
-                if (!isRecurseForward && error === 'no more transactions') {
+                if (error === 'no block') {
+                    if (isRecurseForward) {
+                        (recurse as RecurseForward)();
+                    } else {
+                        (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
+                    }
+                } else if (error === 'no transactions') {
+                    if (isRecurseForward) {
+                        await addBlocksCapturedRange(pendingBlock!, pendingBlock! - 1, []);
+                        (recurse as RecurseForward)();
+                    } else {
+                        (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
+                    }
+                } else if (!isRecurseForward && error === 'no more transactions') {
                     setNoMorePastBlocks(true);
                     setScanningPastBlocks(false);
                 } else if (error === 'rpc unavailable') {
@@ -1026,11 +1247,7 @@ function App() {
                     setScanningPastBlocks(false);
                     setIdenaIndexerApiUrlInvalid(true);
                 } else {
-                    if (isRecurseForward) {
-                        (recurse as RecurseForward)();
-                    } else {
-                        (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
-                    }
+                    setScanningPastBlocks(false);
                 }
             }
         };
@@ -1064,7 +1281,7 @@ function App() {
 
         let recurseBackwardIntervalId: NodeJS.Timeout | undefined;
 
-        if (initialBlock && nodeAvailable && (canUseIdenaApp || canUseRpc)) {
+        if (initialBlock && nodeAvailable && (canUseIdenaApp || canUseRpc) && messagesCacheLoaded) {
             (async function recurseBackwardMessages() {
                 if (nodeAvailableRef.current && (scanningPastBlocks || latestMessagesBackwardQueueRef.current.length)) {
                     const recurseDirection = 'backward';
@@ -1076,18 +1293,18 @@ function App() {
         } else {
             recurseBackwardIntervalId && clearInterval(recurseBackwardIntervalId);
         }
-    }, [initialBlock, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode, scanningPastBlocks]);
+    }, [initialBlock, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode, scanningPastBlocks, messagesCacheLoaded]);
 
     const messagesProcessorFactory = (
         recurseDirection: string,
         recurse: RecurseForwardMessages | RecurseBackwardMessages,
-        latestMessagesQueueRef: React.RefObject<EventTransaction[]>,
+        latestMessagesQueueRef: React.RefObject<(EventTransaction | TransactionCached)[]>,
     ) => {
+        const isRecurseForward = recurseDirection === 'forward';
+
         return async function messageProcessor() {
-            const isRecurseForward = recurseDirection === 'forward';
 
             try {
-                const postersPromised: string[] = [];
                 const posterPromises = [];
                 const messagePromises = [];
                 const mediaPromises = [];
@@ -1098,23 +1315,42 @@ function App() {
 
                 while (latestMessagesQueueRef.current.length) {
                     const firstMessage = latestMessagesQueueRef.current.shift();
+                    const cachedTx = (firstMessage as TransactionCached).cachedItem;
 
-                    const { newMessage, posterPromise, mediaPromise, messagePromise, continued } = await processMessage(
-                        firstMessage!,
+                    const { newMessage, continued } = cachedTx ? { newMessage: (cachedTx as Message) } : await processMessage(
+                        (firstMessage as EventTransaction),
                         encryptedPrivateKeyActual,
                         passwordyActual,
                         postersAddress,
                         messagesRef,
                         thisChannelId,
-                        postersRef,
-                        rpcClientRef,
-                        postersPromised,
-                        findPostsWithRef,
-                        indexerApiUrlRef,
                     );
 
                     if (continued) {
+                        if (continued === 'already-captured') {
+                            // transactionsAccepted.push(firstMessage);
+                        } else {
+                            await cacheIgnore({ txHash: firstMessage!.txHash, method: firstMessage!.method, reason: 'non-compliance' });
+                        }
                         continue;
+                    }
+
+                    const messagePromise = newMessage!.message && !newMessage!.messageResolved && getMessage(newMessage!.messageId, newMessage!.message, rpcClientRef.current!, newMessage!.textPassword);
+                    const mediaPromise = newMessage!.media && !newMessage!.mediaResolved && getMedia(newMessage!.messageId, newMessage!.media, rpcClientRef.current!, newMessage!.mediaPassword);
+
+                    const allParticipants = [ newMessage!.sender, ...newMessage!.participants ];
+
+                    for (let index = 0; index < allParticipants.length; index++) {
+                        const participant = allParticipants[index];
+
+                        const posterPromise = getPosterPromise(
+                            participant,
+                            postersRef,
+                            findPostsWithRef.current === 'indexer-api',
+                            rpcClientRef.current!,
+                            indexerApiUrlRef,
+                        );
+                        posterPromises.push(posterPromise);
                     }
 
                     const newReplyPosts: Record<string, string> = {};
@@ -1157,7 +1393,6 @@ function App() {
                         updatedMessages,
                     );
 
-                    posterPromise && posterPromises.push(posterPromise);
                     messagePromise && messagePromises.push(messagePromise);
                     mediaPromise && mediaPromises.push(mediaPromise);
 
@@ -1170,9 +1405,9 @@ function App() {
                     newMessages.push(newMessage);
                 }
 
-                await resolveNewPosters(posterPromises, postersRef);
-                await resolveNewMessages(messagePromises, null, messagesRef);
-                await resolveNewMedia(mediaPromises, null, messagesRef);
+                await Promise.all(posterPromises);
+                await resolveNewTextForMessages(messagePromises, postersAddress, encryptedPrivateKeyActual, passwordyActual, messagesRef);
+                await resolveNewMediaForMessages(mediaPromises, postersAddress, encryptedPrivateKeyActual, passwordyActual, messagesRef);
 
                 const conversationKeys: string[] = [];
 
@@ -1242,8 +1477,12 @@ function App() {
     }, [submittingPost, submittingLike, submittingTip, submittingMessage]);
 
     useEffect(() => {
-        setInputPostDisabled(!!submittingPost || !!submittingLike || !!submittingTip || !!submittingMessage || (makePostsWith === 'rpc' && viewOnlyNode) || postersAddressInvalid);
-    }, [submittingPost, submittingLike, submittingTip, submittingMessage, makePostsWith, viewOnlyNode, postersAddressInvalid]);
+        setSubmitting(!!submittingPost || !!submittingLike || !!submittingTip || !!submittingMessage);
+    }, [submittingPost, submittingLike, submittingTip, submittingMessage]);
+
+    useEffect(() => {
+        setInputPostDisabled((makePostsWith === 'rpc' && viewOnlyNode) || postersAddressInvalid);
+    }, [viewOnlyNode, postersAddressInvalid]);
 
     const setPostMediaAttachmentHandler = async (attachmentId: string, file: File, ipfsUrl?: string) => {
         if (!supportedImageTypes.includes(file.type)) {
@@ -1261,20 +1500,9 @@ function App() {
             return;
         }
 
-        try {
-            const imageDataUrl = await new Promise<string>((resolve, reject) => {
-                const fileReader = new FileReader();
-                fileReader.onload = () => resolve(fileReader.result as string);
-                fileReader.onerror = () => reject(new Error('Failed to read image file.'));
-                fileReader.readAsDataURL(file);
-            });
+        const newMedia = { file, ipfsUrl };
 
-            const newMedia = { dataUrl: imageDataUrl, file, ipfsUrl };
-
-            postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [attachmentId]: newMedia };
-        } catch {
-            alert('Failed to read media file.');
-        }
+        postMediaAttachmentsRef.current = { ...postMediaAttachmentsRef.current, [attachmentId]: newMedia };
     };
 
     const copyPostTxHandler = async (location: string, replyToPostId?: string, channelId?: string) => {
@@ -1293,7 +1521,7 @@ function App() {
             const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
             const postMediaAttachment = postMediaAttachmentsRef.current[`post-${location}`];
 
-            let { inputText, media, mediaType } = getTextAndMediaForPost(postTextareaElement, postMediaAttachment);
+            let { inputText, media, mediaType } = await getTextAndMediaForPost(postTextareaElement, postMediaAttachment);
 
             if (!inputText && !postMediaAttachment) {
                 alert('No text or media provided!');
@@ -1342,7 +1570,7 @@ function App() {
         const postTextareaElement = document.getElementById(`post-input-${location}`) as HTMLTextAreaElement;
         const postMediaAttachment = postMediaAttachmentsRef.current[`post-${location}`];
 
-        let { inputText, media, mediaType } = getTextAndMediaForPost(postTextareaElement, postMediaAttachment);
+        let { inputText, media, mediaType } = await getTextAndMediaForPost(postTextareaElement, postMediaAttachment);
 
         if (!inputText && !postMediaAttachment) {
             alert('No text or media provided!');
@@ -1436,7 +1664,7 @@ function App() {
             const messageTextareaElement = document.getElementById(`message-input-${location}`) as HTMLTextAreaElement;
             const postMediaAttachment = postMediaAttachmentsRef.current['message-' + location];
 
-            let { inputText, media, mediaType } = getTextAndMediaForPost(messageTextareaElement, postMediaAttachment);
+            let { inputText, media, mediaType } = await getTextAndMediaForPost(messageTextareaElement, postMediaAttachment);
 
             if (!inputText && !postMediaAttachment) {
                 alert('No text or media provided!');
@@ -1453,6 +1681,8 @@ function App() {
                 mediaType = [postMediaAttachment.file.type];
             }
 
+            const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+            const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
             const { message, rawMessageHash } = await encryptRecipientsMessage(
                 postersAddress,
                 recipients,
@@ -1461,11 +1691,8 @@ function App() {
                 media,
                 mediaType,
                 mediaPassword,
-                makePostsWith,
-                encryptedPrivateKeyFromNodeRef,
-                encryptedPrivateKey,
-                passwordFromNodeRef,
-                password,
+                encryptedPrivateKeyActual,
+                passwordyActual,
                 postersRef,
                 replyToMessageId,
             );
@@ -1504,7 +1731,7 @@ function App() {
         const messageTextareaElement = document.getElementById(`message-input-${location}`) as HTMLTextAreaElement;
         const postMediaAttachment = postMediaAttachmentsRef.current[`message-${location}`];
 
-        let { inputText, media, mediaType } = getTextAndMediaForPost(messageTextareaElement, postMediaAttachment);
+        let { inputText, media, mediaType } = await getTextAndMediaForPost(messageTextareaElement, postMediaAttachment);
 
         if (!inputText && !postMediaAttachment) {
             alert('No text or media provided!');
@@ -1571,6 +1798,8 @@ function App() {
             mediaType = [postMediaAttachment.file.type];
         }
 
+        const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+        const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
         const { message, rawMessageHash } = await encryptRecipientsMessage(
             postersAddress,
             recipients,
@@ -1579,11 +1808,8 @@ function App() {
             media,
             mediaType,
             mediaPassword,
-            makePostsWith,
-            encryptedPrivateKeyFromNodeRef,
-            encryptedPrivateKey,
-            passwordFromNodeRef,
-            password,
+            encryptedPrivateKeyActual,
+            passwordyActual,
             postersRef,
             replyToMessageId,
         );
@@ -1610,6 +1836,8 @@ function App() {
         const textPassword = '';
         const mediaPassword = '';
 
+        const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+        const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
         const { message, rawMessageHash } = await encryptRecipientsMessage(
             postersAddress,
             recipients,
@@ -1618,11 +1846,8 @@ function App() {
             media,
             mediaType,
             mediaPassword,
-            makePostsWith,
-            encryptedPrivateKeyFromNodeRef,
-            encryptedPrivateKey,
-            passwordFromNodeRef,
-            password,
+            encryptedPrivateKeyActual,
+            passwordyActual,
             postersRef,
             replyToMessageId,
         );
@@ -1648,7 +1873,7 @@ function App() {
 
         const isBreakingChangeDisabled = tipToPost.timestamp <= breakingChanges.v12.timestamp;
 
-        if (inputPostDisabled || isBreakingChangeDisabled) {
+        if (inputPostDisabled || submitting || isBreakingChangeDisabled) {
             return;
         }
 
@@ -1683,7 +1908,7 @@ function App() {
             }
         }
 
-        if (inputPostDisabled) {
+        if (inputPostDisabled || submitting) {
             return;
         }
 
@@ -1703,7 +1928,7 @@ function App() {
 
         const isBreakingChangeDisabled = replyToPost && replyToPost.timestamp <= breakingChanges.v12.timestamp;
 
-        if (inputPostDisabled || isBreakingChangeDisabled) {
+        if (inputPostDisabled || submitting || isBreakingChangeDisabled) {
             return;
         }
 
@@ -1725,9 +1950,9 @@ function App() {
         setModalOpen('rpcSendMessage');
     };
 
-    const handleExpandImageModal = (e: MouseEventLocal, dataUrl: string, cid?: string) => {
+    const handleExpandImageModal = (e: MouseEventLocal, image: File, cid?: string) => {
         e.stopPropagation();
-        modalExpandImageRef.current = { dataUrl, cid };
+        modalExpandImageRef.current = { image, cid };
         setModalOpen('expandImage');
     };
 
@@ -1843,6 +2068,7 @@ function App() {
                         messagePrefix,
                         SET_NEW_POSTS_ADDED_DELAY,
                         inputPostDisabled,
+                        submitting,
                         copyPostTxHandler,
                         submitPostHandler,
                         submitLikeHandler,
@@ -1948,8 +2174,8 @@ function App() {
                     onRequestClose={() => setModalOpen('')}
                     style={customModalStyles}
                 >
-                    {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} closeModal={() => setModalOpen('')} />}
-                    {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'addMedia' && <ModalAddMediaComponent modalAddMediaRef={modalAddMediaRef} addMediaHandler={addMediaHandler} rpcClient={rpcClientRef.current!} postersAddress={postersAddress} makePostsWith={makePostsWith} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'rpcMakePost' && <ModalRpcMakePostComponent modalRpcMakePostRef={modalRpcMakePostRef} submitPostHandler={submitPostHandler} closeModal={() => setModalOpen('')} />}

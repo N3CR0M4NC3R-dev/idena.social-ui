@@ -1,6 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useOutletContext } from "react-router";
 import { defaultSettings } from "./App";
+import { clearMessagesCache } from "./logic/messagesStore";
+import { clearPostersCache } from "./logic/postersStore";
+import { clearPostsCache } from "./logic/postsStore";
+import { clearTipsCache } from "./logic/tipsStore";
+import { clearIgnoresCache } from "./logic/ignoreStore";
+import { clearBlocksCapturedRange } from "./logic/blocksCapturedStore";
 
 type SettingsProps = {
     inputNodeApplied: boolean,
@@ -81,6 +87,8 @@ function Settings() {
         setIndexerApiUrl,
     } = useOutletContext() as SettingsProps;
 
+    const initNodeUrlRef = useRef({ nodeUrl: '', nodeKey: ''});
+
     const onChangeSaveEncryptedKeyHandler = (newSaveEncryptedKey: boolean) => {
         setSaveEncryptedKey(newSaveEncryptedKey);
         localStorage.setItem('saveEncryptedKey', `${newSaveEncryptedKey}`);
@@ -99,9 +107,18 @@ function Settings() {
 
     useEffect(() => {
         setInputCredentialsApplied(true);
+        initNodeUrlRef.current.nodeUrl = nodeUrl;
+        initNodeUrlRef.current.nodeKey = nodeKey;
     }, []);
 
-    const handleRestoreDefaults = () => {
+    const setInputNodeAppliedLocal = (value: boolean) => {
+        setInputNodeApplied(value);
+        if (value && (nodeUrl !== initNodeUrlRef.current.nodeUrl || nodeKey !== initNodeUrlRef.current.nodeKey)) {
+            clearBlocksCapturedRange().then(() => navigate(0));
+        }
+    }
+
+    const handleRestoreDefaultSettings = () => {
         const userConfirmed = confirm('Are you sure you want to restore default settings?');
 
         if (userConfirmed) {
@@ -127,6 +144,19 @@ function Settings() {
         }
     };
 
+    const handleClearCachedContent = () => {
+        const userConfirmed = confirm('Are you sure you want to clear the cached content?');
+
+        if (userConfirmed) {
+            clearMessagesCache();
+            clearPostersCache();
+            clearPostsCache();
+            clearTipsCache();
+            clearIgnoresCache();
+            clearBlocksCapturedRange();
+        }
+    };
+
     return (<>
         <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
         <div className="mb-4 text-[14px]">
@@ -142,7 +172,7 @@ function Settings() {
                 {!nodeAvailable && <p className="ml-14 text-[11px] text-red-400">Node Unavailable. Please try again.</p>}
             </div>
             <div className="flex flex-row">
-                <button className={`h-7 w-16 ml-14 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeApplied(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
+                <button className={`h-7 w-16 ml-14 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeAppliedLocal(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
                 {!inputNodeApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
             </div>
         </div>
@@ -169,7 +199,7 @@ function Settings() {
                     </div>
                 </div>
                 <div className="flex flex-col ml-5 text-[14px]">
-                    <p className="mb-1">Encrypted private key:</p>
+                    <p className="mb-1">Encrypted private key: <span className="text-[12px]">(Required for messaging functionality)</span></p>
                     <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputCredentialsApplied} value={encryptedPrivateKey} onChange={e => setEncryptedPrivateKey(e.target.value)} />
                     <p className="mb-1">Password:</p>
                     <input type="password" className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputCredentialsApplied} value={password} onChange={e => setPassword(e.target.value)} />
@@ -249,7 +279,10 @@ function Settings() {
         </div>
         <hr className="mb-3 text-gray-500" />
         <div className="mb-6">
-            <button className="h-9 w-36 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" onClick={() => handleRestoreDefaults()}>Restore Defaults</button>
+            <div className="flex flex-row gap-3 text-[15px]">
+                <button className="h-9 w-45 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" onClick={() => handleRestoreDefaultSettings()}>Restore Default Settings</button>
+                <button className="h-9 w-45 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" onClick={() => handleClearCachedContent()}>Clear Cached Content</button>
+            </div>
         </div>
     </>);
 }

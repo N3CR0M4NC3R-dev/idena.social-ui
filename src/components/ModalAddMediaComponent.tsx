@@ -32,19 +32,15 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
             return;
         }
 
-        const { image, mediaType, blob } = await getMedia('postId', ipfsUrl, rpcClient);
+        const { image } = await getMedia('postId', ipfsUrl, rpcClient);
 
-        if (!image || image.includes('error-loading-media.png')) {
+        if (!image || image.name === 'error-loading-media.png') {
             alert('Image cannot be found at IPFS url.');
             return;
         }
 
-        const file = new File([blob!], 'preview', { type: mediaType });
-
-        if (file) {
-            await addMediaHandler(attachmentId, file, ipfsUrl);
-            closeModal();
-        }
+        await addMediaHandler(attachmentId, image, ipfsUrl);
+        closeModal();
     };
 
     const storeToIpfsHandler = async (e: MouseEventLocal) => {

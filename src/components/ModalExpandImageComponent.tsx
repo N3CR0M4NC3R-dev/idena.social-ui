@@ -1,5 +1,7 @@
+import { useObjectUrl } from '../logic/objectUrls';
+
 type ModalExpandImageComponentProps = {
-    modalExpandImageRef: React.RefObject<{ dataUrl?: string, cid?: string} | undefined>,
+    modalExpandImageRef: React.RefObject<{ image?: File, cid?: string} | undefined>,
 };
 
 function ModalExpandImageComponent(props: ModalExpandImageComponentProps) {
@@ -8,12 +10,14 @@ function ModalExpandImageComponent(props: ModalExpandImageComponentProps) {
         modalExpandImageRef,
     } = props;
 
-    const { dataUrl, cid } = modalExpandImageRef.current ?? {};
+    const { image, cid } = modalExpandImageRef.current ?? {};
+
+    const objectUrl = useObjectUrl(image);
 
     return (<>
         <div className="px-3">
-            <a href={cid ? `https://ipfs.idena.io/ipfs/${cid}` : dataUrl} target="_blank" rel="noopener noreferrer">
-                <img className="max-h-[95vh] rounded-sm" src={dataUrl} />
+            <a href={cid ? `https://ipfs.idena.io/ipfs/${cid}` : objectUrl} target="_blank" rel="noopener noreferrer">
+                <img className="max-h-[95vh] rounded-sm" src={objectUrl} />
             </a>
         </div>
     </>);

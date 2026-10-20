@@ -1,7 +1,8 @@
 import type { MouseEventLocal } from "../App.exports";
-import { getDisplayAddressVeryShort } from "../logic/utils";
+import { getDisplayAddressVeryShort, getProfilePic } from "../logic/utils";
 import type { Poster } from "../logic/asyncUtils";
 import { useNavigate } from "react-router";
+import ObjectUrlImageComponent from "./ObjectUrlImageComponent";
 
 type GroupConversationHeaderComponentProps = {
     conversationPartners: Poster[],
@@ -29,7 +30,7 @@ function GroupConversationHeaderComponent(props: GroupConversationHeaderComponen
                 {conversationPartners.map(conversationPartner => <>
                     <div className="w-15 flex-none flex flex-col">
                         <div className="h-17 flex-none -mt-3">
-                            <img src={`https://robohash.org/${conversationPartner.address}?set=set1`} />
+                            <ObjectUrlImageComponent file={getProfilePic(conversationPartner)} />
                         </div>
                         <div className="mb-2 text-center">
                             <p className="text-[10px] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${conversationPartner.address}`)}>{getDisplayAddressVeryShort(conversationPartner.address)}</p>

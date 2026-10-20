@@ -1,8 +1,9 @@
 import { Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router";
-import { getPoster, getPosterWithIndexerApi, type Post, type Poster, type PostTips, type Tip } from "./logic/asyncUtils";
-import { getDisplayAddress, getIdentityStatus } from "./logic/utils";
+import { type Post, type Poster, type PostTips, type Tip, getPosterPromise } from "./logic/asyncUtils";
+import { getDisplayAddress, getIdentityStatus, getProfilePic } from "./logic/utils";
 import { type BrowserStateHistorySettings, type Conversation, type PostMediaAttachment, type ProfileActivity } from "./App.exports";
 import LdsSpinnerComponent from "./components/LdsSpinnerComponent";
+import ObjectUrlImageComponent from "./components/ObjectUrlImageComponent";
 import messagesWhiteSvg from './assets/message-square-chat-white.svg';
 import { keccak256 } from "js-sha3";
 
@@ -18,6 +19,7 @@ type AddressProps = {
     discussPrefix: string,
     SET_NEW_POSTS_ADDED_DELAY: number,
     inputPostDisabled: boolean,
+    submitting: boolean,
     copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
     submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
@@ -31,7 +33,7 @@ type AddressProps = {
     handleOpenSendTipModal: (e: MouseEventLocal, location: string, tipToPost: Post) => void,
     handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
     handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, dataUrl: string, cid?: string) => void,
+    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
     postTipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
@@ -61,6 +63,7 @@ function Profile() {
         submittingTip,
         SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
+        submitting,
         copyPostTxHandler,
         submitPostHandler,
         submitLikeHandler,
@@ -85,10 +88,13 @@ function Profile() {
 
     const poster = postersRef.current[address!] ?? {};
 
-    if (!poster.address) {
-        (findPostsWithRef.current === 'rpc' ? getPoster(rpcClientRef.current!, address!, true) : getPosterWithIndexerApi(indexerApiUrlRef.current, address!))
-            .then((result) => result && (postersRef.current[address!] = result));
-    }
+    getPosterPromise(
+        address!,
+        postersRef,
+        findPostsWithRef.current === 'indexer-api',
+        rpcClientRef.current!,
+        indexerApiUrlRef,
+    );
 
     const posterDisplayAddress = poster.address ? getDisplayAddress(poster.address) : '';
 
@@ -124,7 +130,7 @@ function Profile() {
         {poster.address && <>
             <div className="flex flex-row p-3">
                 <div className="w-25 flex justify-end">
-                    <div className="-mt-1"><img className="w-27" src={`https://robohash.org/${poster.address}?set=set1`} /></div>
+                    <div className="-mt-1"><ObjectUrlImageComponent className="w-27" file={getProfilePic(poster)} /></div>
                 </div>
                 <div className="w-55 overflow-hidden">
                     <div className="flex flex-col">
@@ -152,11 +158,13 @@ function Profile() {
                     latestPosts,
                     latestActivity,
                     postsRef,
+                    postersRef,
                     replyPostsTreeRef,
                     deOrphanedReplyPostsTreeRef,
                     discussPrefix,
                     SET_NEW_POSTS_ADDED_DELAY,
                     inputPostDisabled,
+                    submitting,
                     copyPostTxHandler,
                     submitPostHandler,
                     submitLikeHandler,

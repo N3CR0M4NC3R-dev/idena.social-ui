@@ -1,12 +1,14 @@
 import { useNavigate } from "react-router";
 import type { MouseEventLocal } from "../App.exports";
 import { getDisplayAddress, getIdentityStatus } from "../logic/utils";
+import ObjectUrlImageComponent from "./ObjectUrlImageComponent";
 
 type PosterHeaderComponentProps = {
     address: string,
     age: number,
     state: string,
     stake: string | number,
+    pic?: File,
 };
 
 function PosterHeaderComponent(props: PosterHeaderComponentProps) {
@@ -17,6 +19,7 @@ function PosterHeaderComponent(props: PosterHeaderComponentProps) {
         age,
         state,
         stake,
+        pic,
     } = props;
 
     const handleClickAddress = (e: MouseEventLocal, to: string) => {
@@ -30,7 +33,7 @@ function PosterHeaderComponent(props: PosterHeaderComponentProps) {
         <div className="flex flex-row">
             <div className="w-15 flex-none flex flex-col">
                 <div className="h-17 flex-none -mt-3">
-                    <img src={`https://robohash.org/${address}?set=set1`} />
+                    <ObjectUrlImageComponent file={pic} />
                 </div>
                 <div className="flex-1"></div>
             </div>

@@ -1,6 +1,6 @@
 {
 	"name": "idena.social-ui",
-	"version": "12.9.5",
+	"version": "13.0.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
@@ -16,6 +16,7 @@
 		"bn.js": "^5.2.2",
 		"decimal.js": "^10.6.0",
 		"eciesjs": "^0.5.0",
+		"idb": "^8.0.3",
 		"idena-approved-ads": "^1.2.0",
 		"idena-sdk-js-lite": "^0.3.0",
 		"image-type": "^6.1.0",
