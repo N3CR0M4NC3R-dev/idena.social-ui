@@ -118,6 +118,16 @@ function Settings() {
         }
     }
 
+    const setInputPostersAddressAppliedLocal = (value: boolean) => {
+        setInputPostersAddressApplied(value);
+
+        if (value) {
+            onChangeSaveEncryptedKeyHandler(false);
+            onChangeSavePasswordHandler(false);
+            clearBlocksCapturedRange().then(() => navigate(0));
+        }
+    }
+
     const handleRestoreDefaultSettings = () => {
         const userConfirmed = confirm('Are you sure you want to restore default settings?');
 
@@ -194,7 +204,7 @@ function Settings() {
                     <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
                     {postersAddressInvalid && <p className="text-[11px] text-red-400">Invalid address. (Posting, liking, tipping is disabled).</p>}
                     <div className="flex flex-row">
-                        <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressApplied(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
+                        <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressAppliedLocal(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
                         {!inputPostersAddressApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
                     </div>
                 </div>
