@@ -1,19 +1,24 @@
 import { useState, useEffect } from 'react';
-import topUpSvg from '../assets/top-up-direction-move.svg';
-import topUpSvgWhite from '../assets/top-up-direction-move-white.svg';
+import { ArrowUpIcon } from './icons';
 
 type ScrollToTopButtonComponentProps = {
-    width?: string,
+    variant?: 'round' | 'fab',
+    className?: string,
+};
+
+const variantClassNames = {
+    round: 'flex size-11 items-center justify-center rounded-full border border-line bg-canvas cursor-pointer hover:bg-ink/10',
+    fab: 'btn-accent size-14 opacity-75 hover:opacity-100 shadow-[0_0_15px_color-mix(in_srgb,var(--color-ink)_20%,transparent),0_0_3px_1px_color-mix(in_srgb,var(--color-ink)_15%,transparent)]',
 };
 
 function ScrollToTopButtonComponent(props: ScrollToTopButtonComponentProps) {
 
     const {
-        width,
+        variant = 'round',
+        className,
     } = props;
 
     const [isVisible, setIsVisible] = useState(false);
-    const [imgSrc, setImgSrc] = useState(topUpSvg);
 
     useEffect(() => {
         const toggleVisibility = () => {
@@ -31,19 +36,19 @@ function ScrollToTopButtonComponent(props: ScrollToTopButtonComponentProps) {
 
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
-
-        setImgSrc(topUpSvg);
     };
 
     return (
-        <img
+        <button
             id="scrollToTopButton"
-            src={imgSrc}
-            className={`m-2 inline-block hover:cursor-pointer ${width ?? 'w-20'} ${!isVisible ? 'invisible' : ''}`}
+            type="button"
+            aria-label="Scroll to top"
+            title="Scroll to top"
+            className={`${variantClassNames[variant]} ${className ?? ''} ${!isVisible ? 'invisible' : ''}`}
             onClick={() => scrollToTop()}
-            onMouseEnter={() => setImgSrc(topUpSvgWhite)}
-            onMouseLeave={() => setImgSrc(topUpSvg)}
-        />
+        >
+            <ArrowUpIcon className={variant === 'fab' ? 'size-6' : 'size-5'} />
+        </button>
     );
 };
 

@@ -1,6 +1,6 @@
 import { type Post, type Poster, type PostTips } from './logic/asyncUtils';
 import { useOutletContext } from 'react-router';
-import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
+import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity, defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
 
@@ -68,7 +68,7 @@ function ProfileTips() {
 
     return (<>
         <ul>
-            {profileActivityRef.current[address].tips.map((tipPostIdTxHash: string) => {
+            {(profileActivityRef.current[address] ?? defaultProfileActivity).tips.map((tipPostIdTxHash: string) => {
                 const [tipPostId, txHash] = tipPostIdTxHash.split('|');
                 const post = postsRef.current[tipPostId];
 

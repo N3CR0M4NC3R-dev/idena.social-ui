@@ -16,6 +16,10 @@ function ObjectUrlImageComponent(props: ObjectUrlImageComponentProps) {
 
     const objectUrl = useObjectUrl(file);
 
+    if (!objectUrl) {
+        return <span className={className} onClick={onClick} aria-hidden="true" />;
+    }
+
     return (
         <img className={className} src={objectUrl} onClick={onClick} />
     );

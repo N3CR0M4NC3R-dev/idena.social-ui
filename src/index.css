@@ -1,8 +1,159 @@
 @import "tailwindcss";
-@import "./assets/lds-spinner.css";
 
-body {
-    background-color: rgb(28 25 23); /* Tailwind bg-stone-900 */
-    color: rgb(255, 255, 255);
-    font-family: 'Tahoma';
+@theme {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    --color-canvas: #ffffff;
+    --color-ink: #14171a;
+    --color-ink-muted: #657786;
+    --color-line: #e6ecf0;
+    --color-line-strong: #aab8c2;
+    --color-surface: #f5f8fa;
+    --color-surface-hover: #ebeef0;
+    --color-field: #e6ecf0;
+    --color-accent: #1da1f2;
+    --color-accent-hover: #1a91da;
+    --color-like: #e0245e;
+    --color-tip: #17bf63;
+    --color-danger: #e0245e;
+    --color-btn: #1da1f2;
+    --color-btn-hover: #1a91da;
+    --color-btn-ink: #ffffff;
+}
+
+@layer base {
+    html {
+        color-scheme: light;
+    }
+
+    body {
+        background-color: var(--color-canvas);
+        color: var(--color-ink);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    ::selection {
+        background-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    }
+}
+
+@utility btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--color-btn);
+    color: var(--color-btn-ink);
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        background-color: var(--color-btn-hover);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+}
+
+@utility btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-accent);
+    background-color: transparent;
+    color: var(--color-accent);
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+}
+
+@utility btn-accent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--color-accent);
+    color: #ffffff;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        background-color: var(--color-accent-hover);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+}
+
+@utility form-field {
+    width: 100%;
+    border-radius: 0.375rem;
+    border: 1px solid var(--color-line);
+    background-color: transparent;
+    padding: 0.5rem 0.75rem;
+    color: var(--color-ink);
+    outline: none;
+    transition: border-color 150ms, box-shadow 150ms;
+
+    &::placeholder {
+        color: var(--color-ink-muted);
+    }
+
+    &:focus {
+        border-color: var(--color-accent);
+        box-shadow: 0 0 0 1px var(--color-accent);
+    }
+
+    &:disabled {
+        color: var(--color-ink-muted);
+        cursor: default;
+    }
+}
+
+@utility scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+
+    &::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: var(--color-line-strong);
+        border-radius: 9999px;
+    }
+}
+
+@utility no-scrollbar {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
 }

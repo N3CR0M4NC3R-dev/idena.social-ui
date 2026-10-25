@@ -899,7 +899,7 @@ export const processMessage = async (
     const myPrivateKey = await decryptAESGCM(encryptedPrivateKey, keyData);
     const myPrivateKeyBytes = hexToUint8Array(myPrivateKey);
 
-    const iAmSender = sender === postersAddress;
+    const iAmSender = sender === postersAddress.toLowerCase();
 
     let messageDecoded: string | undefined;
     const decryptSuccesses: number[] = [];

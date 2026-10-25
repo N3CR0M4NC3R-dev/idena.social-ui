@@ -7,6 +7,7 @@ import { clearPostsCache } from "./logic/postsStore";
 import { clearTipsCache } from "./logic/tipsStore";
 import { clearIgnoresCache } from "./logic/ignoreStore";
 import { clearBlocksCapturedRange } from "./logic/blocksCapturedStore";
+import PageHeaderComponent from "./components/PageHeaderComponent";
 
 type SettingsProps = {
     inputNodeApplied: boolean,
@@ -44,7 +45,18 @@ type SettingsProps = {
     setInputCredentialsApplied: React.Dispatch<React.SetStateAction<boolean>>,
     setMakePostsWith: React.Dispatch<React.SetStateAction<string>>,
     setIndexerApiUrl: React.Dispatch<React.SetStateAction<string>>,
+    postersAddress: string,
 };
+
+const radioClassName = 'col-start-1 row-start-1 cursor-pointer appearance-none rounded-full border-2 border-line-strong bg-transparent checked:border-accent checked:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent forced-colors:appearance-auto';
+
+function RadioCheckMark() {
+    return (
+        <svg viewBox="0 0 14 14" fill="none" aria-hidden="true" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white opacity-0 group-has-checked:opacity-100">
+            <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
 
 function Settings() {
     const navigate = useNavigate();
@@ -85,6 +97,7 @@ function Settings() {
         setInputCredentialsApplied,
         setMakePostsWith,
         setIndexerApiUrl,
+        postersAddress,
     } = useOutletContext() as SettingsProps;
 
     const initNodeUrlRef = useRef({ nodeUrl: '', nodeKey: ''});
@@ -101,10 +114,6 @@ function Settings() {
         localStorage.setItem('password', newSavePassword ? password : '');
     };
 
-    const handleGoBack = () => {
-        navigate(-1);
-    };
-
     useEffect(() => {
         setInputCredentialsApplied(true);
         initNodeUrlRef.current.nodeUrl = nodeUrl;
@@ -116,17 +125,21 @@ function Settings() {
         if (value && (nodeUrl !== initNodeUrlRef.current.nodeUrl || nodeKey !== initNodeUrlRef.current.nodeKey)) {
             clearBlocksCapturedRange().then(() => navigate(0));
         }
-    }
+    };
 
     const setInputPostersAddressAppliedLocal = (value: boolean) => {
         setInputPostersAddressApplied(value);
 
         if (value) {
+            if (inputPostersAddress === postersAddress) {
+                return;
+            }
+
             onChangeSaveEncryptedKeyHandler(false);
             onChangeSavePasswordHandler(false);
             clearBlocksCapturedRange().then(() => navigate(0));
         }
-    }
+    };
 
     const handleRestoreDefaultSettings = () => {
         const userConfirmed = confirm('Are you sure you want to restore default settings?');
@@ -168,132 +181,151 @@ function Settings() {
     };
 
     return (<>
-        <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
-        <div className="mb-4 text-[14px]">
-            <div className="flex flex-col">
-                <div className="flex flex-row mb-2 gap-1">
-                    <p className="w-13 flex-none text-right">Rpc url:</p>
-                    <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={nodeUrl} onChange={e => setNodeUrl(e.target.value)} />
-                </div>
-                <div className="flex flex-row mb-1 gap-1">
-                    <p className="w-13 flex-none text-right">Api key:</p>
-                    <input className="flex-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputNodeApplied} value={nodeKey} onChange={e => setNodeKey(e.target.value)} />
-                </div>
-                {!nodeAvailable && <p className="ml-14 text-[11px] text-red-400">Node Unavailable. Please try again.</p>}
+        <PageHeaderComponent title="Settings" />
+        <section className="flex flex-col gap-3 border-b border-line px-4 py-4">
+            <h3 className="text-xl/6 font-extrabold">Node</h3>
+            <label className="flex flex-col gap-1">
+                <span className="text-[13px] text-ink-muted">RPC URL</span>
+                <input className="form-field text-[15px]" disabled={inputNodeApplied} value={nodeUrl} onChange={e => setNodeUrl(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1">
+                <span className="text-[13px] text-ink-muted">API key</span>
+                <input className="form-field text-[15px]" disabled={inputNodeApplied} value={nodeKey} onChange={e => setNodeKey(e.target.value)} />
+            </label>
+            {!nodeAvailable && <p className="text-[13px] text-danger">Node Unavailable. Please try again.</p>}
+            <div className="flex flex-row items-center gap-3">
+                <button type="button" className={`${inputNodeApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputNodeAppliedLocal(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply'}</button>
+                {!inputNodeApplied && <p className="text-[13px] text-ink-muted">Apply changes to take effect</p>}
             </div>
-            <div className="flex flex-row">
-                <button className={`h-7 w-16 ml-14 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputNodeApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputNodeAppliedLocal(!inputNodeApplied)}>{inputNodeApplied ? 'Change' : 'Apply!'}</button>
-                {!inputNodeApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
-            </div>
-        </div>
-        <hr className="mb-3 text-gray-500" />
-        <div className="flex flex-col mb-6">
-            <p>Make posts with:</p>
-            <div className="flex flex-row gap-2">
-                <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} />
-                <label htmlFor="useRpc" className="flex-none text-right">RPC</label>
-            </div>
-            {makePostsWith === 'rpc' && viewOnlyNode && <p className="ml-4.5 text-[11px] text-red-400">Your RPC is View-Only. Switch to: Idena Web App for making posts. (Posting, liking, tipping is disabled)</p>}
-            <div className="flex flex-row gap-2">
-                <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} />
-                <label htmlFor="notUseRpc" className="flex-none text-right">Idena Web App <span className="text-[12px]">(No account? Get one at <a className="text-blue-400 hover:underline" href="https://app.idena.io" target="_blank">app.idena.io</a>)</span></label>
-            </div>
-            {makePostsWith === 'idena-app' && (<>
-                <div className="mb-4 flex flex-col ml-5 text-[14px]">
-                    <p className="mb-1">Your Idena Address:</p>
-                    <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
-                    {postersAddressInvalid && <p className="text-[11px] text-red-400">Invalid address. (Posting, liking, tipping is disabled).</p>}
-                    <div className="flex flex-row">
-                        <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputPostersAddressApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputPostersAddressAppliedLocal(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
-                        {!inputPostersAddressApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
+        </section>
+        <section className="flex flex-col gap-3 border-b border-line px-4 py-4">
+            <h3 className="text-xl/6 font-extrabold">Make posts with</h3>
+            <div className="flex flex-col gap-1">
+                <div className="flex flex-row items-center gap-3 py-1">
+                    <div className="group grid size-5 flex-none grid-cols-1">
+                        <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} className={radioClassName} />
+                        <RadioCheckMark />
                     </div>
+                    <label htmlFor="useRpc" className="cursor-pointer text-[15px]/5">RPC</label>
                 </div>
-                <div className="flex flex-col ml-5 text-[14px]">
-                    <p className="mb-1">Encrypted private key: <span className="text-[12px]">(Required for messaging functionality)</span></p>
-                    <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputCredentialsApplied} value={encryptedPrivateKey} onChange={e => setEncryptedPrivateKey(e.target.value)} />
-                    <p className="mb-1">Password:</p>
-                    <input type="password" className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputCredentialsApplied} value={password} onChange={e => setPassword(e.target.value)} />
-                    <div className="flex flex-row">
-                        <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputCredentialsApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputCredentialsApplied(!inputCredentialsApplied)}>{inputCredentialsApplied ? 'Change' : 'Apply'}</button>
-                        {!inputCredentialsApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
+                {makePostsWith === 'rpc' && viewOnlyNode && <p className="pl-8 text-[13px] text-danger">Your RPC is View-Only. Switch to: Idena Web App for making posts. (Posting, liking, tipping is disabled)</p>}
+                <div className="flex flex-row items-start gap-3 py-1">
+                    <div className="group grid size-5 flex-none grid-cols-1">
+                        <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} className={radioClassName} />
+                        <RadioCheckMark />
                     </div>
-                    {credentialsInvalid && inputCredentialsApplied && <p className="mt-1 text-[11px] text-red-400">Invalid credentials: {credentialsInvalid}. (Messaging is disabled)</p>}
-                    <div className="mt-2 flex flex-row gap-2 items-center">
-                        <div className="group grid size-4 grid-cols-1">
-                            <input
-                                id="saveEncryptedKey"
-                                type="checkbox"
-                                name="saveEncryptedKey"
-                                checked={saveEncryptedKey}
-                                aria-describedby="comments-description"
-                                className="col-start-1 row-start-1 appearance-none rounded-sm border border-white/10 bg-white/5 checked:border-blue-500 checked:bg-blue-500 indeterminate:border-blue-500 indeterminate:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-white/5 disabled:bg-white/10 disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                                onChange={() => onChangeSaveEncryptedKeyHandler(!saveEncryptedKey)}
-                            />
-                            <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25">
-                                <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-checked:opacity-100" />
-                                <path d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
-                            </svg>
-                        </div>
-                        <div className="flex-1">
-                            <label htmlFor="saveEncryptedKey">Save the encrypted key in browser localStorage</label>
+                    <label htmlFor="notUseRpc" className="flex cursor-pointer flex-col text-[15px]/5">
+                        <span>Idena Web App</span>
+                        <span className="text-[13px] text-ink-muted">No account? Get one at <a className="text-accent hover:underline" href="https://app.idena.io" target="_blank">app.idena.io</a></span>
+                    </label>
+                </div>
+            </div>
+            {makePostsWith === 'idena-app' && (
+                <div className="flex flex-col gap-6 sm:pl-8">
+                    <div className="flex flex-col gap-3">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[13px] text-ink-muted">Your Idena address</span>
+                            <input className="form-field text-[12px] sm:text-[15px]" disabled={inputPostersAddressApplied} value={inputPostersAddress} onChange={e => setInputPostersAddress(e.target.value)} />
+                        </label>
+                        {postersAddressInvalid && <p className="text-[13px] text-danger">Invalid address. (Posting, liking, tipping is disabled).</p>}
+                        <div className="flex flex-row items-center gap-3">
+                            <button type="button" className={`${inputPostersAddressApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputPostersAddressAppliedLocal(!inputPostersAddressApplied)}>{inputPostersAddressApplied ? 'Change' : 'Apply'}</button>
+                            {!inputPostersAddressApplied && <p className="text-[13px] text-ink-muted">Apply changes to take effect</p>}
                         </div>
                     </div>
-                    <div className="mt-2 flex flex-row gap-2 items-center">
-                        <div className="group grid size-4 grid-cols-1">
-                            <input
-                                id="savePassword"
-                                type="checkbox"
-                                name="savePassword"
-                                checked={savePassword}
-                                aria-describedby="comments-description"
-                                className="col-start-1 row-start-1 appearance-none rounded-sm border border-white/10 bg-white/5 checked:border-blue-500 checked:bg-blue-500 indeterminate:border-blue-500 indeterminate:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-white/5 disabled:bg-white/10 disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                                onChange={() => onChangeSavePasswordHandler(!savePassword)}
-                            />
-                            <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25">
-                                <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-checked:opacity-100" />
-                                <path d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
-                            </svg>
+                    <div className="flex flex-col gap-3">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[13px] text-ink-muted">Encrypted private key (Required for messaging functionality)</span>
+                            <input className="form-field text-[15px]" disabled={inputCredentialsApplied} value={encryptedPrivateKey} onChange={e => setEncryptedPrivateKey(e.target.value)} />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[13px] text-ink-muted">Password</span>
+                            <input type="password" className="form-field text-[15px]" disabled={inputCredentialsApplied} value={password} onChange={e => setPassword(e.target.value)} />
+                        </label>
+                        <div className="flex flex-row items-center gap-3">
+                            <button type="button" className={`${inputCredentialsApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputCredentialsApplied(!inputCredentialsApplied)}>{inputCredentialsApplied ? 'Change' : 'Apply'}</button>
+                            {!inputCredentialsApplied && <p className="text-[13px] text-ink-muted">Apply changes to take effect</p>}
                         </div>
-                        <div className="flex-1">
-                            <label htmlFor="savePassword">Save the password in browser localStorage</label>
+                        {credentialsInvalid && inputCredentialsApplied && <p className="text-[13px] text-danger">Invalid credentials: {credentialsInvalid}. (Messaging is disabled)</p>}
+                        <div className="flex flex-col gap-1">
+                            <div className="flex flex-row items-center gap-3 py-1">
+                                <div className="group grid size-5 flex-none grid-cols-1">
+                                    <input
+                                        id="saveEncryptedKey"
+                                        type="checkbox"
+                                        name="saveEncryptedKey"
+                                        checked={saveEncryptedKey}
+                                        aria-describedby="comments-description"
+                                        className="col-start-1 row-start-1 cursor-pointer appearance-none rounded border-2 border-line-strong bg-transparent checked:border-accent checked:bg-accent indeterminate:border-accent indeterminate:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:border-line disabled:bg-surface disabled:checked:bg-surface forced-colors:appearance-auto"
+                                        onChange={() => onChangeSaveEncryptedKeyHandler(!saveEncryptedKey)}
+                                    />
+                                    <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-4 self-center justify-self-center stroke-white group-has-disabled:stroke-ink/25">
+                                        <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-checked:opacity-100" />
+                                        <path d="M3 7H11" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
+                                    </svg>
+                                </div>
+                                <label htmlFor="saveEncryptedKey" className="flex-1 cursor-pointer text-[15px]/5">Save the encrypted key in browser localStorage</label>
+                            </div>
+                            <div className="flex flex-row items-center gap-3 py-1">
+                                <div className="group grid size-5 flex-none grid-cols-1">
+                                    <input
+                                        id="savePassword"
+                                        type="checkbox"
+                                        name="savePassword"
+                                        checked={savePassword}
+                                        aria-describedby="comments-description"
+                                        className="col-start-1 row-start-1 cursor-pointer appearance-none rounded border-2 border-line-strong bg-transparent checked:border-accent checked:bg-accent indeterminate:border-accent indeterminate:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:border-line disabled:bg-surface disabled:checked:bg-surface forced-colors:appearance-auto"
+                                        onChange={() => onChangeSavePasswordHandler(!savePassword)}
+                                    />
+                                    <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-4 self-center justify-self-center stroke-white group-has-disabled:stroke-ink/25">
+                                        <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-checked:opacity-100" />
+                                        <path d="M3 7H11" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
+                                    </svg>
+                                </div>
+                                <label htmlFor="savePassword" className="flex-1 cursor-pointer text-[15px]/5">Save the password in browser localStorage</label>
+                            </div>
+                            <p className="pl-8 text-[13px] text-ink-muted">(Note: There is a heightened risk when saving both the encrypted key and password. Only do this with accounts possessing small amounts of idna.)</p>
                         </div>
-                    </div>
-                    <p className="ml-6 text-[12px]">(Note: There is a heightened risk when saving both the encrypted key and password. Only do this with accounts possessing small amounts of idna.)</p>
-                </div>
-            </>)}
-        </div>
-        <hr className="mb-3 text-gray-500" />
-        <div className="flex flex-col mb-6">
-            <p>Find posts with:</p>
-            <div className="flex flex-row gap-2">
-                <input id="findPostsWith" type="radio" name="findPostsWith" value="rpc" checked={findPostsWith === 'rpc'} onChange={(e) => handleInputFindPostsWithToggle(e.target.value)} />
-                <label htmlFor="findPostsWith" className="flex-none text-right">RPC</label>
-            </div>
-            <div className="flex flex-row gap-2">
-                <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPostsWith" value="indexer-api" checked={findPostsWith === 'indexer-api'} onChange={(e) => handleInputFindPostsWithToggle(e.target.value)} />
-                <label htmlFor="notUseFindPastBlocksWithTxsApi" className="flex-none text-right">Indexer Api</label>
-            </div>
-            {findPostsWith === 'indexer-api' && (
-                <div className="flex flex-col ml-5 text-[14px]">
-                    <div className="flex flex-row gap-1">
-                        <p className="mb-1 w-13 flex-none text-right">Api Url:</p>
-                        <input className="flex-1 mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
-                    </div>
-                    {indexerApiUrlInvalid && <p className="ml-14 text-[11px] text-red-400">Invalid Api Url.</p>}
-                    <div className="flex flex-row">
-                        <button className={`h-7 w-16 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer ${inputIdenaIndexerApiUrlApplied ? 'bg-white/10' : 'bg-white/30'}`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
-                        {!inputIdenaIndexerApiUrlApplied && <p className="w-18 ml-1.5 mt-1 text-gray-400 text-[11px]/3.5">Apply changes to take effect</p>}
                     </div>
                 </div>
             )}
-        </div>
-        <hr className="mb-3 text-gray-500" />
-        <div className="mb-6">
-            <div className="flex flex-row gap-3 text-[15px]">
-                <button className="h-9 w-45 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" onClick={() => handleRestoreDefaultSettings()}>Restore Default Settings</button>
-                <button className="h-9 w-45 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" onClick={() => handleClearCachedContent()}>Clear Cached Content</button>
+        </section>
+        <section className="flex flex-col gap-3 border-b border-line px-4 py-4">
+            <h3 className="text-xl/6 font-extrabold">Find posts with</h3>
+            <div className="flex flex-col gap-1">
+                <div className="flex flex-row items-center gap-3 py-1">
+                    <div className="group grid size-5 flex-none grid-cols-1">
+                        <input id="findPostsWith" type="radio" name="findPostsWith" value="rpc" checked={findPostsWith === 'rpc'} onChange={(e) => handleInputFindPostsWithToggle(e.target.value)} className={radioClassName} />
+                        <RadioCheckMark />
+                    </div>
+                    <label htmlFor="findPostsWith" className="cursor-pointer text-[15px]/5">RPC</label>
+                </div>
+                <div className="flex flex-row items-center gap-3 py-1">
+                    <div className="group grid size-5 flex-none grid-cols-1">
+                        <input id="notUseFindPastBlocksWithTxsApi" type="radio" name="findPostsWith" value="indexer-api" checked={findPostsWith === 'indexer-api'} onChange={(e) => handleInputFindPostsWithToggle(e.target.value)} className={radioClassName} />
+                        <RadioCheckMark />
+                    </div>
+                    <label htmlFor="notUseFindPastBlocksWithTxsApi" className="cursor-pointer text-[15px]/5">Indexer API</label>
+                </div>
             </div>
-        </div>
+            {findPostsWith === 'indexer-api' && (
+                <div className="flex flex-col gap-3 sm:pl-8">
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[13px] text-ink-muted">API URL</span>
+                        <input className="form-field text-[15px]" disabled={inputIdenaIndexerApiUrlApplied} value={inputIdenaIndexerApiUrl} onChange={e => setInputIdenaIndexerApiUrl(e.target.value)} />
+                    </label>
+                    {indexerApiUrlInvalid && <p className="text-[13px] text-danger">Invalid Api Url.</p>}
+                    <div className="flex flex-row items-center gap-3">
+                        <button type="button" className={`${inputIdenaIndexerApiUrlApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
+                        {!inputIdenaIndexerApiUrlApplied && <p className="text-[13px] text-ink-muted">Apply changes to take effect</p>}
+                    </div>
+                </div>
+            )}
+        </section>
+        <section className="flex flex-wrap gap-3 border-b border-line px-4 py-4">
+            <button type="button" className="btn-outline h-9 px-4 text-[15px]" onClick={() => handleRestoreDefaultSettings()}>Restore Default Settings</button>
+            <button type="button" className="btn-outline h-9 px-4 text-[15px] border-danger text-danger" onClick={() => handleClearCachedContent()}>Clear Cached Content</button>
+        </section>
     </>);
 }
 

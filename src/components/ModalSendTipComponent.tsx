@@ -44,18 +44,22 @@ function ModalSendTipComponent(props: ModalSendTipComponentProps) {
     };
 
     return (<>
-        <div className="w-full sm:w-[500px] px-3">
-            <p className="mb-2 text-center">Send Tip</p>
-            <div className="text-[14px]">
-                <div className="mb-3">
-                    <p>Idena wallet balance: <span className="[word-break:break-all]">{idenaWalletBalance} <span className="[word-break:keep-all]">iDNA</span></span></p>
+        <div className="w-screen max-w-full sm:w-[600px]">
+            <div className="sticky top-0 z-[5] flex h-[53px] items-center bg-canvas/65 pl-14 pr-4 backdrop-blur-md">
+                <h2 className="text-xl/6 font-extrabold">Send Tip</h2>
+            </div>
+            <div className="px-4 pb-4 text-[15px]/5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-2xl border border-line px-4 py-3">
+                    <p className="text-ink-muted">Idena wallet balance</p>
+                    <p className="font-bold [word-break:break-all]">{idenaWalletBalance} <span className="[word-break:keep-all]">iDNA</span></p>
                 </div>
-                <div className="mb-3">
-                    <div>How much iDNA would you like to tip? <input className="w-16 h-5 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} value={tipAmount} onChange={e => handleChangeTipAmount(e)} /></div>
-                </div>
-                <div className="h-10 flex flex-row">
-                    <button className="h-7 w-20 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={(e) => localSubmitTipHandler(e)}>Send Tip</button>
-                    {insufficientFunds && <div className="flex flex-col justify-center"><p className="ml-2 text-[11px] text-red-400">Send Tip will likely fail due to insufficent balance.</p></div>}
+                <label className="mt-5 block">
+                    <span className="block">How much iDNA would you like to tip?</span>
+                    <input className="form-field mt-2 w-32 text-[15px]" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} value={tipAmount} onChange={e => handleChangeTipAmount(e)} />
+                </label>
+                <div className="mt-5 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+                    {insufficientFunds && <p className="mr-auto text-[13px] text-danger">Send Tip will likely fail due to insufficient balance.</p>}
+                    <button type="button" className="btn-primary h-9 px-4 text-[15px]" onClick={(e) => localSubmitTipHandler(e)}>Send Tip</button>
                 </div>
             </div>
         </div>

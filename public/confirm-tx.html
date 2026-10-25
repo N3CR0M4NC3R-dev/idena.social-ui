@@ -16,13 +16,64 @@
           href="/favicon-16x16.png"
         />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="theme-color" content="#ffffff" />
+		<meta name="color-scheme" content="light" />
 		<title>Idena Social</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0 16px;
+        background-color: #ffffff;
+        color: #14171a;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .card {
+        box-sizing: border-box;
+        max-width: 400px;
+        margin: 15vh auto;
+        padding: 32px;
+        border: 1px solid #e6ecf0;
+        border-radius: 16px;
+        text-align: center;
+      }
+      h3 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 24px;
+      }
+      p {
+        margin: 0 0 24px;
+        color: #657786;
+        font-size: 15px;
+        line-height: 20px;
+      }
+      button {
+        height: 36px;
+        padding: 0 16px;
+        border: none;
+        border-radius: 9999px;
+        background-color: #1da1f2;
+        color: #ffffff;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background-color 150ms;
+      }
+      button:hover {
+        background-color: #1a91da;
+      }
+    </style>
 	</head>
-	<body style="background-color: rgb(28 25 23); color: rgb(255, 255, 255); font-family: 'Tahoma';">
-		<div style="text-align: center;">
+	<body>
+		<div class="card">
 			<h3>Transaction Submitted</h3>
 			<p>You may close this window.</p>
-			<button style="cursor: pointer; font-size: 16px; font-weight: 900;" onclick="window.open('', '_self', ''); window.close();">Close Window</button>
+			<button onclick="window.open('', '_self', ''); window.close();">Close Window</button>
 		</div>
 	</body>
 </html>

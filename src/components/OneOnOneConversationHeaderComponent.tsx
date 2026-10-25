@@ -23,9 +23,9 @@ function OneOnOneConversationHeaderComponent(props: OneOnOneConversationHeaderCo
             stake={parseInt(conversationPartner.stake)}
             pic={getProfilePic(conversationPartner)}
         />
-        {!conversationPartner.pubkey && <div className="ml-3 flex gap-2">
-            <span className="text-[11px] text-red-400">pubkey missing</span>
-            <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => handleSubmitPubkeyModal(e, conversationPartner.address)}>Manually Provide Pubkey</span>
+        {!conversationPartner.pubkey && <div className="flex flex-wrap gap-x-2 pl-[52px] text-[13px]">
+            <span className="text-danger">pubkey missing</span>
+            <span className="cursor-pointer text-accent hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, conversationPartner.address)}>Manually Provide Pubkey</span>
         </div>}
     </>);
 }

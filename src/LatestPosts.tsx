@@ -5,6 +5,10 @@ import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaA
 import { useReducer } from 'react';
 import SortPostsByComponent from './components/SortPostsByComponent';
 import ObjectUrlImageComponent from './components/ObjectUrlImageComponent';
+import PageHeaderComponent from './components/PageHeaderComponent';
+import ComposerToolbarComponent from './components/ComposerToolbarComponent';
+import { CloseIcon } from './components/icons';
+import { getProfilePic } from './logic/utils';
 
 type LatestPostsProps = {
     latestPosts: string[],
@@ -34,6 +38,7 @@ type LatestPostsProps = {
     postTipsRef: React.RefObject<Record<string, PostTips>>,
     postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
     makePostsWith: string,
+    postersAddress: string,
 };
 
 function LatestPosts() {
@@ -69,6 +74,7 @@ function LatestPosts() {
         postTipsRef,
         postMediaAttachmentsRef,
         makePostsWith,
+        postersAddress,
     } = useOutletContext() as LatestPostsProps;
 
     const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -89,34 +95,41 @@ function LatestPosts() {
     };
 
     return (<>
-        <div className="mb-4">
-            {inputPostDisabled && <p className="mt-1 text-red-400 text-[13px]">Posting is disabled because there is a problem with your settings. Please adjust your settings and return to this page.</p>}
-        </div>
-        <div className="mt-3 mb-6">
-            <textarea
-                id='post-input-main'
-                rows={4}
-                className="w-full field-sizing-content min-h-[104px] max-h-[520px] py-1 px-2 outline-1 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                placeholder="Write your post here..."
-                disabled={inputPostDisabled || submitting}
-            />
-            {mainPostMediaAttachment && <div className="mx-4 my-1">
-                <ObjectUrlImageComponent className="max-h-120 max-w-100 size-auto rounded-sm" file={mainPostMediaAttachment.file} />
-            </div>}
-            <div className="flex flex-row gap-2">
-                <div className="flex-1 -mt-1.5">
-                    {mainPostMediaAttachment ? <>
-                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, 'main')}>Remove image</p>
-                    </> : <>
-                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, 'main', 'post')}>Add image</p>
-                    </>}
-                    <p id={"post-copytx-main"} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => !inputPostDisabled && !submitting && copyPostTxHandler('main')}>Copy tx</p>
+        <div className="flex gap-3 px-4 pt-3 pb-2 border-b border-line">
+            <ObjectUrlImageComponent className="size-10 rounded-full object-cover bg-surface flex-none" file={getProfilePic(postersRef.current[postersAddress.toLowerCase()])} />
+            <div className="min-w-0 flex-1">
+                {inputPostDisabled && <p className="pt-1 pb-2 text-danger text-[13px]">Posting is disabled because there is a problem with your settings. Please adjust your settings and return to this page.</p>}
+                <textarea
+                    id='post-input-main'
+                    rows={4}
+                    className="block w-full resize-none bg-transparent outline-none text-xl/6 py-3 placeholder:text-ink-muted field-sizing-content min-h-[56px] max-h-[520px] scrollbar-thin"
+                    placeholder="What's up?"
+                    disabled={inputPostDisabled || submitting}
+                />
+                {mainPostMediaAttachment ? <div className="relative my-2 w-fit max-w-full">
+                    <ObjectUrlImageComponent className="max-h-120 max-w-full size-auto rounded-2xl border border-line" file={mainPostMediaAttachment.file} />
+                    <button type="button" aria-label="Remove image" title="Remove image" className="absolute top-1 left-1 inline-flex size-8 items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm cursor-pointer hover:bg-black/60" onClick={(e) => removeMediaHandler(e, 'main')}>
+                        <CloseIcon className="size-[18px]" />
+                    </button>
+                </div> : null}
+                <div className="border-t border-line pt-2 mt-1">
+                    <ComposerToolbarComponent
+                        hasAttachment={!!mainPostMediaAttachment}
+                        onAddImage={(e) => handleOpenAddMediaModal(e, 'main', 'post')}
+                        onRemoveImage={(e) => removeMediaHandler(e, 'main')}
+                        copyTxId="post-copytx-main"
+                        onCopyTx={() => !inputPostDisabled && !submitting && copyPostTxHandler('main')}
+                        submitText={submittingPost === 'main' ? 'Posting...' : 'Post'}
+                        onSubmit={(e) => makePostsWith === 'rpc' ? handleOpenRpcMakePostModal(e, 'main') : submitPostHandler('main')}
+                        submitDisabled={inputPostDisabled || submitting}
+                        hint="Your post will take time to display due to blockchain acceptance."
+                    />
                 </div>
-                <p className="hidden sm:block text-right w-50 mt-0.5 text-gray-400 text-[12px]">Your post will take time to display due to blockchain acceptance.</p>
-                <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || submitting} onClick={(e) => makePostsWith === 'rpc' ? handleOpenRpcMakePostModal(e, 'main') : submitPostHandler('main')}>{submittingPost === 'main' ? 'Posting...' : 'Post!'}</button>
             </div>
         </div>
-        <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
+        <PageHeaderComponent sticky={false}>
+            <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
+        </PageHeaderComponent>
         <ul>
             {(sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).map((postId) => (
                 <li key={postId}>

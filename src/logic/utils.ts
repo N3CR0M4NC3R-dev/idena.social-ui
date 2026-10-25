@@ -30,6 +30,23 @@ export function getDisplayDateTime(timestamp: number) {
     return { displayDate, displayTime };
 }
 
+export function getDisplayTimeAgo(timestamp: number) {
+    const datePost = new Date(timestamp * 1000);
+    const dateNow = new Date();
+    const secondsAgo = Math.max(0, Math.floor((dateNow.getTime() - datePost.getTime()) / 1000));
+
+    if (secondsAgo < 60) return `${secondsAgo}s`;
+    if (secondsAgo < 60 * 60) return `${Math.floor(secondsAgo / 60)}m`;
+    if (secondsAgo < 24 * 60 * 60) return `${Math.floor(secondsAgo / (60 * 60))}h`;
+
+    const sameYear = datePost.getFullYear() === dateNow.getFullYear();
+    return datePost.toLocaleDateString('en-US', sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export function getDisplayFullDate(timestamp: number) {
+    return new Date(timestamp * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export function getMessageLines(message?: string, calculateViewMoreIndex = false, maxLines = 10) {
     const limit = 30;
 
@@ -367,18 +384,19 @@ export function getSpotlightPostDetails(spotlightPost: Post, postsRef: React.Ref
 
 export function getPostActivities(post: Post, postersAddress: string, postsRef: React.RefObject<Record<string, Post>>) {
     const replyToPost = postsRef.current[post.replyToPostId];
+    const ownAddress = postersAddress.toLowerCase();
 
     let newPostActivities: string[] = [];
 
-    if (replyToPost?.poster === postersAddress && post.postLevel === 'Reply') {
+    if (replyToPost?.poster === ownAddress && post.postLevel === 'Reply') {
         newPostActivities = [ ...newPostActivities, `${post.timestamp}-${post.postId}-reply` ];
-    } else if (replyToPost?.poster === postersAddress && post.postLevel === 'Comment') {
+    } else if (replyToPost?.poster === ownAddress && post.postLevel === 'Comment') {
         newPostActivities = [ ...newPostActivities, `${post.timestamp}-${post.postId}-commentReply` ];
     } else if (post.postLevel === 'Comment') {
         const postId = post.channelPostId;
         const channelPost = postsRef.current[postId];
 
-        if (channelPost.poster === postersAddress) {
+        if (channelPost.poster === ownAddress) {
             newPostActivities = [ ...newPostActivities, `${post.timestamp}-${post.postId}-comment` ];
         }
     }

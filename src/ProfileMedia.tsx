@@ -1,6 +1,6 @@
 import { type Post, type Poster, type PostTips } from './logic/asyncUtils';
 import { useOutletContext } from 'react-router';
-import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity } from './App.exports';
+import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity, defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
 
@@ -68,7 +68,7 @@ function ProfileMedia() {
 
     return (<>
         <ul>
-            {profileActivityRef.current[address].media.map((mediaPostId: string) => {
+            {(profileActivityRef.current[address] ?? defaultProfileActivity).media.map((mediaPostId: string) => {
                 const mediaPost = postsRef.current[mediaPostId];
 
                 const {

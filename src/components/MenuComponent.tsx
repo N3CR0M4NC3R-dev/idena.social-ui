@@ -1,35 +1,54 @@
-import { Link } from "react-router";
-import settingsWhiteSvg from '../assets/settings-white.svg';
-import homeWhiteSvg from '../assets/home-white.svg';
-import profileWhiteSvg from '../assets/profile-round-1342-white.svg';
-import messagesWhiteSvg from '../assets/message-square-chat-white.svg';
-import notificationsWhiteSvg from '../assets/notifications-white.svg';
+import { Link, useLocation } from "react-router";
+import { BellIcon, HomeIcon, MessagesIcon, ProfileIcon, SettingsIcon } from './icons';
 
 type MenuComponentProps = {
     postersAddress: string,
-    setMobileMenuOpen?: React.Dispatch<React.SetStateAction<boolean>>,
+    variant: 'sidebar' | 'bottom',
 };
 
 function MenuComponent(props: MenuComponentProps) {
 
     const {
         postersAddress,
-        setMobileMenuOpen,
+        variant,
     } = props;
 
-    return (<>
-        <hr />
-        <Link to="/" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={homeWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">HOME</span></div></Link>
-        <hr />
-        <Link to={`/profile/${postersAddress}`} onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={profileWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">PROFILE</span></div></Link>
-        <hr />
-        <Link to="/messages" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={messagesWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">MESSAGES</span></div></Link>
-        <hr />
-        <Link to="/postactivity" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={notificationsWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">POST ACTIVITY</span></div></Link>
-        <hr />
-        <Link to="/settings" onClick={() => setMobileMenuOpen?.(false)}><div className="hover:bg-gray-400/30 py-1"><img src={settingsWhiteSvg} className="h-7 p-[3px] mr-0.5 inline-block rounded-md" /> <span className="align-middle">SETTINGS</span></div></Link>
-        <hr />
-    </>);
+    const { pathname } = useLocation();
+
+    const profilePath = `/profile/${postersAddress.toLowerCase()}`;
+
+    const menuItems = [
+        { to: '/', label: 'Home', Icon: HomeIcon, active: pathname === '/' },
+        { to: profilePath, label: 'Profile', Icon: ProfileIcon, active: !!postersAddress && pathname.toLowerCase().startsWith(profilePath.toLowerCase()) },
+        { to: '/messages', label: 'Messages', Icon: MessagesIcon, active: pathname === '/messages' || pathname.startsWith('/conversation/') },
+        { to: '/postactivity', label: 'Post Activity', Icon: BellIcon, active: pathname === '/postactivity' },
+        { to: '/settings', label: 'Settings', Icon: SettingsIcon, active: pathname === '/settings' },
+    ];
+
+    if (variant === 'bottom') {
+        return (
+            <nav className="flex h-[53px]" aria-label="Primary">
+                {menuItems.map(({ to, label, Icon, active }) => (
+                    <Link key={label} to={to} aria-label={label} title={label} aria-current={active ? 'page' : undefined} className="flex flex-1 items-center justify-center active:bg-ink/10">
+                        <Icon className="size-[26px]" filled={active} />
+                    </Link>
+                ))}
+            </nav>
+        );
+    }
+
+    return (
+        <nav className="-mx-2 flex flex-col xl:-mx-3" aria-label="Primary">
+            {menuItems.map(({ to, label, Icon, active }) => (
+                <Link key={label} to={to} aria-label={label} title={label} aria-current={active ? 'page' : undefined} className="flex justify-center px-2 py-1 hover:bg-ink/10 xl:justify-start xl:px-3">
+                    <span className="inline-flex items-center gap-5 p-3">
+                        <Icon className="size-[26px] flex-none" filled={active} />
+                        <span className={`hidden pr-4 text-xl/6 xl:inline ${active ? 'font-bold' : ''}`}>{label}</span>
+                    </span>
+                </Link>
+            ))}
+        </nav>
+    );
 }
 
 export default MenuComponent;

@@ -1,7 +1,9 @@
 import { type Post, type Poster, type PostTips } from './logic/asyncUtils';
-import { useNavigate, useOutletContext } from 'react-router';
+import { useOutletContext } from 'react-router';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from './App.exports';
 import PostComponent from './components/PostComponent';
+import PageHeaderComponent from './components/PageHeaderComponent';
+import { BellIcon, HeartIcon, ReplyIcon, TipIcon } from './components/icons';
 import { getSpotlightPostDetails } from './logic/utils';
 
 const sortFn = (a: string, b: string) => (b.split('-')[0] as unknown as number) - (a.split('-')[0] as unknown as number);
@@ -37,8 +39,6 @@ type PostActivityProps = {
 
 function PostActivity() {
 
-    const navigate = useNavigate();
-
     const {
         postsRef,
         postersRef,
@@ -68,12 +68,8 @@ function PostActivity() {
         postActivityRef,
     } = useOutletContext() as PostActivityProps;
 
-    const handleGoBack = () => {
-        navigate(-1);
-    };
-
     return (<>
-        <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
+        <PageHeaderComponent title="Post Activity" />
         <ul>
             {
             // @ts-ignore: toSorted not recognized yet
@@ -84,18 +80,25 @@ function PostActivity() {
                     const spotlightPost = post.isLike ? postsRef.current[post.replyToPostId] : post;
 
                     let notificationMessage;
+                    let notificationIcon;
                     if (postType === 'tip') {
-                        notificationMessage = `Your ${post.postLevel.toLowerCase()} has recieved a tip`;
+                        notificationMessage = `Your ${post.postLevel.toLowerCase()} has received a tip`;
+                        notificationIcon = <TipIcon className="size-7 text-tip" />;
                     } else if (post.isLike) {
-                        notificationMessage = `Your ${spotlightPost.postLevel.toLowerCase()} has recieved a like`;
+                        notificationMessage = `Your ${spotlightPost.postLevel.toLowerCase()} has received a like`;
+                        notificationIcon = <HeartIcon filled className="size-7 text-like" />;
                     } else if (postType === 'comment') {
                         notificationMessage = 'Your reply has received a new comment';
+                        notificationIcon = <ReplyIcon className="size-7 text-accent" />;
                     } else if (postType === 'commentReply') {
                         notificationMessage = 'Your comment has received a reply comment';
+                        notificationIcon = <ReplyIcon className="size-7 text-accent" />;
                     } else if (postType === 'reply') {
                         notificationMessage = 'Your post has received a reply';
+                        notificationIcon = <ReplyIcon className="size-7 text-accent" />;
                     } else {
-                        notificationMessage = `You have recieved an interaction`;
+                        notificationMessage = `You have received an interaction`;
+                        notificationIcon = <BellIcon className="size-7 text-accent" />;
                     }
 
                     const {
@@ -114,8 +117,11 @@ function PostActivity() {
                     const postItemKeyUnique = postItemKey + addedUniquity;
 
                     return <li key={postItemKeyUnique}>
-                        <div className="text-center text-[13px] bg-stone-700">
-                            <p>{notificationMessage}</p>
+                        <div className="flex gap-3 px-4 pt-3">
+                            <div className="w-10 flex-none flex justify-end">
+                                {notificationIcon}
+                            </div>
+                            <p className="min-w-0 flex-1 pt-1 text-[15px]/5 text-ink [word-break:break-word]">{notificationMessage}</p>
                         </div>
                         <PostComponent
                             uniqueKey={postItemKeyUnique}

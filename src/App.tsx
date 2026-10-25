@@ -6,7 +6,6 @@ import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveRepl
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
 import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
-import menuWhiteSvg from './assets/menu-8-white.svg';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
@@ -19,6 +18,7 @@ import ModalRpcSendMessageComponent from './components/ModalRpcSendMessageCompon
 import ScanBlocksComponent from './components/ScanBlocksComponent';
 import ModalSubmitPubkeyComponent from './components/ModalSubmitPubkeyComponent';
 import ScrollToTopButtonComponent from './components/ScrollToTopButtonComponent';
+import { CloseIcon } from './components/icons';
 import { loadPostsCache } from './logic/postsStore';
 import { loadTipsCache } from './logic/tipsStore';
 import { loadMessagesCache } from './logic/messagesStore';
@@ -100,22 +100,16 @@ if (!DEBUG) {
     console.error = () => {};
 }
 
-const customModalStyles = {
-    overlay: {
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    },
-    content: {
-        border: 'none',
-        borderRadius: 'none',
-        backgroundColor: 'rgb(41, 37, 38)',
-        top: '50%',
-        left: '50%',
-        right: 'auto',
-        bottom: 'auto',
-        marginRight: '-50%',
-        transform: 'translate(-50%, -50%)',
-        padding: '5px 0px 5px 0px',
-    },
+const modalClassNames = {
+    overlay: 'fixed inset-0 z-50 bg-[rgba(91,112,131,0.4)]',
+    content: 'absolute inset-0 overflow-y-auto overscroll-contain scrollbar-thin bg-canvas outline-none sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[90vh] sm:max-w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl',
+    closeButton: 'hover:bg-ink/10',
+};
+
+const modalExpandImageClassNames = {
+    overlay: modalClassNames.overlay,
+    content: 'absolute top-1/2 left-1/2 max-h-[90vh] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 outline-none',
+    closeButton: 'bg-black/60 text-white backdrop-blur-sm hover:bg-black/80',
 };
 
 Modal.setAppElement('#root');
@@ -234,7 +228,6 @@ function App() {
 
     // miscellaneous
     const [, forceUpdate] = useReducer(x => x + 1, 0);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
 
     const setBrowserStateHistorySettings = (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => {
@@ -942,7 +935,7 @@ function App() {
                         profileActivity.tips = isRecurseForward ? [`${newTip!.postId}|${newTip!.txHash}`, ...profileActivity.tips] : [...profileActivity.tips, `${newTip!.postId}|${newTip!.txHash}`];
                         profileActivityRef.current[newTip!.tipper] = profileActivity;
 
-                        if (postsRef.current[newTip!.postId!]?.poster === postersAddress) {
+                        if (postsRef.current[newTip!.postId!]?.poster === postersAddress.toLowerCase()) {
                             postActivityRef.current = [ ...postActivityRef.current, `${newTip!.timestamp}-${newTip!.postId}|${newTip!.txHash}-tip` ];
                         }
 
@@ -1122,7 +1115,7 @@ function App() {
 
                     let newPostActivities: string[] = [];
 
-                    if (newPost!.poster === postersAddress) {
+                    if (newPost!.poster === postersAddress.toLowerCase()) {
                         const postTips = postTipsRef.current[newPost!.postId];
 
                         if (postTips) {
@@ -1967,63 +1960,62 @@ function App() {
         forceUpdate();
     };
 
+    const footerLinks = (<>
+        <a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a>
+        <span aria-hidden="true">·</span>
+        <a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a>
+    </>);
+
     return (
-        <main className="w-full flex flex-row justify-center p-2">
-            <div className="hidden lg:flex flex-1 justify-end">
-                <div className="w-[200px] min-w-[200px] ml-2 mr-8 flex flex-col">
-                    <div className="text-[28px] mb-3">
-                        <Link to="/">Idena Social</Link>
-                    </div>
-                    <MenuComponent postersAddress={postersAddress} />
-                    <div className="mb-3 text-gray-500">
-                        <div className="flex flex-row gap-1 whitespace-nowrap">
-                            <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a></p>
-                            <p className="text-[14px]/7">|</p>
-                            <p className="my-1 text-[14px]"><a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a></p>
-                        </div>
-                    </div>
-                    <ScanBlocksComponent
-                        currentBlockCaptured={currentBlockCaptured}
-                        scanningPastBlocks={scanningPastBlocks}
-                        setScanningPastBlocks={setScanningPastBlocks}
-                        noMorePastBlocks={noMorePastBlocks}
-                        pastBlockCaptured={pastBlockCaptured}
-                        nodeAvailable={nodeAvailable}
-                        displayCurrentBlock={true}
-                    />
+        <div className="flex min-h-screen w-full justify-center">
+            <header className="hidden flex-none sm:block">
+                <div className="sticky top-0 flex h-screen w-[88px] flex-col overflow-y-auto no-scrollbar px-2 xl:w-[275px] xl:px-3">
+                    <Link to="/" aria-label="Idena Social" title="Idena Social" className="mt-0.5 flex justify-center xl:justify-start">
+                        <span className="flex h-16 items-center gap-3 px-2.5 xl:pr-5">
+                            <span className="size-11 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={WhatIsIdenaThumbPng} alt="" /></span>
+                            <span className="hidden text-[26px]/8 font-extrabold xl:inline">Idena Social</span>
+                        </span>
+                    </Link>
+                    <MenuComponent postersAddress={postersAddress} variant="sidebar" />
+                    <section className="mt-14 hidden flex-none xl:block" aria-label="Blockchain">
+                        <ScanBlocksComponent
+                            currentBlockCaptured={currentBlockCaptured}
+                            scanningPastBlocks={scanningPastBlocks}
+                            setScanningPastBlocks={setScanningPastBlocks}
+                            noMorePastBlocks={noMorePastBlocks}
+                            pastBlockCaptured={pastBlockCaptured}
+                            nodeAvailable={nodeAvailable}
+                            variant="card"
+                        />
+                    </section>
+                    <footer className="mt-auto hidden flex-wrap gap-x-3 gap-y-1 px-4 py-3 text-[13px]/4 text-ink-muted xl:flex">
+                        {footerLinks}
+                    </footer>
                 </div>
-            </div>
-            <div className="w-full md:w-[500px] flex-none">
-                <div className="lg:hidden flex flex-row gap-2 text-[12px] bg-stone-700 rounded-md">
-                    <div className="m-1 min-w-[70px]">
-                        <a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
-                            <img className="rounded-md h-[70px] w-[70px]" src={currentAd?.thumb ?? defaultAd.thumb} />
+            </header>
+            <main className="min-h-screen w-full min-w-0 max-w-[600px] border-line pb-[calc(53px+env(safe-area-inset-bottom))] [--sticky-top:85px] sm:border-x sm:pb-0 lg:[--sticky-top:0px]">
+                <div className="sticky top-0 z-20 h-(--sticky-top) bg-canvas/90 backdrop-blur-md lg:hidden">
+                    <div className="flex gap-3 border-b border-line px-4 py-3">
+                        <a className="flex-none" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
+                            <img className="size-10 rounded-lg bg-surface object-cover" src={currentAd?.thumb ?? defaultAd.thumb} alt={currentAd?.title ?? defaultAd.title} />
                         </a>
+                        <div className="min-w-0 flex-1 text-[15px]/5">
+                            <div className="flex items-baseline gap-2">
+                                <p className="min-w-0 flex-1 truncate font-bold">{currentAd?.title ?? defaultAd.title}</p>
+                                <p className="flex-none text-[13px] text-ink-muted">Ad</p>
+                            </div>
+                            <p className="truncate">{currentAd?.desc ?? defaultAd.desc}</p>
+                            <a className="block w-fit max-w-full truncate text-accent hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a>
+                        </div>
                     </div>
-                    <div className="flex flex-col justify-center whitespace-nowrap overflow-hidden">
-                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
-                        <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
-                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
-                    </div>
-                    <div className="flex-1 text-right"><p className="text-[12px] mt-1 mr-2">Ad</p></div>
                 </div>
-                <div className="lg:hidden my-2">
-                    <div className="text-[26px] mb-1">
-                        <Link to="/">Idena Social</Link>
-                    </div>
-                    <div className="flex flex-row gap-3">
-                        <div className="min-w-8">
-                            <img src={menuWhiteSvg} className={'h-8 p-[5px] mr-0.5 inline-block rounded-md hover:bg-gray-400/30 hover:cursor-pointer' + (mobileMenuOpen ? ' bg-gray-400/30' : '')} onClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
-                        </div>
-                        <div className="flex flex-row gap-1 whitespace-nowrap">
-                            <p className="my-1 text-[14px]"><a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a></p>
-                            <p className="text-[14px]/7">|</p>
-                            <p className="my-1 text-[14px]"><a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a></p>
-                        </div>
-                    </div>
-                    {mobileMenuOpen && <div className="mt-2 mb-4">
-                        <MenuComponent postersAddress={postersAddress} setMobileMenuOpen={setMobileMenuOpen} />
-                    </div>}
+                <div className="flex h-[53px] items-center border-b border-line px-4 sm:hidden">
+                    <Link to="/" className="flex items-center gap-3">
+                        <span className="size-8 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={WhatIsIdenaThumbPng} alt="" /></span>
+                        <span className="text-[19px] font-extrabold">Idena Social</span>
+                    </Link>
+                </div>
+                <div className="xl:hidden">
                     <ScanBlocksComponent
                         currentBlockCaptured={currentBlockCaptured}
                         scanningPastBlocks={scanningPastBlocks}
@@ -2031,8 +2023,11 @@ function App() {
                         noMorePastBlocks={noMorePastBlocks}
                         pastBlockCaptured={pastBlockCaptured}
                         nodeAvailable={nodeAvailable}
-                        displayCurrentBlock={true}
+                        variant="compact"
                     />
+                    <footer className="flex flex-wrap gap-x-3 gap-y-1 border-b border-line px-4 py-3 text-[13px]/4 text-ink-muted">
+                        {footerLinks}
+                    </footer>
                 </div>
                 <Outlet
                     context={{
@@ -2116,9 +2111,10 @@ function App() {
                         setIndexerApiUrl,
                         profileActivityRef,
                         postActivityRef,
+                        noMorePastBlocks,
                     }}
                 />
-                {!['/settings'].includes(pathname) && <div className="mb-5">
+                {!['/settings'].includes(pathname) && <div>
                     <ScanBlocksComponent
                         currentBlockCaptured={currentBlockCaptured}
                         scanningPastBlocks={scanningPastBlocks}
@@ -2126,54 +2122,61 @@ function App() {
                         noMorePastBlocks={noMorePastBlocks}
                         pastBlockCaptured={pastBlockCaptured}
                         nodeAvailable={nodeAvailable}
-                        displayCurrentBlock={false}
+                        variant="row"
                     />
                 </div>}
-                <div className="sticky bottom-4 text-right lg:hidden">
-                    <ScrollToTopButtonComponent width={'w-14'} />
-                </div>
-            </div>
-            <div className="hidden lg:flex flex-1 justify-start">
-                <div className="min-w-[320px] mt-3 mr-2 ml-8 flex flex-col text-[13px]">
-                    <div className="flex flex-col h-[90px] justify-center">
-                        <div className="px-1 font-[700] text-gray-400"><p>{currentAd?.title ?? defaultAd.title}</p></div>
-                        <div className="px-1"><p>{currentAd?.desc ?? defaultAd.desc}</p></div>
-                        <div className="px-1 text-blue-400"><a className="hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a></div>
-                    </div>
-                    <div className="my-3">
-                        <a href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
-                            <img className="rounded-md h-[320px] w-[320px]" src={currentAd?.media ?? defaultAd.media} />
-                        </a>
-                    </div>
-                    <div className="flex flex-row px-1">
-                        <div className="w-16 flex-auto">
-                            <div className="font-[600] text-gray-400"><p>Sponsored by</p></div>
-                            <div>
-                                <a className="flex flex-row items-center" href={`https://scan.idena.io/address/${currentAd?.author}`} target="_blank" rel="noopener noreferrer">
-                                    <img className="-mt-0.5 -ml-1.5 h-5 w-5" src={`https://robohash.org/${currentAd?.author}?set=set1`} />
-                                    <span>{getDisplayAddress(currentAd?.author || '')}</span>
-                                </a>
+                <footer className="flex flex-wrap justify-center gap-x-3 gap-y-1 px-4 py-4 text-[13px]/4 text-ink-muted lg:hidden">
+                    <a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a>
+                    <span aria-hidden="true">·</span>
+                    <a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a>
+                </footer>
+            </main>
+            <aside className="hidden w-[290px] flex-none -translate-x-5 lg:ml-6 lg:block xl:ml-8 xl:w-[350px]">
+                <div className="sticky top-0 flex h-screen flex-col gap-3 pt-[22px] pb-3">
+                    <div className="flex min-h-0 flex-col gap-4 overflow-y-auto scrollbar-thin">
+                        <section className="flex-none overflow-hidden" aria-label="Sponsored">
+                            <a className="mx-4 block" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
+                                <img className="aspect-square w-full rounded-2xl border border-line bg-surface object-cover" src={currentAd?.media ?? defaultAd.media} alt={currentAd?.title ?? defaultAd.title} />
+                            </a>
+                            <div className="px-4 pt-3 text-[15px]/5">
+                                <p className="font-bold">{currentAd?.title ?? defaultAd.title}</p>
+                                <p>{currentAd?.desc ?? defaultAd.desc}</p>
+                                <a className="block w-fit max-w-full truncate text-accent hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a>
                             </div>
-                        </div>
-                        <div className="flex-1" />
-                        <div className="w-16 flex-auto">
-                            <div className="font-[600] text-gray-400"><p>Burnt, in 24 hr</p></div>
-                            <div><p>{currentAd?.burnAmount} iDNA</p></div>
-                        </div>
+                            <div className="grid grid-cols-2 gap-4 px-4 pt-3 pb-4 text-[13px]/5">
+                                <div className="min-w-0">
+                                    <p className="text-ink-muted">Sponsored by</p>
+                                    <a className="flex items-center gap-1.5 hover:underline" href={`https://scan.idena.io/address/${currentAd?.author}`} target="_blank" rel="noopener noreferrer">
+                                        <img className="size-5 flex-none rounded-full bg-surface" src={`https://robohash.org/${currentAd?.author}?set=set1`} alt="" />
+                                        <span className="truncate font-bold">{getDisplayAddress(currentAd?.author || '')}</span>
+                                    </a>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-ink-muted">Burnt, in 24 hr</p>
+                                    <p className="truncate font-bold">{currentAd?.burnAmount} iDNA</p>
+                                </div>
+                            </div>
+                        </section>
                     </div>
-                    <div className="flex-1 content-end">
-                        <div className="sticky bottom-2">
-                            <ScrollToTopButtonComponent />
-                        </div>
-                    </div >
+                    <div className="mt-auto flex flex-none items-center px-4 pb-3">
+                        <ScrollToTopButtonComponent variant="fab" />
+                    </div>
                 </div>
+            </aside>
+            <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-canvas/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
+                <MenuComponent postersAddress={postersAddress} variant="bottom" />
             </div>
+            <ScrollToTopButtonComponent variant="fab" className="fixed right-4 bottom-[calc(69px+env(safe-area-inset-bottom))] z-30 sm:bottom-6 lg:hidden" />
             <div onClick={(e) => e.stopPropagation()}>
                 <Modal
                     isOpen={!!modalOpen} 
                     onRequestClose={() => setModalOpen('')}
-                    style={customModalStyles}
+                    overlayClassName={modalOpen === 'expandImage' ? modalExpandImageClassNames.overlay : modalClassNames.overlay}
+                    className={modalOpen === 'expandImage' ? modalExpandImageClassNames.content : modalClassNames.content}
                 >
+                    <button type="button" aria-label="Close" title="Close" className={`sticky top-2 z-10 mt-2 ml-2 -mb-11 flex size-9 cursor-pointer items-center justify-center rounded-full ${modalOpen === 'expandImage' ? modalExpandImageClassNames.closeButton : modalClassNames.closeButton}`} onClick={() => setModalOpen('')}>
+                        <CloseIcon className="size-5" />
+                    </button>
                     {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
@@ -2182,10 +2185,9 @@ function App() {
                     {modalOpen === 'rpcSendMessage' && <ModalRpcSendMessageComponent modalRpcSendMessageRef={modalRpcSendMessageRef} submitMessageHandler={submitMessageHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'expandImage' && <ModalExpandImageComponent modalExpandImageRef={modalExpandImageRef} />}
                     {modalOpen === 'submitPubkey' && <ModalSubmitPubkeyComponent modalSubmitPubkeyRef={modalSubmitPubkeyRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
-                    <div className="text-center"><button className="h-7 w-15 my-1 px-2 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setModalOpen('')}>Close</button></div>
                 </Modal>
             </div>
-        </main>
+        </div>
     );
 };
 

@@ -1,16 +1,16 @@
 import { useEffect, useReducer, type FocusEventHandler } from 'react';
 import { getChildPostIds, breakingChanges, type Post, type PostTips, type Poster } from '../logic/asyncUtils';
-import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus, getMessageLines, getProfilePic, getShortDisplayTipAmount, likeEmoji } from '../logic/utils';
+import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayFullDate, getDisplayTimeAgo, getDisplayTipAmount, getIdentityStatus, getMessageLines, getProfilePic, getShortDisplayTipAmount, likeEmoji } from '../logic/utils';
 import { initDomSettings, initPostOutletDomSettings, initProfileRepliesDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from '../App.exports';
 import { useLocation, useNavigate } from 'react-router';
-import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
-import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
-import heartGraySvg from '../assets/heart-gray.svg';
-import heartRedSvg from '../assets/heart-red.svg';
-import cashGraySvg from '../assets/cash-gray.svg';
-import cashGreenSvg from '../assets/cash-green.svg';
-import PosterHeaderComponent from './PosterHeaderComponent';
 import ObjectUrlImageComponent from './ObjectUrlImageComponent';
+import ComposerToolbarComponent from './ComposerToolbarComponent';
+import { CloseIcon, HeartIcon, ReplyIcon, TipIcon } from './icons';
+
+const avatarClassName = 'flex-none cursor-pointer rounded-full bg-surface object-cover hover:opacity-85';
+const actionButtonClassName = 'inline-flex size-[34px] flex-none cursor-pointer items-center justify-center rounded-full';
+const actionCountClassName = '-ml-0.5 cursor-pointer pr-3 hover:underline';
+const commentActionButtonClassName = 'inline-flex size-7 flex-none cursor-pointer items-center justify-center rounded-full';
 
 type PostComponentProps = {
     uniqueKey: string,
@@ -342,287 +342,264 @@ function PostComponent(props: PostComponentProps) {
     };
 
     return (<>
-        <div className={`flex flex-col pt-3 bg-stone-800 ${!isPostOutlet ? 'hover:cursor-pointer' : ''}`} onMouseDown={handlePostMouseDown} onClick={handlePostClick}>
-            <PosterHeaderComponent address={post.poster} age={posterAge} state={posterState} stake={posterStake} pic={posterPic} />
-            <div className="flex-1 px-4 py-2 text-[17px] text-wrap leading-5">
-                <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(post, e)}>view more</a></span>}</p>
-            </div>
-            {post.image && <div className="mx-4 my-2">
-                <ObjectUrlImageComponent className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-sm hover:cursor-pointer" file={post.image} onClick={(e) => handleExpandImageModal(e, post.image!, post.cid)} />
-            </div>}
-            <div className="flex flex-row ml-2 mr-3 mb-1.5 text-[12px]">
-                <div className="w-22">
-                    {replyComments.length ?
-                        <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => toggleShowReplyInputHandler(e, post)} /><a className="block sm:inline text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{ totalNumberOfReplies} replies</a></div>
-                        :
-                        <div className="text-gray-500"><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={(e) => toggleShowReplyInputHandler(e, post)} /><p className="block sm:inline align-[-0.5px]">0 replies</p></div>
-                    }
+        <div className="border-b border-line">
+            <div className={`flex px-4 pt-3 ${isPostOutlet ? 'flex-wrap items-center gap-x-3' : 'gap-3 hover:bg-ink/[0.03]'} ${!isPostOutlet ? 'hover:cursor-pointer' : ''}`} onMouseDown={handlePostMouseDown} onClick={handlePostClick}>
+                <div className={isPostOutlet ? 'contents' : 'flex flex-none flex-col items-center'}>
+                    <ObjectUrlImageComponent className={`size-10 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${post.poster}`)} />
+                    {!isPostOutlet && showReplies && replyComments.length > 0 && <div className="mt-1 w-0.5 flex-1 bg-line"></div>}
                 </div>
-                <div className="w-20">
-                    {replyLikes.length ?
-                        <div className="text-red-400"><img src={heartRedSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === `${uniqueKey}-${post.postId}` ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${post.postId}`, post.postId)} /><a className="block sm:inline text-red-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{ replyLikes.length} likes</a></div>
-                        :
-                        <div className="text-gray-500"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === `${uniqueKey}-${post.postId}` ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${post.postId}`, post.postId)} /><p className="block sm:inline align-[-0.5px]">0 likes</p></div>
-                    }
-                </div>
-                <div className="flex-1 min-w-20">
-                    {postTips.totalAmount ?
-                        <div className="text-green-400"><img src={cashGreenSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === `${uniqueKey}-${post.postId}` ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${post.postId}`, post)} /><a className="block sm:inline text-green-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} idna</a></div>
-                        :
-                        <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === `${uniqueKey}-${post.postId}` ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${post.postId}`, post)} /><p className="block sm:inline align-[-0.5px]">0 idna</p></div>
-                    }
-                </div>
-                <div className="w-35 flex items-end justify-end">
-                    <div className="text-right text-[11px]/6 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{`${displayDate}, ${displayTime}`}</a></div>
-                </div>
-            </div>
-            {!isBreakingChangeDisabled && showReplyInput && <>
-                <div className="flex flex-col mb-2 px-2">
-                    <div className="flex flex-row gap-2 items-end">
-                        <div className="flex-1">
-                            <textarea
-                                id={`post-input-${uniqueKey}-${post.postId}`}
-                                rows={1}
-                                className="w-full field-sizing-content max-w-[408px] min-h-[29px] max-h-[520px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[14px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                                placeholder="Reply here..."
-                                disabled={inputPostDisabled || submitting}
-                                onFocus={replyInputOnFocusHandler}
-                                onBlur={replyInputOnBlurHandler}
-                                onClick={(e) => e.stopPropagation()}
+                <div className={isPostOutlet ? 'contents' : 'min-w-0 flex-1 pb-1'}>
+                    <div className={`mb-1 min-w-0 text-[15px]/5 ${isPostOutlet ? 'flex-1' : 'flex flex-wrap items-center gap-x-1 sm:flex-nowrap'}`}>
+                        <span className={`cursor-pointer font-bold text-ink hover:underline ${isPostOutlet ? 'block w-fit max-w-full truncate' : 'whitespace-nowrap'}`} onClick={(e) => handleClickAddress(e, `/profile/${post.poster}`)}>{getDisplayAddress(post.poster)}</span>
+                        <span className={`truncate text-ink-muted ${isPostOutlet ? 'block' : 'min-w-0 max-sm:order-last max-sm:basis-full max-sm:text-[13px]/4'}`}>{`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}</span>
+                        {!isPostOutlet && <>
+                            <span className="text-ink-muted" aria-hidden="true">·</span>
+                            <a className="whitespace-nowrap text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`} onClick={(e) => e.stopPropagation()}>{getDisplayTimeAgo(post.timestamp)}</a>
+                        </>}
+                    </div>
+                    <p className={`min-w-0 basis-full text-ink [word-break:break-word] ${isPostOutlet ? 'mt-3 text-[17px]/6' : 'text-[15px]/5'}`}>{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-accent hover:underline" onClick={(e) => toggleViewMoreHandler(post, e)}>Show more</a></span>}</p>
+                    {post.image ? <div className="mt-3 min-w-0 basis-full">
+                        <ObjectUrlImageComponent className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-2xl border border-line hover:cursor-pointer" file={post.image} onClick={(e) => handleExpandImageModal(e, post.image!, post.cid)} />
+                    </div> : null}
+                    {isPostOutlet && <div className="basis-full py-4 text-[15px] text-ink-muted">
+                        <a className="hover:underline" href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{`${displayTime} · ${getDisplayFullDate(post.timestamp)}`}</a>
+                    </div>}
+                    <div className={`flex basis-full text-[13px] text-ink-muted ${isPostOutlet ? 'justify-between border-t border-line px-1 py-1' : 'mt-1 -ml-2 max-w-[425px]'}`}>
+                        <div className={`flex items-center ${isPostOutlet ? '' : 'flex-1'} ${replyComments.length ? 'text-accent' : ''}`}>
+                            <button type="button" aria-label="Reply" title="Reply" className={`${actionButtonClassName} hover:bg-accent/20 hover:text-accent`} onClick={(e) => toggleShowReplyInputHandler(e, post)}>
+                                <ReplyIcon className={isPostOutlet ? 'size-[22.5px]' : 'size-[18.75px]'} />
+                            </button>
+                            {replyComments.length ? <button type="button" className={actionCountClassName} onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{totalNumberOfReplies}<span className="sr-only"> replies</span></button> : null}
+                        </div>
+                        <div className={`flex items-center ${isPostOutlet ? '' : 'flex-1'} ${replyLikes.length ? 'text-like' : ''}`}>
+                            <button type="button" aria-label="Like" title="Like" className={`${actionButtonClassName} hover:bg-like/20 hover:text-like ${submittingLike === `${uniqueKey}-${post.postId}` ? 'bg-like/10 text-like' : ''}`} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${post.postId}`, post.postId)}>
+                                <HeartIcon className={isPostOutlet ? 'size-[22.5px]' : 'size-[18.75px]'} />
+                            </button>
+                            {replyLikes.length ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{replyLikes.length}<span className="sr-only"> likes</span></button> : null}
+                        </div>
+                        <div className={`flex items-center ${isPostOutlet ? '' : 'flex-1'} ${postTips.totalAmount ? 'text-tip' : ''}`}>
+                            <button type="button" aria-label="Tip" title="Tip" className={`${actionButtonClassName} hover:bg-tip/20 hover:text-tip ${submittingTip === `${uniqueKey}-${post.postId}` ? 'bg-tip/10 text-tip' : ''}`} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${post.postId}`, post)}>
+                                <TipIcon className={isPostOutlet ? 'size-[22.5px]' : 'size-[18.75px]'} />
+                            </button>
+                            {postTips.totalAmount ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} iDNA</button> : null}
+                        </div>
+                    </div>
+                    {!isBreakingChangeDisabled && showReplyInput && <div className={`basis-full cursor-auto ${isPostOutlet ? 'border-t border-line pt-1 pb-3' : 'pb-2'}`} onClick={(e) => e.stopPropagation()}>
+                        <textarea
+                            id={`post-input-${uniqueKey}-${post.postId}`}
+                            rows={1}
+                            className="block w-full field-sizing-content min-h-[29px] max-h-[520px] resize-none border-b border-line bg-transparent py-2 text-[15px]/5 text-ink outline-none placeholder:text-ink-muted focus:border-accent scrollbar-thin"
+                            placeholder="Post your reply"
+                            disabled={inputPostDisabled || submitting}
+                            onFocus={replyInputOnFocusHandler}
+                            onBlur={replyInputOnBlurHandler}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                        {postMediaAttachment ? <div className="mt-3">
+                            <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
+                        </div> : null}
+                        <div className="pt-2">
+                            <ComposerToolbarComponent
+                                compact
+                                hasAttachment={!!postMediaAttachment}
+                                onAddImage={(e) => handleOpenAddMediaModal(e, `${uniqueKey}-${post.postId}`, 'post')}
+                                onRemoveImage={(e) => removeMediaHandler(e, `${uniqueKey}-${post.postId}`)}
+                                copyTxId={`post-copytx-${uniqueKey}-${post.postId}`}
+                                onCopyTx={(e) => localCopyPostTxHandler(e, `${uniqueKey}-${post.postId}`, post.postId)}
+                                submitText={submittingPost === `${uniqueKey}-${post.postId}` ? '...' : 'Reply'}
+                                onSubmit={(e) => localSubmitPostHandler(e, `${uniqueKey}-${post.postId}`, post.postId)}
+                                submitDisabled={inputPostDisabled || submitting}
                             />
                         </div>
-                        <div>
-                            <button className="h-8 w-17 mb-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || submitting} onClick={(e) => localSubmitPostHandler(e, `${uniqueKey}-${post.postId}`, post.postId)}>{submittingPost ===`${uniqueKey}-${post.postId}` ? '...' : 'Post!'}</button>
-                        </div>
-                    </div>
-                    {postMediaAttachment && <div className="my-1">
-                        <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-sm" file={postMediaAttachment.file} />
                     </div>}
-                    <div className="leading-[12px]">
-                        {postMediaAttachment ? <>
-                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, `${uniqueKey}-${post.postId}`)}>Remove image</p>
-                        </> : <>
-                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, `${uniqueKey}-${post.postId}`, 'post')}>Add image</p>
-                        </>}
-                        <p id={`post-copytx-${uniqueKey}-${post.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(e, `${uniqueKey}-${post.postId}`, post.postId)}>Copy tx</p>
-                    </div>
                 </div>
-            </>}
-        </div>
-        {showReplies && <div className="flex flex-col bg-stone-800">
-            <ul>
-                {replyComments.slice(0, showMaxReplies).map((replyPost, index) => {
+            </div>
+            {showReplies && <div>
+                <ul>
+                    {replyComments.slice(0, showMaxReplies).map((replyPost, index) => {
 
-                    const postTips = postTipsRef.current[replyPost.postId] ?? { totalAmount: 0, tips: [] };
-                    const posterDisplayAddress = getDisplayAddress(replyPost.poster);
-                    const posterStake = replyPost.posterDetails_atTimeOfPost.stake;
-                    const posterState = replyPost.posterDetails_atTimeOfPost.state;
-                    const posterAge = replyPost.posterDetails_atTimeOfPost.age;
-                    const posterPic = getProfilePic(postersRef.current[replyPost.poster], posterState);
-                    const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
-                    const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(replyPost.message, true, 3);
-                    const postDomSettingsItem = getPostDomSettings(replyPost.postId);
+                        const postTips = postTipsRef.current[replyPost.postId] ?? { totalAmount: 0, tips: [] };
+                        const posterDisplayAddress = getDisplayAddress(replyPost.poster);
+                        const posterStake = replyPost.posterDetails_atTimeOfPost.stake;
+                        const posterState = replyPost.posterDetails_atTimeOfPost.state;
+                        const posterAge = replyPost.posterDetails_atTimeOfPost.age;
+                        const posterPic = getProfilePic(postersRef.current[replyPost.poster], posterState);
+                        const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
+                        const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(replyPost.message, true, 3);
+                        const postDomSettingsItem = getPostDomSettings(replyPost.postId);
 
-                    const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
+                        const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
 
-                    const messageLinesDisplay = showTruncatedMessageLines ? truncatedMessageLines : messageLines;
+                        const messageLinesDisplay = showTruncatedMessageLines ? truncatedMessageLines : messageLines;
 
-                    const postMediaAttachment = postMediaAttachmentsRef.current[`post-${uniqueKey}-${replyPost.postId}`];
+                        const postMediaAttachment = postMediaAttachmentsRef.current[`post-${uniqueKey}-${replyPost.postId}`];
 
-                    const showDiscussion = !postDomSettingsItem.repliesHidden;
-                    const discussParentId = discussPrefix + replyPost.postId;
+                        const showDiscussion = !postDomSettingsItem.repliesHidden;
+                        const discussParentId = discussPrefix + replyPost.postId;
 
-                    const discussionPostComments = discussionPostsAll[discussParentId].discussionPostComments;
-                    const discussionPostLikes = discussionPostsAll[discussParentId].discussionPostLikes;
+                        const discussionPostComments = discussionPostsAll[discussParentId].discussionPostComments;
+                        const discussionPostLikes = discussionPostsAll[discussParentId].discussionPostLikes;
 
-                    const likesForReplyPost = discussionPostLikes.filter(like => like.replyToPostId === replyPost.postId);
+                        const likesForReplyPost = discussionPostLikes.filter(like => like.replyToPostId === replyPost.postId);
 
-                    const discussReplyToPostId = postDomSettingsItem.discussReplyToPostId;
-                    const discussReplyToPost = discussReplyToPostId && postsRef.current[discussReplyToPostId!];
+                        const discussReplyToPostId = postDomSettingsItem.discussReplyToPostId;
+                        const discussReplyToPost = discussReplyToPostId && postsRef.current[discussReplyToPostId!];
 
-                    const isSpotlightReply = !!spotlightReplyPostId && index === 0;
+                        const isSpotlightReply = !!spotlightReplyPostId && index === 0;
 
-                    const addAttrs = {
-                        ...( isSpotlightReply && spotlightDiscussionPostId && { id: `spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
-                    };
+                        const addAttrs = {
+                            ...( isSpotlightReply && spotlightDiscussionPostId && { id: `spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
+                        };
 
-                    return (
-                        <li key={replyPost.postId}>
-                            <hr className="mx-2 text-gray-700" />
-                            <div className={`mx-2 mt-1.5 mb-2 flex flex-col ${isSpotlightReply && !spotlightDiscussionPostId && 'bg-yellow-200/10'}`}>
-                                <div className="flex flex-row">
-                                    <div className="w-11 flex-none flex flex-col">
-                                        <div className="h-13 flex-none">
-                                            <ObjectUrlImageComponent file={posterPic} />
+                        return (
+                            <li key={replyPost.postId} className={isPostOutlet ? 'border-t border-line' : ''}>
+                                <div className={`flex gap-3 px-4 pb-1 ${isPostOutlet ? 'pt-3' : 'pt-1'} ${isSpotlightReply && !spotlightDiscussionPostId ? 'bg-accent/15 hover:bg-accent/20' : ''}`}>
+                                    <div className="flex flex-none flex-col items-center">
+                                        <ObjectUrlImageComponent className={`size-10 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)} />
+                                        {!isPostOutlet && index < replyComments.length - 1 && <div className="mt-1 w-0.5 flex-1 bg-line"></div>}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-x-1 text-[15px]/5 sm:flex-nowrap">
+                                            <span className="cursor-pointer whitespace-nowrap font-bold text-ink hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)}>{posterDisplayAddress}</span>
+                                            <span className="min-w-0 truncate text-ink-muted max-sm:order-last max-sm:basis-full max-sm:text-[13px]/4" title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}>{`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}</span>
+                                            <span className="text-ink-muted" aria-hidden="true">·</span>
+                                            <a className="whitespace-nowrap text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(replyPost.timestamp)}</a>
                                         </div>
-                                        <div className="flex-1"></div>
-                                    </div>
-                                    <div className="ml-1 mr-3 flex-1 flex flex-col overflow-hidden">
-                                        <div className="flex-none flex flex-col gap-x-3">
-                                            <div className="flex flex-row items-center">
-                                                <p className="text-[16px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)}>{posterDisplayAddress}</p>
-                                                <span className="ml-2 text-[11px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
-                                            </div>
-                                            <div className="flex-1"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="-mt-7 flex-1 pl-12 pr-4 pt-2 text-[14px] text-wrap leading-5">
-                                    <p className="[word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="hover:underline cursor-pointer text-[12px] text-blue-400 whitespace-nowrap" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>view more</a></span>}</p>
-                                </div>
-                                {replyPost.image && <div className="ml-12 mr-4 my-1">
-                                    <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-sm hover:cursor-pointer" file={replyPost.image} onClick={(e) => handleExpandImageModal(e, replyPost.image!, replyPost.cid)} />
-                                </div>}
-                                <div className="w-full pt-2 px-4 flex flex-row text-[12px]">
-                                    <div className="w-26">
-                                        {discussionPostComments.length || showDiscussion ?
-                                            <div className="text-blue-400"><img src={commentBlueSvg} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => toggleReplyDiscussionHandler(replyPost)} /><a className="block sm:inline text-blue-400 align-[-0.5px] hover:underline cursor-pointer" onClick={() => toggleShowDiscussionHandler(replyPost)}>{ discussionPostComments.length} comments</a></div>
-                                            :
-                                            <div className="text-gray-500"><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => toggleReplyDiscussionHandler(replyPost)} /><p className="block sm:inline align-[-0.5px]">0 comments</p></div>
-                                        }
-                                    </div>
-                                    <div className="w-19">
-                                        {likesForReplyPost.length ?
-                                            <div className="text-red-400"><img src={heartRedSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === `${uniqueKey}-${replyPost.postId}` ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${replyPost.postId}`, replyPost.postId, discussParentId)} /><a className="block sm:inline text-red-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForReplyPost)}>{likesForReplyPost.length} likes</a></div>
-                                            :
-                                            <div className="text-gray-500"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === `${uniqueKey}-${replyPost.postId}` ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${replyPost.postId}`, replyPost.postId, discussParentId)} /><p className="block sm:inline align-[-0.5px]">0 likes</p></div>
-                                        }
-                                    </div>
-                                    <div className="flex-1 min-w-19">
-                                        {postTips.totalAmount ?
-                                            <div className="text-green-400"><img src={cashGreenSvg} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === `${uniqueKey}-${replyPost.postId}` ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${replyPost.postId}`, replyPost)} /><a className="block sm:inline text-green-400 align-[-0.5px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} idna</a></div>
-                                            :
-                                            <div className="text-gray-500"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-6 p-[3px] mr-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === `${uniqueKey}-${replyPost.postId}` ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${replyPost.postId}`, replyPost)} /><p className="block sm:inline align-[-0.5px]">0 idna</p></div>
-                                        }
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px]/5 text-stone-500 font-[700] hover:underline"><a href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a></p>
-                                    </div>
-                                </div>
-                                {showDiscussion && <div className="mt-2.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
-                                    <ul {...addAttrs} id={`spotlight-discussion-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`} className="relative flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
-                                        {discussionPostComments.length === 0 && <li className="mb-1"><p className="italic text-center text-[12px] text-gray-500">no comments yet</p></li>}
-                                        {discussionPostComments.map((discussionPost) => {
-                                            const postTips = postTipsRef.current[discussionPost.postId] ?? { totalAmount: 0, tips: [] };
-                                            const posterDisplayAddress = getDisplayAddressShort(discussionPost.poster);
-                                            const posterStake = discussionPost.posterDetails_atTimeOfPost.stake;
-                                            const posterState = discussionPost.posterDetails_atTimeOfPost.state;
-                                            const posterAge = discussionPost.posterDetails_atTimeOfPost.age;
-                                            const posterPic = getProfilePic(postersRef.current[discussionPost.poster], posterState);
-                                            const { displayDate, displayTime } = getDisplayDateTime(discussionPost.timestamp);
-                                            const { messageLines } = getMessageLines(discussionPost.message);
-                                            const replyToPost = postsRef.current[discussionPost.replyToPostId];
-                                            const replyToPostPosterState = replyToPost?.posterDetails_atTimeOfPost.state;
-                                            const replyToPostPosterPic = getProfilePic(postersRef.current[replyToPost?.poster], replyToPostPosterState);
-                                            const likesForDiscussionPost = discussionPostLikes.filter(like => like.replyToPostId === discussionPost.postId);
-
-                                            const isSpotlightDiscussionPost = discussionPost.postId === spotlightDiscussionPostId;
-
-                                            const addAttrs = {
-                                                ...( isSpotlightDiscussionPost && { id: `spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
-                                            };
-
-                                            return (
-                                                <li {...addAttrs} className={`${isSpotlightDiscussionPost ? 'bg-yellow-200/10 hover:bg-yellow-200/15' : 'hover:bg-stone-800'}`}>
-                                                    <div className="my-1.5 flex flex-col">
-                                                        {replyToPost && <div className="flex flex-row">
-                                                            <div className="w-8 flex justify-end items-end">
-                                                                <div className="h-2.5 w-4 border-t-1 border-l-1 border-gray-500"></div>
-                                                            </div>
-                                                            <div className="flex-1 flex flex-row mr-3">
-                                                                <div className="w-5"><ObjectUrlImageComponent file={replyToPostPosterPic} /></div>
-                                                                <div className="flex-1 text-nowrap overflow-hidden">
-                                                                    <p className="max-w-[120px] text-[12px] text-gray-500">{getMessageLines(replyToPost.message).messageLines[0]}</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>}
-                                                        <div className="flex flex-row">
-                                                            <div className="w-9 flex-none flex flex-col">
-                                                                <div className="h-11 flex-none">
-                                                                    <ObjectUrlImageComponent file={posterPic} />
-                                                                </div>
-                                                                <div className="flex-1"></div>
-                                                            </div>
-                                                            <div className="flex-1 flex flex-col">
-                                                                <div className="mx-1 flex flex-row items-center overflow-hidden">
-                                                                    <div className="flex-1">
-                                                                        <span className="text-[14px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${discussionPost.poster}`)}>{posterDisplayAddress}</span>
-                                                                        <span className="ml-1 text-[9px] align-[2px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="mx-1 text-[10px] text-stone-500 font-[700] hover:underline"><a className="break-all" href={`https://scan.idena.io/transaction/${discussionPost.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a></p>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
-                                                                    <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
-                                                                </div>
-                                                                {discussionPost.image && <div className="my-1 mx-1">
-                                                                    <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm hover:cursor-pointer" file={discussionPost.image} onClick={(e) => handleExpandImageModal(e, discussionPost.image!, discussionPost.cid)} />
-                                                                </div>}
-                                                            </div>
-                                                            <div className="pt-0.5 mr-1 text-[12px] flex flex-col gap-0.5">
-                                                                <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] -ml-0.5 mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)} /></div>
-                                                                {likesForDiscussionPost.length ?
-                                                                    <div className="text-red-400 text-left whitespace-nowrap"><img src={heartRedSvg} className={'h-5 p-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === `${uniqueKey}-${discussionPost.postId}` ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${discussionPost.postId}`, discussionPost.postId, discussParentId)} /><a className="text-red-400 ml-[1px] align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, likesForDiscussionPost)}>{likesForDiscussionPost.length}</a></div>
-                                                                    :
-                                                                    <div className="text-gray-500 text-left"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === `${uniqueKey}-${discussionPost.postId}` ? ' bg-red-400/30' : '')} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${discussionPost.postId}`, discussionPost.postId, discussParentId)} /></div>
-                                                                }
-                                                                {postTips.totalAmount ?
-                                                                    <div className="text-green-400 text-left whitespace-nowrap"><img src={cashGreenSvg} className={'h-5 p-0.5 -ml-0.5 inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === `${uniqueKey}-${discussionPost.postId}` ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${discussionPost.postId}`, discussionPost)} /><a className="text-green-400 ml-0.5 align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getShortDisplayTipAmount(postTips.totalAmount)}</a></div>
-                                                                    :
-                                                                    <div className="text-gray-500 text-left"><img src={cashGraySvg} onMouseOver={(e) => { e.currentTarget.src = cashGreenSvg; }} onMouseOut={(e) => { e.currentTarget.src = cashGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-green-400/30 hover:cursor-pointer' + (submittingTip === `${uniqueKey}-${discussionPost.postId}` ? ' bg-green-400/30' : '')} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${discussionPost.postId}`, discussionPost)} /></div>
-                                                                }
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                    {!isBreakingChangeDisabled && <>
-                                        {discussReplyToPost && <div className="w-full mt-1 px-1 flex flex-row bg-stone-800">
-                                            <div className="flex-1 overflow-hidden text-nowrap text-[12px] text-gray-500"><p className="mt-[1px]">Replying to {getDisplayAddressShort(discussReplyToPost!.poster)}: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p></div>
-                                            <div className="w-6 text-right">
-                                                <button className="text-[10px] align-[2.5px] h-4 w-5 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>✖</button>
-                                            </div>
+                                        <p className="text-[15px]/5 text-ink [word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-accent hover:underline" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>Show more</a></span>}</p>
+                                        {replyPost.image && <div className="mt-3">
+                                            <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line hover:cursor-pointer" file={replyPost.image} onClick={(e) => handleExpandImageModal(e, replyPost.image!, replyPost.cid)} />
                                         </div>}
-                                        <div className="mt-1 flex flex-col">
-                                            <div className="flex flex-row gap-2 items-end">
-                                                <div className="flex-1">
+                                        <div className="mt-1 -ml-2 flex max-w-[425px] text-[13px] text-ink-muted">
+                                            <div className={`flex flex-1 items-center ${discussionPostComments.length || showDiscussion ? 'text-accent' : ''}`}>
+                                                <button type="button" aria-label="Comment" title="Comment" className={`${actionButtonClassName} hover:bg-accent/20 hover:text-accent`} onClick={() => toggleReplyDiscussionHandler(replyPost)}>
+                                                    <ReplyIcon className="size-[18.75px]" />
+                                                </button>
+                                                {discussionPostComments.length || showDiscussion ? <button type="button" className={actionCountClassName} onClick={() => toggleShowDiscussionHandler(replyPost)}>{discussionPostComments.length}<span className="sr-only"> comments</span></button> : null}
+                                            </div>
+                                            <div className={`flex flex-1 items-center ${likesForReplyPost.length ? 'text-like' : ''}`}>
+                                                <button type="button" aria-label="Like" title="Like" className={`${actionButtonClassName} hover:bg-like/20 hover:text-like ${submittingLike === `${uniqueKey}-${replyPost.postId}` ? 'bg-like/10 text-like' : ''}`} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${replyPost.postId}`, replyPost.postId, discussParentId)}>
+                                                    <HeartIcon className="size-[18.75px]" />
+                                                </button>
+                                                {likesForReplyPost.length ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenLikesModal(e, likesForReplyPost)}>{likesForReplyPost.length}<span className="sr-only"> likes</span></button> : null}
+                                            </div>
+                                            <div className={`flex flex-1 items-center ${postTips.totalAmount ? 'text-tip' : ''}`}>
+                                                <button type="button" aria-label="Tip" title="Tip" className={`${actionButtonClassName} hover:bg-tip/20 hover:text-tip ${submittingTip === `${uniqueKey}-${replyPost.postId}` ? 'bg-tip/10 text-tip' : ''}`} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${replyPost.postId}`, replyPost)}>
+                                                    <TipIcon className="size-[18.75px]" />
+                                                </button>
+                                                {postTips.totalAmount ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} iDNA</button> : null}
+                                            </div>
+                                        </div>
+                                        {showDiscussion && <div className="mt-1 mb-2 overflow-hidden border border-line">
+                                            <ul {...addAttrs} id={`spotlight-discussion-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`} className="relative flex flex-col flex-col-reverse max-h-100 overflow-y-auto scrollbar-thin">
+                                                {discussionPostComments.length === 0 && <li className="py-3"><p className="text-center text-[13px] text-ink-muted">No comments yet</p></li>}
+                                                {discussionPostComments.map((discussionPost) => {
+                                                    const postTips = postTipsRef.current[discussionPost.postId] ?? { totalAmount: 0, tips: [] };
+                                                    const posterDisplayAddress = getDisplayAddressShort(discussionPost.poster);
+                                                    const posterStake = discussionPost.posterDetails_atTimeOfPost.stake;
+                                                    const posterState = discussionPost.posterDetails_atTimeOfPost.state;
+                                                    const posterAge = discussionPost.posterDetails_atTimeOfPost.age;
+                                                    const posterPic = getProfilePic(postersRef.current[discussionPost.poster], posterState);
+                                                    const { displayDate, displayTime } = getDisplayDateTime(discussionPost.timestamp);
+                                                    const { messageLines } = getMessageLines(discussionPost.message);
+                                                    const replyToPost = postsRef.current[discussionPost.replyToPostId];
+                                                    const replyToPostPosterState = replyToPost?.posterDetails_atTimeOfPost.state;
+                                                    const replyToPostPosterPic = getProfilePic(postersRef.current[replyToPost?.poster], replyToPostPosterState);
+                                                    const likesForDiscussionPost = discussionPostLikes.filter(like => like.replyToPostId === discussionPost.postId);
+
+                                                    const isSpotlightDiscussionPost = discussionPost.postId === spotlightDiscussionPostId;
+
+                                                    const addAttrs = {
+                                                        ...( isSpotlightDiscussionPost && { id: `spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
+                                                    };
+
+                                                    return (
+                                                        <li {...addAttrs} className={`px-3 py-2 ${isSpotlightDiscussionPost ? 'bg-accent/15 hover:bg-accent/20' : 'hover:bg-ink/[0.03]'}`}>
+                                                            {replyToPost && <div className="flex items-center gap-1 text-[13px]/5 text-ink-muted">
+                                                                <div className="ml-4 h-2.5 w-4 flex-none self-end rounded-tl border-t border-l border-line-strong"></div>
+                                                                <ObjectUrlImageComponent className="size-4 flex-none rounded-full bg-surface object-cover" file={replyToPostPosterPic} />
+                                                                <p className="min-w-0 truncate">{getMessageLines(replyToPost.message).messageLines[0]}</p>
+                                                            </div>}
+                                                            <div className="flex gap-2">
+                                                                <ObjectUrlImageComponent className={`size-8 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${discussionPost.poster}`)} />
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="flex items-center gap-1 text-[14px]/5">
+                                                                        <span className="cursor-pointer whitespace-nowrap font-bold text-ink hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${discussionPost.poster}`)}>{posterDisplayAddress}</span>
+                                                                        <span className="min-w-0 truncate text-[13px] text-ink-muted" title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}>{`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}</span>
+                                                                        <span className="text-[13px] text-ink-muted" aria-hidden="true">·</span>
+                                                                        <a className="whitespace-nowrap text-[13px] text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${discussionPost.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(discussionPost.timestamp)}</a>
+                                                                    </div>
+                                                                    <div className="max-h-[9999px] text-[14px]/5 text-ink">
+                                                                        <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                                                    </div>
+                                                                    {discussionPost.image && <div className="mt-2">
+                                                                        <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line hover:cursor-pointer" file={discussionPost.image} onClick={(e) => handleExpandImageModal(e, discussionPost.image!, discussionPost.cid)} />
+                                                                    </div>}
+                                                                    <div className="-ml-1.5 flex gap-4 text-[13px] text-ink-muted">
+                                                                        <button type="button" aria-label="Reply" title="Reply" className={`${commentActionButtonClassName} hover:bg-accent/20 hover:text-accent`} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)}>
+                                                                            <ReplyIcon className="size-4" />
+                                                                        </button>
+                                                                        <div className={`flex items-center ${likesForDiscussionPost.length ? 'text-like' : ''}`}>
+                                                                            <button type="button" aria-label="Like" title="Like" className={`${commentActionButtonClassName} hover:bg-like/20 hover:text-like ${submittingLike === `${uniqueKey}-${discussionPost.postId}` ? 'bg-like/10 text-like' : ''}`} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${discussionPost.postId}`, discussionPost.postId, discussParentId)}>
+                                                                                <HeartIcon className="size-4" />
+                                                                            </button>
+                                                                            {likesForDiscussionPost.length ? <button type="button" className="-ml-0.5 cursor-pointer hover:underline" onClick={(e) => handleOpenLikesModal(e, likesForDiscussionPost)}>{likesForDiscussionPost.length}<span className="sr-only"> likes</span></button> : null}
+                                                                        </div>
+                                                                        <div className={`flex items-center ${postTips.totalAmount ? 'text-tip' : ''}`}>
+                                                                            <button type="button" aria-label="Tip" title="Tip" className={`${commentActionButtonClassName} hover:bg-tip/20 hover:text-tip ${submittingTip === `${uniqueKey}-${discussionPost.postId}` ? 'bg-tip/10 text-tip' : ''}`} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${discussionPost.postId}`, discussionPost)}>
+                                                                                <TipIcon className="size-4" />
+                                                                            </button>
+                                                                            {postTips.totalAmount ? <button type="button" className="-ml-0.5 cursor-pointer hover:underline" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getShortDisplayTipAmount(postTips.totalAmount)}<span className="sr-only"> iDNA</span></button> : null}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                            {!isBreakingChangeDisabled && <>
+                                                {discussReplyToPost && <div className="flex items-center gap-2 border-t border-line px-3 py-1.5 text-[13px] text-ink-muted">
+                                                    <p className="min-w-0 flex-1 truncate">Replying to <span className="text-accent">{getDisplayAddressShort(discussReplyToPost!.poster)}</span>: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
+                                                    <button type="button" aria-label="Cancel reply" title="Cancel reply" className="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full text-ink hover:bg-ink/10" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>
+                                                        <CloseIcon className="size-3.5" />
+                                                    </button>
+                                                </div>}
+                                                <div className="border-t border-line px-3 py-2">
                                                     <textarea
                                                         id={`post-input-${uniqueKey}-${replyPost.postId}`}
                                                         rows={2}
-                                                        className="w-full field-sizing-content max-w-[385px] min-h-[26px] max-h-[312px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                                                        placeholder="Comment here..."
+                                                        className="block w-full field-sizing-content min-h-[26px] max-h-[312px] resize-none bg-transparent py-1 text-[14px]/5 text-ink outline-none placeholder:text-ink-muted scrollbar-thin"
+                                                        placeholder="Post your comment"
                                                         disabled={inputPostDisabled || submitting}
                                                     />
+                                                    {postMediaAttachment && <div className="my-2">
+                                                        <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
+                                                    </div>}
+                                                    <div className="pt-1">
+                                                        <ComposerToolbarComponent
+                                                            compact
+                                                            hasAttachment={!!postMediaAttachment}
+                                                            onAddImage={(e) => handleOpenAddMediaModal(e, `${uniqueKey}-${replyPost.postId}`, 'post')}
+                                                            onRemoveImage={(e) => removeMediaHandler(e, `${uniqueKey}-${replyPost.postId}`)}
+                                                            copyTxId={`post-copytx-${uniqueKey}-${replyPost.postId}`}
+                                                            onCopyTx={(e) => localCopyPostTxHandler(e, `${uniqueKey}-${replyPost.postId}`, discussReplyToPostId, discussParentId)}
+                                                            submitText={submittingPost === `${uniqueKey}-${replyPost.postId}` ? '...' : 'Reply'}
+                                                            onSubmit={(e) => localSubmitPostHandler(e, `${uniqueKey}-${replyPost.postId}`, discussReplyToPostId, discussParentId)}
+                                                            submitDisabled={inputPostDisabled || submitting}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || submitting} onClick={(e) => localSubmitPostHandler(e, `${uniqueKey}-${replyPost.postId}`, discussReplyToPostId, discussParentId)}>{submittingPost === `${uniqueKey}-${replyPost.postId}` ? '...' : 'Post!'}</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {postMediaAttachment && <div className="my-1">
-                                            <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm" file={postMediaAttachment.file} />
-                                        </div>}
-                                        <div className="leading-[12px]">
-                                            {postMediaAttachment ? <>
-                                                <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, `${uniqueKey}-${replyPost.postId}`)}>Remove image</p>
-                                            </> : <>
-                                                <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, `${uniqueKey}-${replyPost.postId}`, 'post')}>Add image</p>
                                             </>}
-                                            <p id={`post-copytx-${uniqueKey}-${replyPost.postId}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => localCopyPostTxHandler(e, `${uniqueKey}-${replyPost.postId}`, discussReplyToPostId, discussParentId)}>Copy tx</p>
-                                        </div>
-                                    </>}
-                                </div>}
-                            </div>
-                        </li>
-                    );
-                })}
-            </ul>
-            {replyComments.length > showMaxReplies && <div className="mx-2 mb-2"><p className="text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => increaseShowMaxReplies(10)}>show more replies</p></div>}
-        </div>}
-        <div className="mt-10"></div>
+                                        </div>}
+                                    </div>
+                                </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+                {replyComments.length > showMaxReplies && <button type="button" className={`block w-full cursor-pointer py-3 text-left text-[15px] text-accent hover:bg-ink/[0.03] ${isPostOutlet ? 'border-t border-line px-4' : 'pr-4 pl-[68px]'}`} onClick={() => increaseShowMaxReplies(10)}>Show more replies</button>}
+            </div>}
+        </div>
     </>);
 }
 

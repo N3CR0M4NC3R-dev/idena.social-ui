@@ -1,8 +1,4 @@
 import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessageLines, getProfilePic, likeEmoji } from "../logic/utils";
-import commentGraySvg from '../assets/comment-alt-lines-gray.svg';
-import commentBlueSvg from '../assets/comment-alt-lines-blue.svg';
-import heartGraySvg from '../assets/heart-gray.svg';
-import heartRedSvg from '../assets/heart-red.svg';
 import { initDomSettings, type BrowserStateHistorySettings, type Conversation, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from "../App.exports";
 import { getChildPostIds, type Message, type Poster } from "../logic/asyncUtils";
 import { useLocation, useNavigate } from "react-router";
@@ -10,6 +6,8 @@ import { useReducer } from "react";
 import OneOnOneConversationHeaderComponent from "./OneOnOneConversationHeaderComponent";
 import GroupConversationHeaderComponent from "./GroupConversationHeaderComponent";
 import ObjectUrlImageComponent from "./ObjectUrlImageComponent";
+import ComposerToolbarComponent from "./ComposerToolbarComponent";
+import { CloseIcon, HeartIcon, ReplyIcon } from "./icons";
 
 type ConversationComponentProps = {
     conversationKey: string,
@@ -182,9 +180,9 @@ function ConversationComponent(props: ConversationComponentProps) {
     const messages = conversation.messages.map((messageId) => messagesRef.current[messageId]).filter(message => !message.isLike);
     const participants = conversation.participants;
 
-    const participantsExcludingSelf = participants.filter(item => item !== postersAddress);
+    const participantsExcludingSelf = participants.filter(item => item.toLowerCase() !== postersAddress.toLowerCase());
     if (!participantsExcludingSelf.length) {
-        participantsExcludingSelf.push(postersAddress);
+        participantsExcludingSelf.push(postersAddress.toLowerCase());
     }
     const conversationPartners = participantsExcludingSelf.map(participant => postersRef.current[participant]);
 
@@ -197,128 +195,98 @@ function ConversationComponent(props: ConversationComponentProps) {
     const postMediaAttachment = postMediaAttachmentsRef.current[`message-${conversationKey}`];
 
     return <>
-        <div className="flex flex-col pt-3 pb-2 bg-stone-800 hover:cursor-pointer" onClick={() => handleConversationClick(conversationKey)}>
+        <div className={`flex flex-col gap-1 border-b border-line px-4 py-3 ${!isConversationOutlet ? 'cursor-pointer hover:bg-ink/[0.03]' : ''}`} onClick={() => handleConversationClick(conversationKey)}>
             {conversationPartners.length === 1
                 ? <OneOnOneConversationHeaderComponent conversationPartner={conversationPartners[0]} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />
                 : <GroupConversationHeaderComponent conversationPartners={conversationPartners} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />}
-            <div className="ml-3 flex gap-2">
-                <span className="inline text-[11px] text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</span>
-            </div>
+            <button type="button" className={`self-start cursor-pointer text-[13px] text-accent hover:underline ${conversationPartners.length === 1 ? 'ml-[52px]' : ''}`} onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</button>
         </div>
-        {showReplies && <div className="bg-stone-800 pt-1 pb-2">
-            <div className="mt-1.5 ml-4 mr-2 p-2 bg-stone-900 text-[14px]">
-                <ul className="flex flex-col flex-col-reverse max-h-100 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
-                    {messages.map((message) => {
-                        const posterDisplayAddress = getDisplayAddressShort(message.sender);
-                        const posterStake = message.sendersDetails_atTimeOfMessage.stake;
-                        const posterState = message.sendersDetails_atTimeOfMessage.state;
-                        const posterAge = message.sendersDetails_atTimeOfMessage.age;
-                        const posterPic = getProfilePic(postersRef.current[message.sender], posterState);
-                        const { displayDate, displayTime } = getDisplayDateTime(message.timestamp);
-                        const { messageLines } = getMessageLines(message.message);
-                        const replyToMessage = messagesRef.current[message.replyToMessageId];
-                        const replyToMessagePosterPic = getProfilePic(postersRef.current[replyToMessage?.sender], replyToMessage?.sendersDetails_atTimeOfMessage.state);
-                        const awaitingReplyToMessage = message.replyToMessageId && !replyToMessage;
+        {showReplies && <div className="border-b border-line">
+            <ul className="flex flex-col flex-col-reverse gap-3 max-h-100 overflow-y-auto scrollbar-thin px-4 py-3">
+                {messages.map((message) => {
+                    const posterDisplayAddress = getDisplayAddressShort(message.sender);
+                    const posterStake = message.sendersDetails_atTimeOfMessage.stake;
+                    const posterState = message.sendersDetails_atTimeOfMessage.state;
+                    const posterAge = message.sendersDetails_atTimeOfMessage.age;
+                    const posterPic = getProfilePic(postersRef.current[message.sender], posterState);
+                    const { displayDate, displayTime } = getDisplayDateTime(message.timestamp);
+                    const { messageLines } = getMessageLines(message.message);
+                    const replyToMessage = messagesRef.current[message.replyToMessageId];
+                    const replyToMessagePosterPic = getProfilePic(postersRef.current[replyToMessage?.sender], replyToMessage?.sendersDetails_atTimeOfMessage.state);
+                    const awaitingReplyToMessage = message.replyToMessageId && !replyToMessage;
 
-                        const messageParentId = messagePrefix + message.messageId;
-                        const repliesToThisMessage = [ ...getChildPostIds(messageParentId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(messageParentId, deOrphanedReplyPostsTreeRef.current) ];
-                        const replyMessages = repliesToThisMessage.map(replyMessageId => messagesRef.current[replyMessageId]);
-                        const replyLikes = replyMessages.filter(replyMessage => replyMessage.isLike);
+                    const messageParentId = messagePrefix + message.messageId;
+                    const repliesToThisMessage = [ ...getChildPostIds(messageParentId, replyPostsTreeRef.current).reverse(), ...getChildPostIds(messageParentId, deOrphanedReplyPostsTreeRef.current) ];
+                    const replyMessages = repliesToThisMessage.map(replyMessageId => messagesRef.current[replyMessageId]);
+                    const replyLikes = replyMessages.filter(replyMessage => replyMessage.isLike);
 
-                        return (
-                            <li key={message.messageId} className="hover:bg-stone-800">
-                                <div className="my-1.5 flex flex-col">
-                                    {replyToMessage && <div className="flex flex-row">
-                                        <div className="w-8 flex justify-end items-end">
-                                            <div className="h-2.5 w-4 border-t-1 border-l-1 border-gray-500"></div>
-                                        </div>
-                                        <div className="flex-1 flex flex-row mr-3">
-                                            <div className="w-5">{!awaitingReplyToMessage && <ObjectUrlImageComponent file={replyToMessagePosterPic} />}</div>
-                                            <div className="flex-1 text-nowrap overflow-hidden">
-                                                {awaitingReplyToMessage ?
-                                                    <p className="max-w-[120px] text-[12px] text-gray-500">Reply to message loading...</p>
-                                                    :
-                                                    <p className="max-w-[120px] text-[12px] text-gray-500">{getMessageLines(replyToMessage.message).messageLines[0]}</p>
-                                                }
-                                            </div>
-                                        </div>
-                                    </div>}
-                                    <div className="flex flex-row">
-                                        <div className="w-9 flex-none flex flex-col">
-                                            <div className="h-11 flex-none">
-                                                <ObjectUrlImageComponent file={posterPic} />
-                                            </div>
-                                            <div className="flex-1"></div>
-                                        </div>
-                                        <div className="flex-1 flex flex-col">
-                                            <div className="mx-1 flex flex-row items-center overflow-hidden">
-                                                <div className="flex-1">
-                                                    <span className="text-[14px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${message.sender}`)}>{posterDisplayAddress}</span>
-                                                    <span className="ml-1 text-[9px] align-[2px]">{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
-                                                </div>
-                                                <div>
-                                                    <p className="mx-1 text-[10px] text-stone-500 font-[700] hover:underline"><a className="break-all" href={`https://scan.idena.io/transaction/${message.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a></p>
-                                                </div>
-                                            </div>
-                                            <div className="max-h-[9999px] pl-1 pr-2 pt-0.5 pb-1 text-[12px] text-wrap leading-5 overflow-hidden">
-                                                <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
-                                            </div>
-                                            {message.image && <div className="my-1 mx-1">
-                                                <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm hover:cursor-pointer" file={message.image} onClick={(e) => handleExpandImageModal(e, message.image!, message.cid)} />
-                                            </div>}
-                                        </div>
-                                        <div className="pt-0.5 mr-1 text-[12px] flex flex-col gap-0.5">
-                                            <div className=""><img src={commentGraySvg} onMouseOver={(e) => { e.currentTarget.src = commentBlueSvg; }} onMouseOut={(e) => { e.currentTarget.src = commentGraySvg; }} className={'h-6 p-[0px] -ml-0.5 mr-0.5 inline-block rounded-md hover:bg-blue-400/30 hover:cursor-pointer'} onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)} /></div>
-                                            {replyLikes.length ?
-                                                <div className="text-red-400 text-left whitespace-nowrap"><img src={heartRedSvg} className={'h-5 p-0.5 inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === message.messageId ? ' bg-red-400/30' : '')} onClick={() => localSubmitLikeHandler(conversationKey, participantsExcludingSelf, message.messageId)} /><a className="text-red-400 ml-[1px] align-[-1px] hover:underline cursor-pointer" onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{replyLikes.length}</a></div>
-                                                :
-                                                <div className="text-gray-500 text-left"><img src={heartGraySvg} onMouseOver={(e) => { e.currentTarget.src = heartRedSvg; }} onMouseOut={(e) => { e.currentTarget.src = heartGraySvg; }} className={'h-5 p-[2px] inline-block rounded-md hover:bg-red-400/30 hover:cursor-pointer' + (submittingLike === message.messageId ? ' bg-red-400/30' : '')} onClick={() => localSubmitLikeHandler(conversationKey, participantsExcludingSelf, message.messageId)} /></div>
-                                            }
-                                        </div>
+                    const isOwnMessage = message.sender === postersAddress.toLowerCase();
+
+                    return (
+                        <li key={message.messageId} className={`flex items-end gap-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                            {!isOwnMessage && <ObjectUrlImageComponent className="mb-8 size-8 flex-none rounded-full bg-surface object-cover" file={posterPic} />}
+                            <div className={`flex min-w-0 max-w-[80%] flex-col gap-1 ${isOwnMessage ? 'items-end' : 'items-start'}`}>
+                                <span className={`cursor-pointer text-[13px] font-bold hover:underline ${isOwnMessage ? 'text-ink-muted' : ''}`} title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`} onClick={(e) => handleClickAddress(e, `/profile/${message.sender}`)}>{posterDisplayAddress}</span>
+                                {replyToMessage && <div className="flex max-w-full items-center gap-1.5 rounded-2xl border border-line px-3 py-1.5 text-[13px] text-ink-muted">
+                                    {!awaitingReplyToMessage && <ObjectUrlImageComponent className="size-4 flex-none rounded-full bg-surface object-cover" file={replyToMessagePosterPic} />}
+                                    {awaitingReplyToMessage ?
+                                        <p className="min-w-0 truncate">Reply to message loading...</p>
+                                        :
+                                        <p className="min-w-0 truncate">{getMessageLines(replyToMessage.message).messageLines[0]}</p>
+                                    }
+                                </div>}
+                                <p className={`max-w-full rounded-3xl px-4 py-2.5 text-[15px]/5 [word-break:break-word] empty:hidden ${isOwnMessage ? 'rounded-br-md bg-accent text-white' : 'rounded-bl-md bg-field text-ink'}`}>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                {message.image && <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto cursor-pointer rounded-2xl border border-line" file={message.image} onClick={(e) => handleExpandImageModal(e, message.image!, message.cid)} />}
+                                <div className={`flex items-center gap-1 text-[13px] text-ink-muted ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                                    <a className="whitespace-nowrap hover:underline" href={`https://scan.idena.io/transaction/${message.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a>
+                                    <button type="button" aria-label="Reply" title="Reply" className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-accent/20 hover:text-accent" onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)}>
+                                        <ReplyIcon className="size-4" />
+                                    </button>
+                                    <div className={`flex items-center ${replyLikes.length ? 'text-like' : ''}`}>
+                                        <button type="button" aria-label="Like" title="Like" className={`inline-flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-like/20 hover:text-like ${submittingLike === message.messageId ? 'bg-like/10 text-like' : ''}`} onClick={() => localSubmitLikeHandler(conversationKey, participantsExcludingSelf, message.messageId)}>
+                                            <HeartIcon className="size-4" />
+                                        </button>
+                                        {!!replyLikes.length && <button type="button" className="cursor-pointer pr-1 hover:underline" onClick={(e) => handleOpenLikesModal(e, replyLikes)}>{replyLikes.length}</button>}
                                     </div>
                                 </div>
-                            </li>
-                        );
-                    })}
-                </ul>
-                <>
-                    {discussReplyToPost && <div className="w-full mt-1 px-1 flex flex-row bg-stone-800">
-                        <div className="flex-1 overflow-hidden text-nowrap text-[12px] text-gray-500"><p className="mt-[1px]">Replying to {getDisplayAddressShort(discussReplyToPost!.sender)}: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p></div>
-                        <div className="w-6 text-right">
-                            <button className="text-[10px] align-[2.5px] h-4 w-5 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => setDiscussReplyToPostIdHandler(conversationKey)}>✖</button>
-                        </div>
-                    </div>}
-                    <div className="mt-1 flex flex-col">
-                        <div className="flex flex-row gap-2 items-end">
-                            <div className="flex-1">
-                                <textarea
-                                    id={`message-input-${conversationKey}`}
-                                    rows={2}
-                                    className="w-full field-sizing-content max-w-[385px] min-h-[26px] max-h-[312px] py-1 px-2 outline-1 bg-stone-900 placeholder:text-gray-500 text-[12px] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                                    placeholder="Comment here..."
-                                    disabled={inputPostDisabled || submitting || messageSettingsInvalid}
-                                />
                             </div>
-                            <div>
-                                <button className="h-7 w-16 mb-1 px-4 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" disabled={inputPostDisabled || submitting ||messageSettingsInvalid} onClick={() => localSubmitMessageHandler(conversationKey, participantsExcludingSelf, discussReplyToPostId)}>{submittingMessage === conversationKey ? '...' : 'Send!'}</button>
-                            </div>
-                        </div>
-                    </div>
-                    {postMediaAttachment && <div className="my-1">
-                        <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-sm" file={postMediaAttachment.file} />
-                    </div>}
-                    <div className="leading-[12px]">
-                        {postMediaAttachment ? <>
-                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, conversationKey)}>Remove image</p>
-                        </> : <>
-                            <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, conversationKey, 'message')}>Add image</p>
-                        </>}
-                        <p id={`message-copytx-${conversationKey}`} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => localCopyMessageTxHandler(conversationKey, participantsExcludingSelf, discussReplyToPostId)}>Copy tx</p>
-                    </div>
-                </>
+                        </li>
+                    );
+                })}
+            </ul>
+            <div className="flex flex-col gap-2 border-t border-line px-4 py-3">
+                {discussReplyToPost && <div className="flex items-center gap-2 text-[13px] text-ink-muted">
+                    <p className="min-w-0 flex-1 truncate">Replying to {getDisplayAddressShort(discussReplyToPost!.sender)}: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
+                    <button type="button" aria-label="Cancel reply" title="Cancel reply" className="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full hover:bg-ink/10" onClick={() => setDiscussReplyToPostIdHandler(conversationKey)}>
+                        <CloseIcon className="size-3.5" />
+                    </button>
+                </div>}
+                <textarea
+                    id={`message-input-${conversationKey}`}
+                    rows={2}
+                    className="field-sizing-content max-h-[312px] min-h-[44px] w-full resize-none rounded-2xl bg-field px-4 py-2.5 text-[15px]/5 outline-none scrollbar-thin placeholder:text-ink-muted focus:ring-1 focus:ring-accent"
+                    placeholder="Start a new message"
+                    disabled={inputPostDisabled || submitting || messageSettingsInvalid}
+                />
+                {postMediaAttachment && <div className="relative w-fit">
+                    <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
+                    <button type="button" aria-label="Remove image" title="Remove image" className="absolute top-1 left-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm hover:bg-black/60" onClick={(e) => removeMediaHandler(e, conversationKey)}>
+                        <CloseIcon className="size-[18px]" />
+                    </button>
+                </div>}
+                <ComposerToolbarComponent
+                    compact
+                    hasAttachment={!!postMediaAttachment}
+                    onAddImage={(e) => handleOpenAddMediaModal(e, conversationKey, 'message')}
+                    onRemoveImage={(e) => removeMediaHandler(e, conversationKey)}
+                    copyTxId={`message-copytx-${conversationKey}`}
+                    onCopyTx={() => localCopyMessageTxHandler(conversationKey, participantsExcludingSelf, discussReplyToPostId)}
+                    submitText={submittingMessage === conversationKey ? '...' : 'Send'}
+                    onSubmit={() => localSubmitMessageHandler(conversationKey, participantsExcludingSelf, discussReplyToPostId)}
+                    submitDisabled={inputPostDisabled || submitting || messageSettingsInvalid}
+                />
             </div>
         </div>}
-        <div className="mt-10"></div>
     </>;
 }
 

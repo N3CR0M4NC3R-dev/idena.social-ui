@@ -83,7 +83,9 @@ function ProfilePosts() {
     });
 
     return (<>
-        <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
+        <div className="border-b border-line">
+            <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} variant="pills" />
+        </div>
         <ul>
             {filteredOrderedPosts.map((postId: string) => (
                 <li key={postId}>

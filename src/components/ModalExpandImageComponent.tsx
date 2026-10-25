@@ -15,11 +15,9 @@ function ModalExpandImageComponent(props: ModalExpandImageComponentProps) {
     const objectUrl = useObjectUrl(image);
 
     return (<>
-        <div className="px-3">
-            <a href={cid ? `https://ipfs.idena.io/ipfs/${cid}` : objectUrl} target="_blank" rel="noopener noreferrer">
-                <img className="max-h-[95vh] rounded-sm" src={objectUrl} />
-            </a>
-        </div>
+        <a className="block" href={cid ? `https://ipfs.idena.io/ipfs/${cid}` : objectUrl} target="_blank" rel="noopener noreferrer">
+            <img className="block max-h-[90vh] max-w-[90vw] rounded-2xl" src={objectUrl} />
+        </a>
     </>);
 }
 

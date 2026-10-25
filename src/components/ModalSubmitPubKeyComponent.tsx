@@ -40,23 +40,23 @@ function ModalSubmitPubkeyComponent(props: ModalSubmitPubkeyComponentProps) {
     };
 
     return (<>
-        <div className="w-full sm:w-[500px] px-3">
-            <p className="mb-2 text-center">Submit Pubkey</p>
-            <div className="text-[14px]">
-                <div className="mb-3">
-                    <div>To manually submit the pubkey for this address {modalSubmitPubkeyRef.current.address}, paste and submit a raw transaction where this address was the sender. Raw transactions can be found at <a className="text-blue-400 hover:underline hover:cursor-pointer" href="http://scan.idena.io" target="_blank">scan.idena.io</a></div>
-                </div>
-                <div className="mb-3">
-                    <textarea
-                        id="submit-raw-transaction"
-                        rows={4}
-                        value={rawTransaction}
-                        className="w-full field-sizing-content min-h-[104px] max-h-[520px] py-1 px-2 outline-1 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                        placeholder="Paste raw transaction here..."
-                        onChange={(e) => setRawTransaction(e.target.value)}
-                    />
-                    <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => localSubmitPubkeyHandler()}>Submit</button>
-                    {rawTransactionError && <p className="text-[11px] text-red-400">{rawTransactionError}</p>}
+        <div className="w-screen max-w-full sm:w-[600px]">
+            <div className="sticky top-0 z-[5] flex h-[53px] items-center bg-canvas/65 pl-14 pr-4 backdrop-blur-md">
+                <h2 className="text-xl/6 font-extrabold">Submit Pubkey</h2>
+            </div>
+            <div className="px-4 pb-4 text-[15px]/5">
+                <p className="text-ink-muted">To manually submit the pubkey for this address <span className="text-ink [word-break:break-all]">{modalSubmitPubkeyRef.current.address}</span>, paste and submit a raw transaction where this address was the sender. Raw transactions can be found at <a className="text-accent hover:underline hover:cursor-pointer" href="http://scan.idena.io" target="_blank">scan.idena.io</a></p>
+                <textarea
+                    id="submit-raw-transaction"
+                    rows={4}
+                    value={rawTransaction}
+                    className="form-field mt-4 block resize-none text-[15px] field-sizing-content min-h-[104px] max-h-[520px] scrollbar-thin"
+                    placeholder="Paste raw transaction here..."
+                    onChange={(e) => setRawTransaction(e.target.value)}
+                />
+                <div className="mt-3 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+                    {rawTransactionError && <p className="mr-auto text-[13px] text-danger">{rawTransactionError}</p>}
+                    <button type="button" className="btn-primary h-9 px-4 text-[15px]" onClick={() => localSubmitPubkeyHandler()}>Submit</button>
                 </div>
             </div>
         </div>

@@ -1,5 +1,7 @@
 import { useNavigate, useOutletContext, useParams } from "react-router";
 import ConversationComponent from "./components/ConversationComponent";
+import PageHeaderComponent from "./components/PageHeaderComponent";
+import LdsSpinnerComponent from "./components/LdsSpinnerComponent";
 import type { Message, Poster } from "./logic/asyncUtils";
 import type { BrowserStateHistorySettings, Conversation, MouseEventLocal, PostMediaAttachment } from "./App.exports";
 
@@ -29,6 +31,7 @@ type ConversationOutletProps = {
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     messagePrefix: string,
+    noMorePastBlocks: boolean,
 };
 
 function ConversationOutlet() {
@@ -61,15 +64,27 @@ function ConversationOutlet() {
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
         messagePrefix,
+        noMorePastBlocks,
     } = useOutletContext() as ConversationOutletProps;
 
     const handleGoBack = () => {
         navigate(-1);
     };
 
+    const conversation = conversationsRef.current[conversationKey!];
+
+    const conversationUnavailable = messageSettingsInvalid
+        ? <p className="px-8 py-6 text-center text-[15px] text-danger">Messaging is disabled because there is a problem with your settings. Please adjust your settings and return to this page.</p>
+        : noMorePastBlocks
+            ? <p className="px-8 py-6 text-center text-[15px] text-ink-muted">No messages found for this conversation yet.</p>
+            : <>
+                <LdsSpinnerComponent />
+                <p className="px-8 pb-6 text-center text-[15px] text-ink-muted">This conversation hasn't loaded yet. It will appear here once its messages have been scanned. Use “Scan more past blocks” below to search further back.</p>
+            </>;
+
     return (<>
-        <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
-        <ConversationComponent
+        <PageHeaderComponent title="Conversation" onBack={handleGoBack} />
+        {conversation ? <ConversationComponent
             conversationKey={conversationKey!}
             postersAddress={postersAddress}
             replyPostsTreeRef={replyPostsTreeRef}
@@ -97,7 +112,7 @@ function ConversationOutlet() {
             submittingLike={submittingLike}
             messagePrefix={messagePrefix}
             isConversationOutlet={true}
-        />
+        /> : conversationUnavailable}
     </>);
 }
 

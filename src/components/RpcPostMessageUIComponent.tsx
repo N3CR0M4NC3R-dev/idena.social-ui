@@ -28,53 +28,45 @@ function RpcPostMessageUIComponent(props: RpcPostMessageUIComponentProps) {
     };
 
     return (<>
-        <div className="text-[14px]">
-            <div className="mb-3">
-                <div className="flex flex-row gap-2 items-center">
-                    <div className="group grid size-4 grid-cols-1">
-                        <input
-                            id="textIpfs"
-                            type="checkbox"
-                            name="textIpfs"
-                            checked={storeTextIpfs}
-                            aria-describedby="comments-description"
-                            className="col-start-1 row-start-1 appearance-none rounded-sm border border-white/10 bg-white/5 checked:border-blue-500 checked:bg-blue-500 indeterminate:border-blue-500 indeterminate:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-white/5 disabled:bg-white/10 disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                            onChange={onChangeTextIpfsHandler}
-                        />
-                        <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25">
-                            <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-checked:opacity-100" />
-                            <path d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
-                        </svg>
-                    </div>
-                    <div className="flex-1">
-                        <label htmlFor="textIpfs">Store text on IPFS</label>
-                    </div>
+        <div className="text-[15px]/5">
+            <div className="flex items-center gap-3 py-3">
+                <label htmlFor="textIpfs" className="min-w-0 flex-1 cursor-pointer">Store text on IPFS</label>
+                <div className="group grid size-5 flex-none grid-cols-1">
+                    <input
+                        id="textIpfs"
+                        type="checkbox"
+                        name="textIpfs"
+                        checked={storeTextIpfs}
+                        aria-describedby="comments-description"
+                        className="col-start-1 row-start-1 cursor-pointer appearance-none rounded border-2 border-line-strong bg-transparent checked:border-accent checked:bg-accent indeterminate:border-accent indeterminate:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:border-line disabled:bg-surface disabled:checked:bg-surface forced-colors:appearance-auto"
+                        onChange={onChangeTextIpfsHandler}
+                    />
+                    <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-ink/25">
+                        <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-checked:opacity-100" />
+                        <path d="M3 7H11" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
+                    </svg>
                 </div>
             </div>
-            <div className="mb-3">
-                <div className="flex flex-row gap-2 items-center">
-                    <div className="group grid size-4 grid-cols-1">
-                        <input
-                            id="mediaIpfs"
-                            type="checkbox"
-                            name="mediaIpfs"
-                            checked={storeMediaIpfs}
-                            aria-describedby="comments-description"
-                            className="col-start-1 row-start-1 appearance-none rounded-sm border border-white/10 bg-white/5 checked:border-blue-500 checked:bg-blue-500 indeterminate:border-blue-500 indeterminate:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:border-white/5 disabled:bg-white/10 disabled:checked:bg-white/10 forced-colors:appearance-auto"
-                            onChange={onChangeMediaIpfsHandler}
-                        />
-                        <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25">
-                            <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-checked:opacity-100" />
-                            <path d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
-                        </svg>
-                    </div>
-                    <div className="flex-1">
-                        <label htmlFor="mediaIpfs">Store image on IPFS</label>
-                    </div>
+            <div className="flex items-center gap-3 py-3">
+                <label htmlFor="mediaIpfs" className="min-w-0 flex-1 cursor-pointer">Store image on IPFS</label>
+                <div className="group grid size-5 flex-none grid-cols-1">
+                    <input
+                        id="mediaIpfs"
+                        type="checkbox"
+                        name="mediaIpfs"
+                        checked={storeMediaIpfs}
+                        aria-describedby="comments-description"
+                        className="col-start-1 row-start-1 cursor-pointer appearance-none rounded border-2 border-line-strong bg-transparent checked:border-accent checked:bg-accent indeterminate:border-accent indeterminate:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:border-line disabled:bg-surface disabled:checked:bg-surface forced-colors:appearance-auto"
+                        onChange={onChangeMediaIpfsHandler}
+                    />
+                    <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-ink/25">
+                        <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-checked:opacity-100" />
+                        <path d="M3 7H11" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
+                    </svg>
                 </div>
             </div>
-            <div className="mb-3">
-                <button className="h-7 px-3 text-[13px] bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => localSubmitHandler()}>{submitText}</button>
+            <div className="mt-3 flex justify-end">
+                <button type="button" className="btn-primary h-9 px-4 text-[15px]" onClick={() => localSubmitHandler()}>{submitText}</button>
             </div>
         </div>
     </>);

@@ -30,19 +30,11 @@ function PosterHeaderComponent(props: PosterHeaderComponentProps) {
     };
 
     return (<>
-        <div className="flex flex-row">
-            <div className="w-15 flex-none flex flex-col">
-                <div className="h-17 flex-none -mt-3">
-                    <ObjectUrlImageComponent file={pic} />
-                </div>
-                <div className="flex-1"></div>
-            </div>
-            <div className="mr-3 flex-1 flex flex-col overflow-hidden">
-                <div className="flex-none flex flex-col gap-x-3 items-start">
-                    <p className="text-[18px] font-[600] hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${address}`)}>{getDisplayAddress(address)}</p>
-                    <div><p className="text-[11px]/4">{`Age: ${age}, Status: ${getIdentityStatus(state)}, Stake: ${stake}`}</p></div>
-                    <div className="flex-1"></div>
-                </div>
+        <div className="flex min-w-0 items-center gap-3">
+            <ObjectUrlImageComponent className="size-10 flex-none rounded-full bg-surface object-cover" file={pic} />
+            <div className="min-w-0 flex-1">
+                <p className="w-fit max-w-full truncate text-[15px]/5 font-bold text-ink hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${address}`)}>{getDisplayAddress(address)}</p>
+                <p className="truncate text-[13px]/4 text-ink-muted">{`Age ${age} · ${getIdentityStatus(state)} · Stake ${stake}`}</p>
             </div>
         </div>
     </>);

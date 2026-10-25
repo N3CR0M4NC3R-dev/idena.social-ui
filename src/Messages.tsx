@@ -1,9 +1,12 @@
 import { useEffect, useReducer, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router";
+import { useOutletContext } from "react-router";
 import { getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, type Message, type Poster, getPosterPromise } from "./logic/asyncUtils";
 import { type BrowserStateHistorySettings, type Conversation, type MouseEventLocal, type PostMediaAttachment } from "./App.exports";
 import ConversationComponent from "./components/ConversationComponent";
 import ObjectUrlImageComponent from "./components/ObjectUrlImageComponent";
+import PageHeaderComponent from "./components/PageHeaderComponent";
+import ComposerToolbarComponent from "./components/ComposerToolbarComponent";
+import { CloseIcon, UserPlusIcon } from "./components/icons";
 
 type MessagesProps = {
     copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
@@ -43,7 +46,6 @@ type MessagesProps = {
 };
 
 function Messages() {
-    const navigate = useNavigate();
 
     const {
         copyMessageTxHandler,
@@ -92,10 +94,6 @@ function Messages() {
     useEffect(() => {
         setInputCredentialsApplied(true);
     }, []);
-
-    const handleGoBack = () => {
-        navigate(-1);
-    };
 
     const addRecipient = async () => {
 
@@ -182,51 +180,61 @@ function Messages() {
     };
 
     return (<>
-        <button className="mb-4 text-[13px] hover:cursor-pointer hover:underline" onClick={handleGoBack}>&lt; Back</button>
-        <div className="mb-4">
-            {messageSettingsInvalid && <p className="mt-1 text-red-400 text-[13px]">Messaging is disabled because there is a problem with your settings. Please adjust your settings and return to this page.</p>}
-        </div>
-        <div className="mb-4">
-            <p className="mb-1">Add recipient address:</p>
-            <input className="w-full mb-1 py-0.5 px-1 outline-1 text-[11px] placeholder:text-gray-500" value={addNewRecipient} onChange={e => { setAddressInvalid(''); setAddNewRecipient(e.target.value); }} />
-            {addressInvalid && <div className="flex gap-2 text-[11px] text-red-400">
-                <span>Invalid address: {addressInvalid}.</span>
-                {addressInvalid === 'pubkey missing' && addNewRecipient !== zeroAddress && <><span className="text-blue-400 hover:underline hover:cursor-pointer" onClick={(e) => handleSubmitPubkeyModal(e, addNewRecipient)}>Manually Provide Pubkey</span><span>then try again</span></>}
-            </div>}
-            <div>
-                <button className="h-7 w-30 mt-1 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer bg-white/10" disabled={loadingNewRecipient} onClick={() => addRecipient()}>{loadingNewRecipient ? 'Loading...' : 'Add Recipient'}</button>
+        <PageHeaderComponent title="Messages" />
+        <div className="flex flex-col gap-3 border-b border-line px-4 py-3">
+            {messageSettingsInvalid && <p className="text-[13px] text-danger">Messaging is disabled because there is a problem with your settings. Please adjust your settings and return to this page.</p>}
+            <div className="flex flex-col gap-1.5">
+                <p className="text-[13px] text-ink-muted">To</p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input className="form-field min-w-0 flex-1 text-[12px] md:text-[15px]" placeholder="Recipient address (0x...)" value={addNewRecipient} onChange={e => { setAddressInvalid(''); setAddNewRecipient(e.target.value); }} />
+                    <button type="button" className="btn-outline h-8 flex-none self-start px-4 text-[14px] sm:self-auto" disabled={loadingNewRecipient} onClick={() => addRecipient()}>
+                        <UserPlusIcon className="size-4" />
+                        {loadingNewRecipient ? 'Loading...' : 'Add Recipient'}
+                    </button>
+                </div>
+                {addressInvalid && <div className="flex flex-wrap gap-x-2 text-[13px] text-danger">
+                    <span>Invalid address: {addressInvalid}.</span>
+                    {addressInvalid === 'pubkey missing' && addNewRecipient !== zeroAddress && <><span className="cursor-pointer text-accent hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, addNewRecipient.toLowerCase())}>Manually Provide Pubkey</span><span>then try again</span></>}
+                </div>}
             </div>
-        </div>
-        {!!recipients.length && <div className="mb-4">
-            <p>Recipients:</p>
-            {recipients.map(recipient => <><p className="inline">{recipient}</p><button className="ml-2 text-[10px] align-[2.5px] h-4 w-5 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => removeRecipient(recipient)}>✖</button></>)}
-        </div>}
-        <div className="mb-4">
+            {!!recipients.length && <div className="flex flex-col gap-1.5">
+                <p className="text-[13px] text-ink-muted">Recipients</p>
+                <div className="flex flex-wrap gap-2">
+                    {recipients.map(recipient => <div key={recipient} className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-full border border-line-strong pr-1 pl-3 text-[13px] sm:text-[14px]">
+                        <span className="min-w-0 break-all">{recipient}</span>
+                        <button type="button" aria-label="Remove recipient" title="Remove recipient" className="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full hover:bg-ink/10" onClick={() => removeRecipient(recipient)}>
+                            <CloseIcon className="size-3.5" />
+                        </button>
+                    </div>)}
+                </div>
+            </div>}
             <textarea
                 id='message-input-main'
                 rows={4}
-                className="w-full field-sizing-content min-h-[104px] max-h-[520px] py-1 px-2 outline-1 placeholder:text-gray-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-neutral-700 dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500 [&::-webkit-scrollbar-corner]:bg-neutral-500"
-                placeholder="Write your message here..."
+                className="field-sizing-content max-h-[520px] min-h-[104px] w-full resize-none rounded-2xl bg-field px-4 py-3 text-[15px]/5 outline-none scrollbar-thin placeholder:text-ink-muted focus:ring-1 focus:ring-accent"
+                placeholder="Start a new message"
                 disabled={inputPostDisabled || submitting || messageSettingsInvalid}
             />
-            {mainPostMediaAttachment && <div className="mx-4 my-1">
-                <ObjectUrlImageComponent className="max-h-120 max-w-100 size-auto rounded-sm" file={mainPostMediaAttachment.file} />
+            {mainPostMediaAttachment && <div className="relative w-fit">
+                <ObjectUrlImageComponent className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-2xl border border-line" file={mainPostMediaAttachment.file} />
+                <button type="button" aria-label="Remove image" title="Remove image" className="absolute top-1 left-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm hover:bg-black/60" onClick={(e) => removeMediaHandler(e, 'main')}>
+                    <CloseIcon className="size-[18px]" />
+                </button>
             </div>}
-            <div className="flex flex-row gap-2">
-                <div className="flex-1 -mt-1.5">
-                    {mainPostMediaAttachment ? <>
-                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => removeMediaHandler(e, 'main')}>Remove image</p>
-                    </> : <>
-                        <p className="inline-block -mt-1 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={(e) => handleOpenAddMediaModal(e, 'main', 'message')}>Add image</p>
-                    </>}
-                    <p id={"message-copytx-main"} className="inline-block -mt-1 ml-2 text-blue-400 text-[12px] hover:cursor-pointer hover:underline" onClick={() => !inputPostDisabled && !submitting && !messageSettingsInvalid && localCopyMessageTxHandler('main')}>Copy tx</p>
-                </div>
-                <button className="h-9 w-27 my-1 px-4 py-1 bg-white/10 inset-ring inset-ring-white/5 hover:bg-white/20 cursor-pointer" onClick={() => localSubmitMessageHandler('main')}>{submittingMessage === 'main' ? 'Sending...' : 'Send!'}</button>
-            </div>
+            <ComposerToolbarComponent
+                hasAttachment={!!mainPostMediaAttachment}
+                onAddImage={(e) => handleOpenAddMediaModal(e, 'main', 'message')}
+                onRemoveImage={(e) => removeMediaHandler(e, 'main')}
+                copyTxId="message-copytx-main"
+                onCopyTx={() => !inputPostDisabled && !submitting && !messageSettingsInvalid && localCopyMessageTxHandler('main')}
+                submitText={submittingMessage === 'main' ? 'Sending...' : 'Send'}
+                onSubmit={() => localSubmitMessageHandler('main')}
+            />
         </div>
-        <div className="mb-4">
+        <div>
             {!!latestConversationActivity.length && latestConversationActivity.map(conversationKey => {
                 return <ConversationComponent
+                    key={conversationKey}
                     conversationKey={conversationKey}
                     postersAddress={postersAddress}
                     replyPostsTreeRef={replyPostsTreeRef}
