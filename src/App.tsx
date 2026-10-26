@@ -2016,6 +2016,9 @@ function App() {
                     </Link>
                 </div>
                 <div className="xl:hidden">
+                    <footer className="flex flex-wrap gap-x-3 gap-y-1 border-b border-line px-4 py-3 text-[13px]/4 text-ink-muted">
+                        {footerLinks}
+                    </footer>
                     <ScanBlocksComponent
                         currentBlockCaptured={currentBlockCaptured}
                         scanningPastBlocks={scanningPastBlocks}
@@ -2025,9 +2028,6 @@ function App() {
                         nodeAvailable={nodeAvailable}
                         variant="compact"
                     />
-                    <footer className="flex flex-wrap gap-x-3 gap-y-1 border-b border-line px-4 py-3 text-[13px]/4 text-ink-muted">
-                        {footerLinks}
-                    </footer>
                 </div>
                 <Outlet
                     context={{
@@ -2125,11 +2125,6 @@ function App() {
                         variant="row"
                     />
                 </div>}
-                <footer className="flex flex-wrap justify-center gap-x-3 gap-y-1 px-4 py-4 text-[13px]/4 text-ink-muted lg:hidden">
-                    <a className="hover:underline" href={termsOfServiceUrl} target="_blank" rel="noopener noreferrer">Terms of Service</a>
-                    <span aria-hidden="true">·</span>
-                    <a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a>
-                </footer>
             </main>
             <aside className="hidden w-[290px] flex-none -translate-x-5 lg:ml-6 lg:block xl:ml-8 xl:w-[350px]">
                 <div className="sticky top-0 flex h-screen flex-col gap-3 pt-[22px] pb-3">
