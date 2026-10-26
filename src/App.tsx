@@ -5,7 +5,7 @@ import { sha3_256 } from 'js-sha3';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import WhatIsIdenaPng from './assets/whatisidena.png';
-import WhatIsIdenaThumbPng from './assets/whatisidena_thumb.png';
+import WhatIsIdenaThumbPng from './assets/idena_logo.png';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
