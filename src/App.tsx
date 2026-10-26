@@ -1966,11 +1966,15 @@ function App() {
         <a className="hover:underline" href={attributionsUrl} target="_blank" rel="noopener noreferrer">Attributions</a>
     </>);
 
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    };
+
     return (
         <div className="flex min-h-screen w-full justify-center">
             <header className="hidden flex-none sm:block">
                 <div className="sticky top-0 flex h-screen w-[88px] flex-col overflow-y-auto no-scrollbar px-2 xl:w-[275px] xl:px-3">
-                    <Link to="/" aria-label="Idena Social" title="Idena Social" className="mt-0.5 flex justify-center xl:justify-start">
+                    <Link to="/" aria-label="Idena Social" title="Idena Social" onClick={scrollToTop} className="mt-0.5 flex justify-center xl:justify-start">
                         <span className="flex h-16 items-center gap-3 px-2.5 xl:pr-5">
                             <span className="size-11 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={WhatIsIdenaThumbPng} alt="" /></span>
                             <span className="hidden text-[26px]/8 font-extrabold xl:inline">Idena Social</span>
@@ -2010,7 +2014,7 @@ function App() {
                     </div>
                 </div>
                 <div className="flex h-[53px] items-center border-b border-line px-4 sm:hidden">
-                    <Link to="/" className="flex items-center gap-3">
+                    <Link to="/" onClick={scrollToTop} className="flex items-center gap-3">
                         <span className="size-8 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={WhatIsIdenaThumbPng} alt="" /></span>
                         <span className="text-[19px] font-extrabold">Idena Social</span>
                     </Link>

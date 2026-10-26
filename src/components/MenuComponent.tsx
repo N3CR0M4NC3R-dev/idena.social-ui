@@ -25,11 +25,15 @@ function MenuComponent(props: MenuComponentProps) {
         { to: '/settings', label: 'Settings', Icon: SettingsIcon, active: pathname === '/settings' },
     ];
 
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    };
+
     if (variant === 'bottom') {
         return (
             <nav className="flex h-[53px]" aria-label="Primary">
                 {menuItems.map(({ to, label, Icon, active }) => (
-                    <Link key={label} to={to} aria-label={label} title={label} aria-current={active ? 'page' : undefined} className="flex flex-1 items-center justify-center active:bg-ink/10">
+                    <Link key={label} to={to} aria-label={label} title={label} aria-current={active ? 'page' : undefined} onClick={scrollToTop} className="flex flex-1 items-center justify-center active:bg-ink/10">
                         <Icon className="size-[26px]" filled={active} />
                     </Link>
                 ))}
@@ -40,7 +44,7 @@ function MenuComponent(props: MenuComponentProps) {
     return (
         <nav className="-mx-2 flex flex-col xl:-mx-3" aria-label="Primary">
             {menuItems.map(({ to, label, Icon, active }) => (
-                <Link key={label} to={to} aria-label={label} title={label} aria-current={active ? 'page' : undefined} className="flex justify-center px-2 py-1 hover:bg-ink/10 xl:justify-start xl:px-3">
+                <Link key={label} to={to} aria-label={label} title={label} aria-current={active ? 'page' : undefined} onClick={scrollToTop} className="flex justify-center px-2 py-1 hover:bg-ink/10 xl:justify-start xl:px-3">
                     <span className="inline-flex items-center gap-5 p-3">
                         <Icon className="size-[26px] flex-none" filled={active} />
                         <span className={`hidden pr-4 text-xl/6 xl:inline ${active ? 'font-bold' : ''}`}>{label}</span>
