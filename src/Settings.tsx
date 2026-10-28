@@ -123,6 +123,8 @@ function Settings() {
     const setInputNodeAppliedLocal = (value: boolean) => {
         setInputNodeApplied(value);
         if (value && (nodeUrl !== initNodeUrlRef.current.nodeUrl || nodeKey !== initNodeUrlRef.current.nodeKey)) {
+            localStorage.setItem('nodeUrl', nodeUrl);
+            localStorage.setItem('nodeKey', nodeKey);
             clearBlocksCapturedRange().then(() => navigate(0));
         }
     };
