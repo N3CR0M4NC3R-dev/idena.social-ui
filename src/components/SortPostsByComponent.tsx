@@ -30,7 +30,7 @@ function SortPostsByComponent(props: SortPostsByComponentProps) {
                             type="button"
                             role="tab"
                             aria-selected={isActive}
-                            className={`h-8 px-4 rounded-full border text-[14px] font-bold cursor-pointer ${isActive ? 'border-accent bg-accent text-white' : 'border-line-strong text-ink hover:bg-ink/10'}`}
+                            className={`h-8 px-4 rounded-full border text-[14px] font-bold cursor-pointer ${isActive ? 'border-btn bg-btn text-btn-ink' : 'border-line-strong text-ink hover:bg-ink/10'}`}
                             onClick={() => setBrowserStateHistorySettings({ sortPostsBy: option.value }, true)}
                         >
                             {option.label}

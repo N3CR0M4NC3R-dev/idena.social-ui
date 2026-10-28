@@ -195,11 +195,11 @@ function ConversationComponent(props: ConversationComponentProps) {
     const postMediaAttachment = postMediaAttachmentsRef.current[`message-${conversationKey}`];
 
     return <>
-        <div className={`flex flex-col gap-1 border-b border-line px-4 py-3 ${!isConversationOutlet ? 'cursor-pointer hover:bg-ink/[0.03]' : ''}`} onClick={() => handleConversationClick(conversationKey)}>
+        <div className={`flex flex-col gap-1 border-b border-line px-4 py-3 ${!isConversationOutlet ? 'cursor-pointer' : ''}`} onClick={() => handleConversationClick(conversationKey)}>
             {conversationPartners.length === 1
                 ? <OneOnOneConversationHeaderComponent conversationPartner={conversationPartners[0]} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />
                 : <GroupConversationHeaderComponent conversationPartners={conversationPartners} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />}
-            <button type="button" className={`self-start cursor-pointer text-[13px] text-accent hover:underline ${conversationPartners.length === 1 ? 'ml-[52px]' : ''}`} onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</button>
+            <button type="button" className={`self-start cursor-pointer text-[13px] text-link hover:underline ${conversationPartners.length === 1 ? 'ml-[52px]' : ''}`} onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</button>
         </div>
         {showReplies && <div className="border-b border-line">
             <ul className="flex flex-col flex-col-reverse gap-3 max-h-100 overflow-y-auto scrollbar-thin px-4 py-3">
@@ -235,11 +235,11 @@ function ConversationComponent(props: ConversationComponentProps) {
                                         <p className="min-w-0 truncate">{getMessageLines(replyToMessage.message).messageLines[0]}</p>
                                     }
                                 </div>}
-                                <p className={`max-w-full rounded-3xl px-4 py-2.5 text-[15px]/5 [word-break:break-word] empty:hidden ${isOwnMessage ? 'rounded-br-md bg-accent text-white' : 'rounded-bl-md bg-field text-ink'}`}>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                <p className={`max-w-full rounded-3xl px-4 py-2.5 text-[15px]/5 [word-break:break-word] empty:hidden ${isOwnMessage ? 'rounded-br-md bg-btn-hover text-btn-ink' : 'rounded-bl-md bg-bubble text-ink'}`}>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                 {message.image && <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto cursor-pointer rounded-2xl border border-line" file={message.image} onClick={(e) => handleExpandImageModal(e, message.image!, message.cid)} />}
                                 <div className={`flex items-center gap-1 text-[13px] text-ink-muted ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                                     <a className="whitespace-nowrap hover:underline" href={`https://scan.idena.io/transaction/${message.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a>
-                                    <button type="button" aria-label="Reply" title="Reply" className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-accent/20 hover:text-accent" onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)}>
+                                    <button type="button" aria-label="Reply" title="Reply" className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-comment/20 hover:text-comment" onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)}>
                                         <ReplyIcon className="size-4" />
                                     </button>
                                     <div className={`flex items-center ${replyLikes.length ? 'text-like' : ''}`}>

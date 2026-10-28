@@ -25,7 +25,7 @@ function OneOnOneConversationHeaderComponent(props: OneOnOneConversationHeaderCo
         />
         {!conversationPartner.pubkey && <div className="flex flex-wrap gap-x-2 pl-[52px] text-[13px]">
             <span className="text-danger">pubkey missing</span>
-            <span className="cursor-pointer text-accent hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, conversationPartner.address)}>Manually Provide Pubkey</span>
+            <span className="cursor-pointer text-link hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, conversationPartner.address)}>Manually Provide Pubkey</span>
         </div>}
     </>);
 }

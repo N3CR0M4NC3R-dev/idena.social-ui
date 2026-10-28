@@ -17,6 +17,9 @@ import ProfileLikes from './ProfileLikes.tsx';
 import ProfileTips from './ProfileTips.tsx';
 import ProfileMedia from './ProfileMedia.tsx';
 import PostActivity from './PostActivity.tsx';
+import { initTheme } from './logic/theme.ts';
+
+initTheme();
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>

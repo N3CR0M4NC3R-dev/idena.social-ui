@@ -42,10 +42,10 @@ function ModalSubmitPubkeyComponent(props: ModalSubmitPubkeyComponentProps) {
     return (<>
         <div className="w-screen max-w-full sm:w-[600px]">
             <div className="sticky top-0 z-[5] flex h-[53px] items-center bg-canvas/65 pl-14 pr-4 backdrop-blur-md">
-                <h2 className="text-xl/6 font-extrabold">Submit Pubkey</h2>
+                <h2 className="font-display text-xl/6 font-bold">Submit Pubkey</h2>
             </div>
             <div className="px-4 pb-4 text-[15px]/5">
-                <p className="text-ink-muted">To manually submit the pubkey for this address <span className="text-ink [word-break:break-all]">{modalSubmitPubkeyRef.current.address}</span>, paste and submit a raw transaction where this address was the sender. Raw transactions can be found at <a className="text-accent hover:underline hover:cursor-pointer" href="http://scan.idena.io" target="_blank">scan.idena.io</a></p>
+                <p className="text-ink-muted">To manually submit the pubkey for this address <span className="text-ink [word-break:break-all]">{modalSubmitPubkeyRef.current.address}</span>, paste and submit a raw transaction where this address was the sender. Raw transactions can be found at <a className="text-link hover:underline hover:cursor-pointer" href="http://scan.idena.io" target="_blank">scan.idena.io</a></p>
                 <textarea
                     id="submit-raw-transaction"
                     rows={4}

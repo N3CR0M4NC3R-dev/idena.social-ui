@@ -37,7 +37,7 @@ function GroupConversationHeaderComponent(props: GroupConversationHeaderComponen
                     <p className="whitespace-nowrap text-[12px] text-ink-muted hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${conversationPartner.address}`)}>{getDisplayAddressVeryShort(conversationPartner.address)}</p>
                     {!conversationPartner.pubkey && <div className="text-[11px]/3.5">
                         <p className="text-danger">pubkey missing</p>
-                        <p className="text-accent hover:cursor-pointer hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, conversationPartner.address)}>Fix here</p>
+                        <p className="text-link hover:cursor-pointer hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, conversationPartner.address)}>Fix here</p>
                     </div>}
                 </div>)}
             </div>

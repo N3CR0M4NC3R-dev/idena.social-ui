@@ -16,13 +16,47 @@
           href="/favicon-16x16.png"
         />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<meta name="theme-color" content="#ffffff" />
+		<meta name="theme-color" content="#fdfcfa" />
 		<meta name="color-scheme" content="light" />
+    <script>
+      try {
+        var theme = localStorage.getItem('theme');
+        if (theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#141210');
+        }
+      } catch (e) {}
+    </script>
     <style>
+      :root {
+        color-scheme: light;
+        --canvas: #fdfcfa;
+        --ink: #1c1814;
+        --ink-muted: #776f62;
+        --line: #e7e3db;
+        --btn: #e7e3db;
+        --btn-hover: #d6d0c4;
+      }
+      html.dark {
+        color-scheme: dark;
+        --canvas: #141210;
+        --ink: #ece8e1;
+        --ink-muted: #9a9184;
+        --line: #2f2b26;
+        --btn: #2f2b26;
+        --btn-hover: #3b3631;
+      }
+      @font-face {
+        font-family: "Cinzel";
+        font-style: normal;
+        font-display: swap;
+        font-weight: 400 900;
+        src: url("/fonts/cinzel-latin-wght-normal.woff2") format("woff2");
+      }
       body {
         margin: 0;
-        background-color: #ffffff;
-        color: #14171a;
+        background-color: var(--canvas);
+        color: var(--ink);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 15px;
         line-height: 1.5;
@@ -34,8 +68,8 @@
         max-width: 600px;
         min-height: 100vh;
         margin: 0 auto;
-        border-left: 1px solid #e6ecf0;
-        border-right: 1px solid #e6ecf0;
+        border-left: 1px solid var(--line);
+        border-right: 1px solid var(--line);
       }
       h2 {
         position: sticky;
@@ -45,17 +79,18 @@
         height: 53px;
         margin: 0;
         padding: 0 16px;
-        border-bottom: 1px solid #e6ecf0;
-        background-color: rgba(255, 255, 255, 0.85);
+        border-bottom: 1px solid var(--line);
+        background-color: color-mix(in srgb, var(--canvas) 85%, transparent);
         -webkit-backdrop-filter: blur(12px);
         backdrop-filter: blur(12px);
         font-size: 20px;
-        font-weight: 800;
+        font-family: "Cinzel", "Trajan Pro", Georgia, serif;
+        font-weight: 700;
         line-height: 24px;
       }
       .section {
         padding: 16px;
-        border-bottom: 1px solid #e6ecf0;
+        border-bottom: 1px solid var(--line);
       }
       p {
         margin: 0;
@@ -68,7 +103,7 @@
         margin-top: 8px;
       }
       li::marker {
-        color: #657786;
+        color: var(--ink-muted);
       }
       a {
         color: #1da1f2;
@@ -82,8 +117,8 @@
         padding: 0 16px;
         border: none;
         border-radius: 9999px;
-        background-color: #1da1f2;
-        color: #ffffff;
+        background-color: var(--btn);
+        color: var(--ink);
         font-family: inherit;
         font-size: 15px;
         font-weight: 700;
@@ -91,7 +126,7 @@
         transition: background-color 150ms;
       }
       button:hover {
-        background-color: #1a91da;
+        background-color: var(--btn-hover);
       }
       @media (max-width: 600px) {
         .column {

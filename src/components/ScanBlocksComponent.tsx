@@ -13,7 +13,7 @@ type ScanBlocksComponentProps = {
 const scanButtonClassNames = {
     card: 'btn-outline h-9 w-full px-4 text-[15px]',
     compact: 'btn-outline h-8 flex-none px-3 text-[13px]',
-    row: 'flex h-[53px] w-full items-center justify-center border-b border-line text-[15px] text-accent enabled:cursor-pointer enabled:hover:bg-ink/[0.03] disabled:text-ink-muted',
+    row: 'flex h-[53px] w-full items-center justify-center border-b border-line text-[15px] text-link enabled:cursor-pointer enabled:hover:bg-ink/[0.03] disabled:text-ink-muted',
 };
 
 function ScanBlocksComponent(props: ScanBlocksComponentProps) {

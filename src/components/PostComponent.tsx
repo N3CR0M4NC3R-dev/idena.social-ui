@@ -343,7 +343,7 @@ function PostComponent(props: PostComponentProps) {
 
     return (<>
         <div className="border-b border-line">
-            <div className={`flex px-4 pt-3 ${isPostOutlet ? 'flex-wrap items-center gap-x-3' : 'gap-3 hover:bg-ink/[0.03]'} ${!isPostOutlet ? 'hover:cursor-pointer' : ''}`} onMouseDown={handlePostMouseDown} onClick={handlePostClick}>
+            <div className={`flex px-4 pt-3 ${isPostOutlet ? 'flex-wrap items-center gap-x-3' : 'gap-3'} ${!isPostOutlet ? 'hover:cursor-pointer' : ''}`} onMouseDown={handlePostMouseDown} onClick={handlePostClick}>
                 <div className={isPostOutlet ? 'contents' : 'flex flex-none flex-col items-center'}>
                     <ObjectUrlImageComponent className={`size-10 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${post.poster}`)} />
                     {!isPostOutlet && showReplies && replyComments.length > 0 && <div className="mt-1 w-0.5 flex-1 bg-line"></div>}
@@ -357,7 +357,7 @@ function PostComponent(props: PostComponentProps) {
                             <a className="whitespace-nowrap text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`} onClick={(e) => e.stopPropagation()}>{getDisplayTimeAgo(post.timestamp)}</a>
                         </>}
                     </div>
-                    <p className={`min-w-0 basis-full text-ink [word-break:break-word] ${isPostOutlet ? 'mt-3 text-[17px]/6' : 'text-[15px]/5'}`}>{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-accent hover:underline" onClick={(e) => toggleViewMoreHandler(post, e)}>Show more</a></span>}</p>
+                    <p className={`min-w-0 basis-full text-ink [word-break:break-word] ${isPostOutlet ? 'mt-3 text-[17px]/6' : 'text-[15px]/5'}`}>{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-link hover:underline" onClick={(e) => toggleViewMoreHandler(post, e)}>Show more</a></span>}</p>
                     {post.image ? <div className="mt-3 min-w-0 basis-full">
                         <ObjectUrlImageComponent className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-2xl border border-line hover:cursor-pointer" file={post.image} onClick={(e) => handleExpandImageModal(e, post.image!, post.cid)} />
                     </div> : null}
@@ -365,8 +365,8 @@ function PostComponent(props: PostComponentProps) {
                         <a className="hover:underline" href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{`${displayTime} · ${getDisplayFullDate(post.timestamp)}`}</a>
                     </div>}
                     <div className={`flex basis-full text-[13px] text-ink-muted ${isPostOutlet ? 'justify-between border-t border-line px-1 py-1' : 'mt-1 -ml-2 max-w-[425px]'}`}>
-                        <div className={`flex items-center ${isPostOutlet ? '' : 'flex-1'} ${replyComments.length ? 'text-accent' : ''}`}>
-                            <button type="button" aria-label="Reply" title="Reply" className={`${actionButtonClassName} hover:bg-accent/20 hover:text-accent`} onClick={(e) => toggleShowReplyInputHandler(e, post)}>
+                        <div className={`flex items-center ${isPostOutlet ? '' : 'flex-1'} ${replyComments.length ? 'text-comment' : ''}`}>
+                            <button type="button" aria-label="Reply" title="Reply" className={`${actionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={(e) => toggleShowReplyInputHandler(e, post)}>
                                 <ReplyIcon className={isPostOutlet ? 'size-[22.5px]' : 'size-[18.75px]'} />
                             </button>
                             {replyComments.length ? <button type="button" className={actionCountClassName} onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{totalNumberOfReplies}<span className="sr-only"> replies</span></button> : null}
@@ -453,7 +453,7 @@ function PostComponent(props: PostComponentProps) {
 
                         return (
                             <li key={replyPost.postId} className={isPostOutlet ? 'border-t border-line' : ''}>
-                                <div className={`flex gap-3 px-4 pb-1 ${isPostOutlet ? 'pt-3' : 'pt-1'} ${isSpotlightReply && !spotlightDiscussionPostId ? 'bg-accent/15 hover:bg-accent/20' : ''}`}>
+                                <div className={`flex gap-3 px-4 pb-1 ${isPostOutlet ? 'pt-3' : 'pt-1'} ${isSpotlightReply && !spotlightDiscussionPostId ? 'bg-ink/10' : ''}`}>
                                     <div className="flex flex-none flex-col items-center">
                                         <ObjectUrlImageComponent className={`size-10 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)} />
                                         {!isPostOutlet && index < replyComments.length - 1 && <div className="mt-1 w-0.5 flex-1 bg-line"></div>}
@@ -465,13 +465,13 @@ function PostComponent(props: PostComponentProps) {
                                             <span className="text-ink-muted" aria-hidden="true">·</span>
                                             <a className="whitespace-nowrap text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(replyPost.timestamp)}</a>
                                         </div>
-                                        <p className="text-[15px]/5 text-ink [word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-accent hover:underline" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>Show more</a></span>}</p>
+                                        <p className="text-[15px]/5 text-ink [word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-link hover:underline" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>Show more</a></span>}</p>
                                         {replyPost.image && <div className="mt-3">
                                             <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line hover:cursor-pointer" file={replyPost.image} onClick={(e) => handleExpandImageModal(e, replyPost.image!, replyPost.cid)} />
                                         </div>}
                                         <div className="mt-1 -ml-2 flex max-w-[425px] text-[13px] text-ink-muted">
-                                            <div className={`flex flex-1 items-center ${discussionPostComments.length || showDiscussion ? 'text-accent' : ''}`}>
-                                                <button type="button" aria-label="Comment" title="Comment" className={`${actionButtonClassName} hover:bg-accent/20 hover:text-accent`} onClick={() => toggleReplyDiscussionHandler(replyPost)}>
+                                            <div className={`flex flex-1 items-center ${discussionPostComments.length || showDiscussion ? 'text-comment' : ''}`}>
+                                                <button type="button" aria-label="Comment" title="Comment" className={`${actionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={() => toggleReplyDiscussionHandler(replyPost)}>
                                                     <ReplyIcon className="size-[18.75px]" />
                                                 </button>
                                                 {discussionPostComments.length || showDiscussion ? <button type="button" className={actionCountClassName} onClick={() => toggleShowDiscussionHandler(replyPost)}>{discussionPostComments.length}<span className="sr-only"> comments</span></button> : null}
@@ -513,7 +513,7 @@ function PostComponent(props: PostComponentProps) {
                                                     };
 
                                                     return (
-                                                        <li {...addAttrs} className={`px-3 py-2 ${isSpotlightDiscussionPost ? 'bg-accent/15 hover:bg-accent/20' : 'hover:bg-ink/[0.03]'}`}>
+                                                        <li {...addAttrs} className={`px-3 py-2 ${isSpotlightDiscussionPost ? 'bg-ink/10' : ''}`}>
                                                             {replyToPost && <div className="flex items-center gap-1 text-[13px]/5 text-ink-muted">
                                                                 <div className="ml-4 h-2.5 w-4 flex-none self-end rounded-tl border-t border-l border-line-strong"></div>
                                                                 <ObjectUrlImageComponent className="size-4 flex-none rounded-full bg-surface object-cover" file={replyToPostPosterPic} />
@@ -535,7 +535,7 @@ function PostComponent(props: PostComponentProps) {
                                                                         <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line hover:cursor-pointer" file={discussionPost.image} onClick={(e) => handleExpandImageModal(e, discussionPost.image!, discussionPost.cid)} />
                                                                     </div>}
                                                                     <div className="-ml-1.5 flex gap-4 text-[13px] text-ink-muted">
-                                                                        <button type="button" aria-label="Reply" title="Reply" className={`${commentActionButtonClassName} hover:bg-accent/20 hover:text-accent`} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)}>
+                                                                        <button type="button" aria-label="Reply" title="Reply" className={`${commentActionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)}>
                                                                             <ReplyIcon className="size-4" />
                                                                         </button>
                                                                         <div className={`flex items-center ${likesForDiscussionPost.length ? 'text-like' : ''}`}>
@@ -559,7 +559,7 @@ function PostComponent(props: PostComponentProps) {
                                             </ul>
                                             {!isBreakingChangeDisabled && <>
                                                 {discussReplyToPost && <div className="flex items-center gap-2 border-t border-line px-3 py-1.5 text-[13px] text-ink-muted">
-                                                    <p className="min-w-0 flex-1 truncate">Replying to <span className="text-accent">{getDisplayAddressShort(discussReplyToPost!.poster)}</span>: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
+                                                    <p className="min-w-0 flex-1 truncate">Replying to <span className="text-link">{getDisplayAddressShort(discussReplyToPost!.poster)}</span>: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
                                                     <button type="button" aria-label="Cancel reply" title="Cancel reply" className="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full text-ink hover:bg-ink/10" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>
                                                         <CloseIcon className="size-3.5" />
                                                     </button>
@@ -597,7 +597,7 @@ function PostComponent(props: PostComponentProps) {
                         );
                     })}
                 </ul>
-                {replyComments.length > showMaxReplies && <button type="button" className={`block w-full cursor-pointer py-3 text-left text-[15px] text-accent hover:bg-ink/[0.03] ${isPostOutlet ? 'border-t border-line px-4' : 'pr-4 pl-[68px]'}`} onClick={() => increaseShowMaxReplies(10)}>Show more replies</button>}
+                {replyComments.length > showMaxReplies && <button type="button" className={`block w-full cursor-pointer py-3 text-left text-[15px] text-link hover:bg-ink/[0.03] ${isPostOutlet ? 'border-t border-line px-4' : 'pr-4 pl-[68px]'}`} onClick={() => increaseShowMaxReplies(10)}>Show more replies</button>}
             </div>}
         </div>
     </>);

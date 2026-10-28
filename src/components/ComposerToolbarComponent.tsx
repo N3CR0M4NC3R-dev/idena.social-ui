@@ -31,18 +31,18 @@ function ComposerToolbarComponent(props: ComposerToolbarComponentProps) {
 
     return (
         <div className="flex flex-row items-center gap-2">
-            <div className="flex-1 flex flex-row items-center gap-0.5 -ml-2 text-accent">
+            <div className="flex-1 flex flex-row items-center gap-0.5 -ml-2 text-ink">
                 {hasAttachment ?
-                    <button type="button" className="h-8 px-2 inline-flex items-center gap-1 rounded-full text-[13px] font-bold cursor-pointer hover:bg-accent/20" onClick={onRemoveImage}>
+                    <button type="button" className="h-8 px-2 inline-flex items-center gap-1 rounded-full text-[13px] font-bold cursor-pointer hover:bg-ink/10" onClick={onRemoveImage}>
                         <CloseIcon className="size-4" />
                         <span>Remove image</span>
                     </button>
                     :
-                    <button type="button" aria-label="Add image" title="Add image" className={`${compact ? 'size-8' : 'size-[34px]'} inline-flex items-center justify-center rounded-full cursor-pointer hover:bg-accent/20`} onClick={onAddImage}>
+                    <button type="button" aria-label="Add image" title="Add image" className={`${compact ? 'size-8' : 'size-[34px]'} inline-flex items-center justify-center rounded-full cursor-pointer hover:bg-ink/10`} onClick={onAddImage}>
                         <ImageIcon className={compact ? 'size-[18px]' : 'size-5'} />
                     </button>
                 }
-                <button type="button" title="Copy the transaction to sign it elsewhere" className="h-8 px-2 inline-flex items-center gap-1 rounded-full text-[13px] font-bold cursor-pointer hover:bg-accent/20" onClick={onCopyTx}>
+                <button type="button" title="Copy the transaction to sign it elsewhere" className="h-8 px-2 inline-flex items-center gap-1 rounded-full text-[13px] font-bold cursor-pointer hover:bg-ink/10" onClick={onCopyTx}>
                     <CopyIcon className="size-4" />
                     <span id={copyTxId}>Copy tx</span>
                 </button>

@@ -194,7 +194,7 @@ function Messages() {
                 </div>
                 {addressInvalid && <div className="flex flex-wrap gap-x-2 text-[13px] text-danger">
                     <span>Invalid address: {addressInvalid}.</span>
-                    {addressInvalid === 'pubkey missing' && addNewRecipient !== zeroAddress && <><span className="cursor-pointer text-accent hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, addNewRecipient.toLowerCase())}>Manually Provide Pubkey</span><span>then try again</span></>}
+                    {addressInvalid === 'pubkey missing' && addNewRecipient !== zeroAddress && <><span className="cursor-pointer text-link hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, addNewRecipient.toLowerCase())}>Manually Provide Pubkey</span><span>then try again</span></>}
                 </div>}
             </div>
             {!!recipients.length && <div className="flex flex-col gap-1.5">

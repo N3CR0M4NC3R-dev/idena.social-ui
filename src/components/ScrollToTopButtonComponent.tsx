@@ -8,7 +8,7 @@ type ScrollToTopButtonComponentProps = {
 
 const variantClassNames = {
     round: 'flex size-11 items-center justify-center rounded-full border border-line bg-canvas cursor-pointer hover:bg-ink/10',
-    fab: 'btn-accent size-14 opacity-75 hover:opacity-100 shadow-[0_0_15px_color-mix(in_srgb,var(--color-ink)_20%,transparent),0_0_3px_1px_color-mix(in_srgb,var(--color-ink)_15%,transparent)]',
+    fab: 'btn-primary size-14 opacity-75 hover:opacity-100 shadow-[0_0_15px_color-mix(in_srgb,var(--color-ink)_20%,transparent),0_0_3px_1px_color-mix(in_srgb,var(--color-ink)_15%,transparent)]',
 };
 
 function ScrollToTopButtonComponent(props: ScrollToTopButtonComponentProps) {

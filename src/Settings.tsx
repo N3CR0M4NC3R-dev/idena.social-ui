@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router";
 import { defaultSettings } from "./App";
 import { clearMessagesCache } from "./logic/messagesStore";
@@ -7,6 +7,7 @@ import { clearPostsCache } from "./logic/postsStore";
 import { clearTipsCache } from "./logic/tipsStore";
 import { clearIgnoresCache } from "./logic/ignoreStore";
 import { clearBlocksCapturedRange } from "./logic/blocksCapturedStore";
+import { type Theme, applyTheme, defaultTheme, getTheme, saveTheme } from "./logic/theme";
 import PageHeaderComponent from "./components/PageHeaderComponent";
 
 type SettingsProps = {
@@ -50,9 +51,15 @@ type SettingsProps = {
 
 const radioClassName = 'col-start-1 row-start-1 cursor-pointer appearance-none rounded-full border-2 border-line-strong bg-transparent checked:border-accent checked:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent forced-colors:appearance-auto';
 
+const themeOptions: { value: Theme, label: string }[] = [
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'system', label: 'Match device' },
+];
+
 function RadioCheckMark() {
     return (
-        <svg viewBox="0 0 14 14" fill="none" aria-hidden="true" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white opacity-0 group-has-checked:opacity-100">
+        <svg viewBox="0 0 14 14" fill="none" aria-hidden="true" className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-canvas opacity-0 group-has-checked:opacity-100">
             <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
@@ -101,6 +108,13 @@ function Settings() {
     } = useOutletContext() as SettingsProps;
 
     const initNodeUrlRef = useRef({ nodeUrl: '', nodeKey: ''});
+
+    const [theme, setTheme] = useState(getTheme);
+
+    const handleThemeChange = (value: Theme) => {
+        saveTheme(value);
+        setTheme(value);
+    };
 
     const onChangeSaveEncryptedKeyHandler = (newSaveEncryptedKey: boolean) => {
         setSaveEncryptedKey(newSaveEncryptedKey);
@@ -166,6 +180,9 @@ function Settings() {
             setInputIdenaIndexerApiUrlApplied(true);
 
             localStorage.clear();
+
+            applyTheme(defaultTheme);
+            setTheme(defaultTheme);
         }
     };
 
@@ -185,7 +202,7 @@ function Settings() {
     return (<>
         <PageHeaderComponent title="Settings" />
         <section className="flex flex-col gap-3 border-b border-line px-4 py-4">
-            <h3 className="text-xl/6 font-extrabold">Node</h3>
+            <h3 className="text-[17px]/6 font-extrabold">Node</h3>
             <label className="flex flex-col gap-1">
                 <span className="text-[13px] text-ink-muted">RPC URL</span>
                 <input className="form-field text-[15px]" disabled={inputNodeApplied} value={nodeUrl} onChange={e => setNodeUrl(e.target.value)} />
@@ -201,7 +218,7 @@ function Settings() {
             </div>
         </section>
         <section className="flex flex-col gap-3 border-b border-line px-4 py-4">
-            <h3 className="text-xl/6 font-extrabold">Make posts with</h3>
+            <h3 className="text-[17px]/6 font-extrabold">Make posts with</h3>
             <div className="flex flex-col gap-1">
                 <div className="flex flex-row items-center gap-3 py-1">
                     <div className="group grid size-5 flex-none grid-cols-1">
@@ -218,7 +235,7 @@ function Settings() {
                     </div>
                     <label htmlFor="notUseRpc" className="flex cursor-pointer flex-col text-[15px]/5">
                         <span>Idena Web App</span>
-                        <span className="text-[13px] text-ink-muted">No account? Get one at <a className="text-accent hover:underline" href="https://app.idena.io" target="_blank">app.idena.io</a></span>
+                        <span className="text-[13px] text-ink-muted">No account? Get one at <a className="text-link hover:underline" href="https://app.idena.io" target="_blank">app.idena.io</a></span>
                     </label>
                 </div>
             </div>
@@ -261,7 +278,7 @@ function Settings() {
                                         className="col-start-1 row-start-1 cursor-pointer appearance-none rounded border-2 border-line-strong bg-transparent checked:border-accent checked:bg-accent indeterminate:border-accent indeterminate:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:border-line disabled:bg-surface disabled:checked:bg-surface forced-colors:appearance-auto"
                                         onChange={() => onChangeSaveEncryptedKeyHandler(!saveEncryptedKey)}
                                     />
-                                    <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-4 self-center justify-self-center stroke-white group-has-disabled:stroke-ink/25">
+                                    <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-4 self-center justify-self-center stroke-canvas group-has-disabled:stroke-ink/25">
                                         <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-checked:opacity-100" />
                                         <path d="M3 7H11" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
                                     </svg>
@@ -279,7 +296,7 @@ function Settings() {
                                         className="col-start-1 row-start-1 cursor-pointer appearance-none rounded border-2 border-line-strong bg-transparent checked:border-accent checked:bg-accent indeterminate:border-accent indeterminate:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:border-line disabled:bg-surface disabled:checked:bg-surface forced-colors:appearance-auto"
                                         onChange={() => onChangeSavePasswordHandler(!savePassword)}
                                     />
-                                    <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-4 self-center justify-self-center stroke-white group-has-disabled:stroke-ink/25">
+                                    <svg viewBox="0 0 14 14" fill="none" className="pointer-events-none col-start-1 row-start-1 size-4 self-center justify-self-center stroke-canvas group-has-disabled:stroke-ink/25">
                                         <path d="M3 8L6 11L11 3.5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-checked:opacity-100" />
                                         <path d="M3 7H11" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-has-indeterminate:opacity-100" />
                                     </svg>
@@ -293,7 +310,7 @@ function Settings() {
             )}
         </section>
         <section className="flex flex-col gap-3 border-b border-line px-4 py-4">
-            <h3 className="text-xl/6 font-extrabold">Find posts with</h3>
+            <h3 className="text-[17px]/6 font-extrabold">Find posts with</h3>
             <div className="flex flex-col gap-1">
                 <div className="flex flex-row items-center gap-3 py-1">
                     <div className="group grid size-5 flex-none grid-cols-1">
@@ -323,6 +340,20 @@ function Settings() {
                     </div>
                 </div>
             )}
+        </section>
+        <section className="flex flex-col gap-3 border-b border-line px-4 py-4">
+            <h3 className="text-[17px]/6 font-extrabold">Appearance</h3>
+            <div className="flex flex-col gap-1">
+                {themeOptions.map(({ value, label }) => (
+                    <div key={value} className="flex flex-row items-center gap-3 py-1">
+                        <div className="group grid size-5 flex-none grid-cols-1">
+                            <input id={`theme-${value}`} type="radio" name="theme" value={value} checked={theme === value} onChange={() => handleThemeChange(value)} className={radioClassName} />
+                            <RadioCheckMark />
+                        </div>
+                        <label htmlFor={`theme-${value}`} className="cursor-pointer text-[15px]/5">{label}</label>
+                    </div>
+                ))}
+            </div>
         </section>
         <section className="flex flex-wrap gap-3 border-b border-line px-4 py-4">
             <button type="button" className="btn-outline h-9 px-4 text-[15px]" onClick={() => handleRestoreDefaultSettings()}>Restore Default Settings</button>

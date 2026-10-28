@@ -34,7 +34,7 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
     return (<>
         <div className="w-screen max-w-full sm:w-[600px]">
             <div className="sticky top-0 z-[5] flex h-[53px] items-center bg-canvas/65 pl-14 pr-4 backdrop-blur-md">
-                <h2 className="truncate text-xl/6 font-extrabold">{heading}</h2>
+                <h2 className="truncate font-display text-xl/6 font-bold">{heading}</h2>
             </div>
             <ul className="max-h-[calc(100dvh-53px)] overflow-y-auto scrollbar-thin pb-2 sm:max-h-[min(25rem,calc(90vh-53px))]">
                 {modalItemsRef!.current.map((item) => {

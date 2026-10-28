@@ -89,16 +89,16 @@ function PostActivity() {
                         notificationIcon = <HeartIcon filled className="size-7 text-like" />;
                     } else if (postType === 'comment') {
                         notificationMessage = 'Your reply has received a new comment';
-                        notificationIcon = <ReplyIcon className="size-7 text-accent" />;
+                        notificationIcon = <ReplyIcon className="size-7 text-comment" />;
                     } else if (postType === 'commentReply') {
                         notificationMessage = 'Your comment has received a reply comment';
-                        notificationIcon = <ReplyIcon className="size-7 text-accent" />;
+                        notificationIcon = <ReplyIcon className="size-7 text-comment" />;
                     } else if (postType === 'reply') {
                         notificationMessage = 'Your post has received a reply';
-                        notificationIcon = <ReplyIcon className="size-7 text-accent" />;
+                        notificationIcon = <ReplyIcon className="size-7 text-comment" />;
                     } else {
                         notificationMessage = `You have received an interaction`;
-                        notificationIcon = <BellIcon className="size-7 text-accent" />;
+                        notificationIcon = <BellIcon className="size-7 text-ink" />;
                     }
 
                     const {

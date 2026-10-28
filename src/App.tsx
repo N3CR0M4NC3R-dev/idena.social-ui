@@ -101,7 +101,7 @@ if (!DEBUG) {
 }
 
 const modalClassNames = {
-    overlay: 'fixed inset-0 z-50 bg-[rgba(91,112,131,0.4)]',
+    overlay: 'fixed inset-0 z-50 bg-overlay',
     content: 'absolute inset-0 overflow-y-auto overscroll-contain scrollbar-thin bg-canvas outline-none sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[90vh] sm:max-w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl',
     closeButton: 'hover:bg-ink/10',
 };
@@ -1977,9 +1977,10 @@ function App() {
                     <Link to="/" aria-label="Idena Social" title="Idena Social" onClick={scrollToTop} className="mt-0.5 flex justify-center xl:justify-start">
                         <span className="flex h-16 items-center gap-3 px-2.5 xl:pr-5">
                             <span className="size-11 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={WhatIsIdenaThumbPng} alt="" /></span>
-                            <span className="hidden text-[26px]/8 font-extrabold xl:inline">Idena Social</span>
+                            <span className="hidden font-display text-[22px]/8 font-bold whitespace-nowrap xl:inline">Idena Social</span>
                         </span>
                     </Link>
+                    <div aria-hidden="true" className="meander mx-2.5 mb-2" />
                     <MenuComponent postersAddress={postersAddress} variant="sidebar" />
                     <section className="mt-14 hidden flex-none xl:block" aria-label="Blockchain">
                         <ScanBlocksComponent
@@ -2009,16 +2010,17 @@ function App() {
                                 <p className="flex-none text-[13px] text-ink-muted">Ad</p>
                             </div>
                             <p className="truncate">{currentAd?.desc ?? defaultAd.desc}</p>
-                            <a className="block w-fit max-w-full truncate text-accent hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a>
+                            <a className="block w-fit max-w-full truncate text-link hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a>
                         </div>
                     </div>
                 </div>
-                <div className="flex h-[53px] items-center border-b border-line px-4 sm:hidden">
+                <div className="flex h-[53px] items-center px-4 sm:hidden">
                     <Link to="/" onClick={scrollToTop} className="flex items-center gap-3">
                         <span className="size-8 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={WhatIsIdenaThumbPng} alt="" /></span>
-                        <span className="text-[19px] font-extrabold">Idena Social</span>
+                        <span className="font-display text-[19px] font-bold">Idena Social</span>
                     </Link>
                 </div>
+                <div aria-hidden="true" className="meander sm:hidden" />
                 <div className="xl:hidden">
                     <footer className="flex flex-wrap gap-x-3 gap-y-1 border-b border-line px-4 py-3 text-[13px]/4 text-ink-muted">
                         {footerLinks}
@@ -2140,7 +2142,7 @@ function App() {
                             <div className="px-4 pt-3 text-[15px]/5">
                                 <p className="font-bold">{currentAd?.title ?? defaultAd.title}</p>
                                 <p>{currentAd?.desc ?? defaultAd.desc}</p>
-                                <a className="block w-fit max-w-full truncate text-accent hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a>
+                                <a className="block w-fit max-w-full truncate text-link hover:underline" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">{currentAd?.url ?? defaultAd.url}</a>
                             </div>
                             <div className="grid grid-cols-2 gap-4 px-4 pt-3 pb-4 text-[13px]/5">
                                 <div className="min-w-0">

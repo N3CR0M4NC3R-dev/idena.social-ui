@@ -27,7 +27,7 @@ function ModalRpcSendMessageComponent(props: ModalRpcSendMessageComponentProps) 
     return (<>
         <div className="w-screen max-w-full sm:w-[600px]">
             <div className="sticky top-0 z-[5] flex h-[53px] items-center bg-canvas/65 pl-14 pr-4 backdrop-blur-md">
-                <h2 className="text-xl/6 font-extrabold">Send Message</h2>
+                <h2 className="font-display text-xl/6 font-bold">Send Message</h2>
             </div>
             <div className="px-4 pb-4">
                 <RpcPostMessageUIComponent
