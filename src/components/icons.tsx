@@ -18,9 +18,7 @@ const fillWhen = (filled?: boolean) => filled ? 'currentColor' : 'none';
 export function HomeIcon({ className, filled }: IconProps) {
     return (
         <svg {...svgProps} className={className}>
-            <path d="M3 9.25 12 3.5l9 5.75z" fill={fillWhen(filled)} />
-            <path d="M5.75 12v5.5M9.9 12v5.5M14.1 12v5.5M18.25 12v5.5" />
-            <path d="M3.5 20.5h17" />
+            <path d="M3.75 10.4 12 3.75l8.25 6.65v9.1c0 .55-.45 1-1 1H15v-5.75c0-.55-.45-1-1-1h-4c-.55 0-1 .45-1 1v5.75H4.75c-.55 0-1-.45-1-1z" fill={fillWhen(filled)} />
         </svg>
     );
 }

@@ -25,7 +25,7 @@ function PageHeaderComponent(props: PageHeaderComponentProps) {
                     <ArrowLeftIcon className="size-5" />
                 </button>}
                 <div className="min-w-0">
-                    <h2 className="truncate font-display text-xl/6 font-bold">{title}</h2>
+                    <h2 className="truncate text-xl/6 font-extrabold">{title}</h2>
                     {subtitle && <p className="truncate text-[13px]/4 text-ink-muted">{subtitle}</p>}
                 </div>
             </div>}

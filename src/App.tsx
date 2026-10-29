@@ -4,8 +4,8 @@ import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { sha3_256 } from 'js-sha3';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
-import WhatIsIdenaPng from './assets/whatisidena.png';
-import WhatIsIdenaThumbPng from './assets/idena_logo.png';
+import IdenaAdPng from './assets/idena_ad.png';
+import IdenaLogo from './assets/idena_logo.png';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
@@ -51,8 +51,8 @@ const defaultAd = {
     title: 'IDENA: Proof-of-Person blockchain',
     desc: 'Coordination of individuals',
     url: 'https://idena.io',
-    thumb: WhatIsIdenaThumbPng,
-    media: WhatIsIdenaPng,
+    thumb: IdenaLogo,
+    media: IdenaAdPng,
 };
 
 const POLLING_INTERVAL = 10000;
@@ -1976,11 +1976,10 @@ function App() {
                 <div className="sticky top-0 flex h-screen w-[88px] flex-col overflow-y-auto no-scrollbar px-2 xl:w-[275px] xl:px-3">
                     <Link to="/" aria-label="Idena Social" title="Idena Social" onClick={scrollToTop} className="mt-0.5 flex justify-center xl:justify-start">
                         <span className="flex h-16 items-center gap-3 px-2.5 xl:pr-5">
-                            <span className="size-11 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={WhatIsIdenaThumbPng} alt="" /></span>
-                            <span className="hidden font-display text-[22px]/8 font-bold whitespace-nowrap xl:inline">Idena Social</span>
+                            <span className="size-11 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={IdenaLogo} alt="" /></span>
+                            <span className="hidden text-[26px]/8 font-extrabold xl:inline">Idena Social</span>
                         </span>
                     </Link>
-                    <div aria-hidden="true" className="meander mx-2.5 mb-2" />
                     <MenuComponent postersAddress={postersAddress} variant="sidebar" />
                     <section className="mt-14 hidden flex-none xl:block" aria-label="Blockchain">
                         <ScanBlocksComponent
@@ -2014,13 +2013,12 @@ function App() {
                         </div>
                     </div>
                 </div>
-                <div className="flex h-[53px] items-center px-4 sm:hidden">
+                <div className="flex h-[53px] items-center border-b border-line px-4 sm:hidden">
                     <Link to="/" onClick={scrollToTop} className="flex items-center gap-3">
-                        <span className="size-8 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={WhatIsIdenaThumbPng} alt="" /></span>
-                        <span className="font-display text-[19px] font-bold">Idena Social</span>
+                        <span className="size-8 flex-none overflow-hidden rounded-full"><img className="size-full scale-125" src={IdenaLogo} alt="" /></span>
+                        <span className="text-[19px] font-extrabold">Idena Social</span>
                     </Link>
                 </div>
-                <div aria-hidden="true" className="meander sm:hidden" />
                 <div className="xl:hidden">
                     <footer className="flex flex-wrap gap-x-3 gap-y-1 border-b border-line px-4 py-3 text-[13px]/4 text-ink-muted">
                         {footerLinks}
