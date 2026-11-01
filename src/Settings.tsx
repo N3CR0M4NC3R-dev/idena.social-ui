@@ -7,6 +7,8 @@ import { clearPostsCache } from "./logic/postsStore";
 import { clearTipsCache } from "./logic/tipsStore";
 import { clearIgnoresCache } from "./logic/ignoreStore";
 import { clearBlocksCapturedRange } from "./logic/blocksCapturedStore";
+import { clearPostActivityCache } from "./logic/postActivityStore";
+import { clearMessageReadStatusCache } from "./logic/messageReadStatusStore";
 import { type Theme, applyTheme, defaultTheme, getTheme, saveTheme } from "./logic/theme";
 import PageHeaderComponent from "./components/PageHeaderComponent";
 
@@ -195,6 +197,8 @@ function Settings() {
             clearPostsCache();
             clearTipsCache();
             clearIgnoresCache();
+            clearPostActivityCache();
+            clearMessageReadStatusCache();
             clearBlocksCapturedRange();
         }
     };

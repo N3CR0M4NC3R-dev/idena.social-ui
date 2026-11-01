@@ -8,6 +8,7 @@ import GroupConversationHeaderComponent from "./GroupConversationHeaderComponent
 import ObjectUrlImageComponent from "./ObjectUrlImageComponent";
 import ComposerToolbarComponent from "./ComposerToolbarComponent";
 import { CloseIcon, HeartIcon, ReplyIcon } from "./icons";
+import { cacheMessageReadStatus } from "../logic/messageReadStatusStore";
 
 type ConversationComponentProps = {
     conversationKey: string,
@@ -36,6 +37,8 @@ type ConversationComponentProps = {
     submittingMessage: string,
     submittingLike: string,
     messagePrefix: string,
+    messageReadStatusRef: React.RefObject<Map<string, boolean>>,
+    unreadMessagesThisVisitRef: React.RefObject<Map<string, string>>,
     isConversationOutlet?: boolean,
 };
 
@@ -71,6 +74,8 @@ function ConversationComponent(props: ConversationComponentProps) {
         submittingMessage,
         submittingLike,
         messagePrefix,
+        messageReadStatusRef,
+        unreadMessagesThisVisitRef,
         isConversationOutlet,
     } = props as ConversationComponentProps;
 
@@ -180,6 +185,9 @@ function ConversationComponent(props: ConversationComponentProps) {
     const messages = conversation.messages.map((messageId) => messagesRef.current[messageId]).filter(message => !message.isLike);
     const participants = conversation.participants;
 
+    const newMessagesCount = messages.filter(message => messageReadStatusRef.current.get(message.messageId) === false || unreadMessagesThisVisitRef.current.get(message.messageId) === location.pathname).length;
+    const showNewMessages = !isConversationOutlet && !!newMessagesCount;
+
     const participantsExcludingSelf = participants.filter(item => item.toLowerCase() !== postersAddress.toLowerCase());
     if (!participantsExcludingSelf.length) {
         participantsExcludingSelf.push(postersAddress.toLowerCase());
@@ -195,11 +203,16 @@ function ConversationComponent(props: ConversationComponentProps) {
     const postMediaAttachment = postMediaAttachmentsRef.current[`message-${conversationKey}`];
 
     return <>
-        <div className={`flex flex-col gap-1 border-b border-line px-4 py-3 ${!isConversationOutlet ? 'cursor-pointer' : ''}`} onClick={() => handleConversationClick(conversationKey)}>
+        <div className={`flex flex-col gap-1 border-b border-line px-4 py-3 ${showNewMessages ? 'bg-btn/50' : ''} ${!isConversationOutlet ? 'cursor-pointer' : ''}`} onClick={() => handleConversationClick(conversationKey)}>
             {conversationPartners.length === 1
                 ? <OneOnOneConversationHeaderComponent conversationPartner={conversationPartners[0]} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />
                 : <GroupConversationHeaderComponent conversationPartners={conversationPartners} handleSubmitPubkeyModal={handleSubmitPubkeyModal} />}
-            <button type="button" className={`self-start cursor-pointer text-[13px] text-link hover:underline ${conversationPartners.length === 1 ? 'ml-[52px]' : ''}`} onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</button>
+            <div className={`flex items-center gap-2 ${conversationPartners.length === 1 ? 'ml-[52px]' : ''}`}>
+                <button type="button" className="cursor-pointer text-[13px] text-link hover:underline" onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</button>
+                {showNewMessages && <span className="flex h-[18px] items-center rounded-full bg-btn-hover px-1.5 text-[11px]/none font-bold text-btn-ink">
+                    <span className="[text-box:trim-both_cap_alphabetic]">{newMessagesCount} new</span>
+                </span>}
+            </div>
         </div>
         {showReplies && <div className="border-b border-line">
             <ul className="flex flex-col flex-col-reverse gap-3 max-h-100 overflow-y-auto scrollbar-thin px-4 py-3">
@@ -221,6 +234,12 @@ function ConversationComponent(props: ConversationComponentProps) {
                     const replyLikes = replyMessages.filter(replyMessage => replyMessage.isLike);
 
                     const isOwnMessage = message.sender === postersAddress.toLowerCase();
+
+                    if (messageReadStatusRef.current.get(message.messageId) === false) {
+                        unreadMessagesThisVisitRef.current.set(message.messageId, location.pathname);
+                        messageReadStatusRef.current.set(message.messageId, true);
+                        cacheMessageReadStatus(message.messageId, true, postersAddress);
+                    }
 
                     return (
                         <li key={message.messageId} className={`flex items-end gap-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>

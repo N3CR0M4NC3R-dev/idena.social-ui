@@ -43,6 +43,8 @@ type MessagesProps = {
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     SET_NEW_POSTS_ADDED_DELAY: number,
     messagePrefix: string,
+    messageReadStatusRef: React.RefObject<Map<string, boolean>>,
+    unreadMessagesThisVisitRef: React.RefObject<Map<string, string>>,
 };
 
 function Messages() {
@@ -79,6 +81,8 @@ function Messages() {
         deOrphanedReplyPostsTreeRef,
         SET_NEW_POSTS_ADDED_DELAY,
         messagePrefix,
+        messageReadStatusRef,
+        unreadMessagesThisVisitRef,
     } = useOutletContext() as MessagesProps;
 
     const [addNewRecipient, setAddNewRecipient] = useState<string>(zeroAddress);
@@ -261,6 +265,8 @@ function Messages() {
                     submittingMessage={submittingMessage}
                     submittingLike={submittingLike}
                     messagePrefix={messagePrefix}
+                    messageReadStatusRef={messageReadStatusRef}
+                    unreadMessagesThisVisitRef={unreadMessagesThisVisitRef}
                 />;
             })}
         </div>

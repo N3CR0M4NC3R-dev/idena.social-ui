@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, privateKeyToPublicKey, publicKeyToAddress, toHexString, Transaction, transactionType } from "idena-sdk-js-lite";
-import type { PostFinderTransaction, PostMediaAttachment } from "../App.exports";
+import type { PostActivityItem, PostFinderTransaction, PostMediaAttachment } from "../App.exports";
 import { type Post, type Poster } from "./asyncUtils";
 
 export const likeEmoji = '❤️';
@@ -386,22 +386,26 @@ export function getPostActivities(post: Post, postersAddress: string, postsRef: 
     const replyToPost = postsRef.current[post.replyToPostId];
     const ownAddress = postersAddress.toLowerCase();
 
-    let newPostActivities: string[] = [];
+    let newPostActivities: PostActivityItem[] = [];
 
     if (replyToPost?.poster === ownAddress && post.postLevel === 'Reply') {
-        newPostActivities = [ ...newPostActivities, `${post.timestamp}-${post.postId}-reply` ];
+        newPostActivities = [ ...newPostActivities, { timestamp: post.timestamp, postId: post.postId, type: 'reply', read: false } ];
     } else if (replyToPost?.poster === ownAddress && post.postLevel === 'Comment') {
-        newPostActivities = [ ...newPostActivities, `${post.timestamp}-${post.postId}-commentReply` ];
+        newPostActivities = [ ...newPostActivities, { timestamp: post.timestamp, postId: post.postId, type: 'commentReply', read: false } ];
     } else if (post.postLevel === 'Comment') {
         const postId = post.channelPostId;
         const channelPost = postsRef.current[postId];
 
         if (channelPost.poster === ownAddress) {
-            newPostActivities = [ ...newPostActivities, `${post.timestamp}-${post.postId}-comment` ];
+            newPostActivities = [ ...newPostActivities, { timestamp: post.timestamp, postId: post.postId, type: 'comment', read: false } ];
         }
     }
 
     return newPostActivities;
+}
+
+export function getPostActivityKey(postActivity: PostActivityItem) {
+    return `${postActivity.timestamp}|${postActivity.postId}${postActivity.tipTxHash ? `|${postActivity.tipTxHash}` : ''}`;
 }
 
 export function filterIndexerApiBalanceUpdates(balanceUpdates: any[], methods: string[]) {

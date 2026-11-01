@@ -3,11 +3,12 @@ import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { sha3_256 } from 'js-sha3';
 import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi } from './logic/asyncUtils';
-import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
+import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getPostActivityKey, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import IdenaAdPng from './assets/idena_ad.png';
+import IdenaAdThumbPng from './assets/idena_ad_thumb.png';
 import IdenaLogo from './assets/idena_logo.png';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
+import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostActivityItem, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 import ModalAddMediaComponent from './components/ModalAddMediaComponent';
@@ -24,6 +25,8 @@ import { loadTipsCache } from './logic/tipsStore';
 import { loadMessagesCache } from './logic/messagesStore';
 import { loadPostersCache } from './logic/postersStore';
 import { cacheIgnore, loadIgnoresCache, type IgnoreItem } from './logic/ignoreStore';
+import { cachePostActivity, loadPostActivityCache } from './logic/postActivityStore';
+import { cacheMessageReadStatus, loadMessageReadStatusCache } from './logic/messageReadStatusStore';
 import { addBlocksCapturedRange, clearBlocksCapturedRange, getBlocksCapturedRange, getBlocksCapturedRangeOverlapping } from './logic/blocksCapturedStore';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
@@ -51,7 +54,7 @@ const defaultAd = {
     title: 'IDENA: Proof-of-Person blockchain',
     desc: 'Coordination of individuals',
     url: 'https://idena.io',
-    thumb: IdenaLogo,
+    thumb: IdenaAdThumbPng,
     media: IdenaAdPng,
 };
 
@@ -205,7 +208,13 @@ function App() {
     const conversationsRef = useRef<Record<string, Conversation>>({});
     const messagesRef = useRef<Record<string, Message>>({});
     const profileActivityRef = useRef<Record<string, ProfileActivity>>({});
-    const postActivityRef = useRef<string[]>([]);
+    const postActivityRef = useRef<Map<string, PostActivityItem>>(new Map());
+    const [unreadPostActivities, setUnreadPostActivities] = useState<number>(0);
+    const unreadPostActivityThisVisitRef = useRef<Set<string>>(new Set());
+    const messageReadStatusRef = useRef<Map<string, boolean>>(new Map());
+    const [unreadMessages, setUnreadMessages] = useState<number>(0);
+    const unreadMessagesThisVisitRef = useRef<Map<string, string>>(new Map());
+    const prevPathnameRef = useRef(pathname);
 
     // indexeddb cache of posts, posters, tips, messages
     const [cacheLoaded, setCacheLoaded] = useState<boolean>(false);
@@ -240,6 +249,28 @@ function App() {
         };
 
         rerender && forceUpdate();
+    };
+
+    const addPostActivity = async (newPostActivity: PostActivityItem, owner: string) => {
+        const postActivityKey = getPostActivityKey(newPostActivity);
+
+        if (postActivityRef.current.has(postActivityKey)) {
+            return false;
+        }
+
+        postActivityRef.current.set(postActivityKey, newPostActivity);
+        await cachePostActivity(newPostActivity, owner);
+        return true;
+    };
+
+    const addUnreadMessage = async (messageId: string, owner: string) => {
+        if (messageReadStatusRef.current.has(messageId)) {
+            return false;
+        }
+
+        messageReadStatusRef.current.set(messageId, false);
+        await cacheMessageReadStatus(messageId, false, owner);
+        return true;
     };
 
     const setRpcClient = (idenaNodeUrl: string, idenaNodeApiKey: string, setNodeAvailable: React.Dispatch<React.SetStateAction<boolean>>) => {
@@ -316,6 +347,73 @@ function App() {
     }, []);
 
     useEffect(() => {
+        const owner = postersAddress.toLowerCase();
+        let ignore = false;
+
+        loadPostActivityCache(owner).then((cachedPostActivity) => {
+            if (ignore || postersAddressRef.current.toLowerCase() !== owner) return;
+
+            let totalUnread = 0;
+            cachedPostActivity.forEach((postActivity, postActivityKey) => {
+                if (!postActivityRef.current.has(postActivityKey)) {
+                    postActivityRef.current.set(postActivityKey, postActivity);
+                    if (postActivity.read === false) totalUnread++;
+                }
+            });
+            setUnreadPostActivities(totalUnread);
+        });
+
+        // StrictMode runs this effect twice in dev, drop the first load or it marks every key as present and the second counts 0.
+        return () => {
+            ignore = true;
+        };
+    }, [postersAddress]);
+
+    useEffect(() => {
+        const owner = postersAddress.toLowerCase();
+        let ignore = false;
+
+        loadMessageReadStatusCache(owner).then((cachedMessageReadStatus) => {
+            if (ignore || postersAddressRef.current.toLowerCase() !== owner) return;
+
+            let totalUnread = 0;
+            cachedMessageReadStatus.forEach((read, messageId) => {
+                if (!messageReadStatusRef.current.has(messageId)) {
+                    messageReadStatusRef.current.set(messageId, read);
+                    if (read === false) totalUnread++;
+                }
+            });
+            setUnreadMessages(totalUnread);
+        });
+
+        // StrictMode runs this effect twice in dev, drop the first load or it marks every key as present and the second counts 0.
+        return () => {
+            ignore = true;
+        };
+    }, [postersAddress]);
+
+    useEffect(() => {
+        if (prevPathnameRef.current === '/postactivity' && pathname !== '/postactivity') {
+            const readCount = unreadPostActivityThisVisitRef.current.size;
+            setUnreadPostActivities((unread) => unread - readCount);
+            unreadPostActivityThisVisitRef.current.clear();
+        }
+        // messages are read on /messages and /conversation/* pages, the new page has already rendered (and marked its own messages read) by now, so only count off those read on a page we've left.
+        let readMessagesCount = 0;
+        unreadMessagesThisVisitRef.current.forEach((readOnPathname, messageId) => {
+            if (readOnPathname !== pathname) {
+                unreadMessagesThisVisitRef.current.delete(messageId);
+                readMessagesCount++;
+            }
+        });
+        if (readMessagesCount) {
+            const readCount = readMessagesCount;
+            setUnreadMessages((unread) => unread - readCount);
+        }
+        prevPathnameRef.current = pathname;
+    }, [pathname]);
+
+    useEffect(() => {
         const canUseIdenaApp = makePostsWith === 'idena-app' && !credentialsInvalid;
         const canUseRpc = makePostsWith === 'rpc' && !viewOnlyNode;
 
@@ -333,7 +431,7 @@ function App() {
         if (!inputPostersAddressApplied || makePostsWith !== 'idena-app') {
             return;
         }
-        validatePostersAddress();
+        validatePostersAddress(inputPostersAddress);
     }, [inputPostersAddressApplied]);
 
     useEffect(() => {
@@ -365,7 +463,7 @@ function App() {
         if (inputPostersAddress !== zeroAddress || makePostsWith !== 'idena-app' || !inputPostersAddressApplied) {
             return;
         }
-        validatePostersAddress();
+        validatePostersAddress(inputPostersAddress);
     }, [inputPostersAddress, makePostsWith]);
 
     // special case for restoring defaults
@@ -496,7 +594,7 @@ function App() {
         }
     }, [scanningPastBlocks, initialBlock, initialBlockTimestamp, nodeAvailable, cacheLoaded]);
 
-    const validatePostersAddress = () => {
+    const validatePostersAddress = (inputPostersAddress: string) => {
         setPostersAddress(inputPostersAddress);
 
         if (inputPostersAddress === zeroAddress) {
@@ -569,7 +667,7 @@ function App() {
         if (value === 'idena-app') {
             if (postersAddress) {
                 setInputPostersAddress(postersAddress);
-                setPostersAddressInvalid(false);
+                validatePostersAddress(postersAddress);
                 localStorage.setItem('postersAddress', postersAddress);
             } else {
                 setInputPostersAddress(zeroAddress);
@@ -936,7 +1034,9 @@ function App() {
                         profileActivityRef.current[newTip!.tipper] = profileActivity;
 
                         if (postsRef.current[newTip!.postId!]?.poster === postersAddress.toLowerCase()) {
-                            postActivityRef.current = [ ...postActivityRef.current, `${newTip!.timestamp}-${newTip!.postId}|${newTip!.txHash}-tip` ];
+                            const newPostActivity: PostActivityItem = { timestamp: newTip!.timestamp, postId: newTip!.postId, type: 'tip', read: false, tipTxHash: newTip!.txHash };
+                            const added = await addPostActivity(newPostActivity, postersAddress);
+                            if (added) setUnreadPostActivities(current => current + 1);
                         }
 
                         continue;
@@ -1113,7 +1213,7 @@ function App() {
                     profileActivityRef.current[newPost!.poster] = profileActivity;
 
 
-                    let newPostActivities: string[] = [];
+                    let newPostActivities: PostActivityItem[] = [];
 
                     if (newPost!.poster === postersAddress.toLowerCase()) {
                         const postTips = postTipsRef.current[newPost!.postId];
@@ -1123,7 +1223,7 @@ function App() {
 
                             for (let index = 0; index < tips.length; index++) {
                                 const tip = tipsRef.current[tips[index]];
-                                newPostActivities = [ ...newPostActivities, `${tip.timestamp}-${tip.postId}|${tip.txHash}-tip` ];
+                                newPostActivities = [ ...newPostActivities, { timestamp: tip.timestamp, postId: tip.postId, type: 'tip', read: false, tipTxHash: tip.txHash } ];
                             }
                         }
                     }
@@ -1138,7 +1238,10 @@ function App() {
                         newPostActivities = post ? [ ...newPostActivities, ...getPostActivities(post, postersAddress, postsRef) ] : newPostActivities;
                     }
 
-                    postActivityRef.current = [ ...postActivityRef.current, ...newPostActivities ];
+                    for (let index = 0; index < newPostActivities.length; index++) {
+                        const added = await addPostActivity(newPostActivities[index], postersAddress);
+                        if (added) setUnreadPostActivities(current => current + 1);
+                    }
                 }
 
                 await Promise.all(posterPromises);
@@ -1427,6 +1530,11 @@ function App() {
                     conversationsRef.current = { ...conversationsRef.current, [conversationKey]: conversation };
 
                     conversationKeys.push(conversationKey);
+
+                    if (newMessage.sender !== postersAddress.toLowerCase() && !newMessage.isLike) {
+                        const added = await addUnreadMessage(newMessage.messageId, postersAddress);
+                        if (added) setUnreadMessages(current => current + 1);
+                    }
                 }
 
                 setLatestConversationActivity((currentValue) => {
@@ -1475,7 +1583,7 @@ function App() {
 
     useEffect(() => {
         setInputPostDisabled((makePostsWith === 'rpc' && viewOnlyNode) || postersAddressInvalid);
-    }, [viewOnlyNode, postersAddressInvalid]);
+    }, [makePostsWith, viewOnlyNode, postersAddressInvalid]);
 
     const setPostMediaAttachmentHandler = async (attachmentId: string, file: File, ipfsUrl?: string) => {
         if (!supportedImageTypes.includes(file.type)) {
@@ -1980,7 +2088,7 @@ function App() {
                             <span className="hidden text-[26px]/8 font-extrabold xl:inline">Idena Social</span>
                         </span>
                     </Link>
-                    <MenuComponent postersAddress={postersAddress} variant="sidebar" />
+                    <MenuComponent postersAddress={postersAddress} unreadPostActivities={unreadPostActivities} unreadMessages={unreadMessages} variant="sidebar" />
                     <section className="mt-14 hidden flex-none xl:block" aria-label="Blockchain">
                         <ScanBlocksComponent
                             currentBlockCaptured={currentBlockCaptured}
@@ -2115,6 +2223,9 @@ function App() {
                         setIndexerApiUrl,
                         profileActivityRef,
                         postActivityRef,
+                        unreadPostActivityThisVisitRef,
+                        messageReadStatusRef,
+                        unreadMessagesThisVisitRef,
                         noMorePastBlocks,
                     }}
                 />
@@ -2163,7 +2274,7 @@ function App() {
                 </div>
             </aside>
             <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-canvas/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
-                <MenuComponent postersAddress={postersAddress} variant="bottom" />
+                <MenuComponent postersAddress={postersAddress} unreadPostActivities={unreadPostActivities} unreadMessages={unreadMessages} variant="bottom" />
             </div>
             <ScrollToTopButtonComponent variant="fab" className="fixed right-4 bottom-[calc(69px+env(safe-area-inset-bottom))] z-30 sm:bottom-6 lg:hidden" />
             <div onClick={(e) => e.stopPropagation()}>

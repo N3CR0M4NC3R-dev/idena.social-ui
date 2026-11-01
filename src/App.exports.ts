@@ -29,3 +29,4 @@ export const initProfileRepliesDomSettings = { textOverflowHidden: true, replies
 
 export type ProfileActivity = { posts: string[], replies: string[], comments: string[], likes: string[], tips: string[], media: string[] }
 export const defaultProfileActivity = { posts: [], replies: [], comments: [], likes: [], tips: [], media: [] };
+export type PostActivityItem = { timestamp: number, postId: string, type: 'reply' | 'commentReply' | 'comment' | 'tip', read: boolean,  tipTxHash?: string };

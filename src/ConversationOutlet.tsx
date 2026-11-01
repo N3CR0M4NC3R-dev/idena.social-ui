@@ -31,6 +31,8 @@ type ConversationOutletProps = {
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
     deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
     messagePrefix: string,
+    messageReadStatusRef: React.RefObject<Map<string, boolean>>,
+    unreadMessagesThisVisitRef: React.RefObject<Map<string, string>>,
     noMorePastBlocks: boolean,
 };
 
@@ -64,6 +66,8 @@ function ConversationOutlet() {
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
         messagePrefix,
+        messageReadStatusRef,
+        unreadMessagesThisVisitRef,
         noMorePastBlocks,
     } = useOutletContext() as ConversationOutletProps;
 
@@ -111,6 +115,8 @@ function ConversationOutlet() {
             submittingMessage={submittingMessage}
             submittingLike={submittingLike}
             messagePrefix={messagePrefix}
+            messageReadStatusRef={messageReadStatusRef}
+            unreadMessagesThisVisitRef={unreadMessagesThisVisitRef}
             isConversationOutlet={true}
         /> : conversationUnavailable}
     </>);
