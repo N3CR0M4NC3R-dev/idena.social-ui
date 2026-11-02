@@ -16,21 +16,21 @@
           href="/favicon-16x16.png"
         />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<meta name="theme-color" content="#fdfcfa" />
+		<meta name="theme-color" content="#ffffff" />
 		<meta name="color-scheme" content="light" />
     <script>
       try {
         var theme = localStorage.getItem('theme');
         if (theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
           document.documentElement.classList.add('dark');
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#141210');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#000000');
         }
       } catch (e) {}
     </script>
     <style>
       :root {
         color-scheme: light;
-        --canvas: #fdfcfa;
+        --canvas: #ffffff;
         --ink: #1c1814;
         --ink-muted: #776f62;
         --line: #e7e3db;
@@ -39,7 +39,7 @@
       }
       html.dark {
         color-scheme: dark;
-        --canvas: #141210;
+        --canvas: #000000;
         --ink: #ece8e1;
         --ink-muted: #9a9184;
         --line: #2f2b26;

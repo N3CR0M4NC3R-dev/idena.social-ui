@@ -3,7 +3,7 @@
 @theme {
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
-    --color-canvas: #fdfcfa;
+    --color-canvas: #ffffff;
     --color-ink: #1c1814;
     --color-ink-muted: #776f62;
     --color-line: #e7e3db;
@@ -32,7 +32,7 @@
 
     html.dark {
         color-scheme: dark;
-        --color-canvas: #141210;
+        --color-canvas: #000000;
         --color-ink: #ece8e1;
         --color-ink-muted: #9a9184;
         --color-line: #2f2b26;
