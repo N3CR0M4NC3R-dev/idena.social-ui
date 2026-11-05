@@ -3,6 +3,7 @@ import { getChildPostIds, breakingChanges, type Post, type PostTips, type Poster
 import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayFullDate, getDisplayTimeAgo, getDisplayTipAmount, getIdentityStatus, getMessageLines, getProfilePic, getShortDisplayTipAmount, likeEmoji } from '../logic/utils';
 import { initDomSettings, initPostOutletDomSettings, initProfileRepliesDomSettings, type BrowserStateHistorySettings, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from '../App.exports';
 import { useLocation, useNavigate } from 'react-router';
+import { useInfiniteScroll } from '../logic/useInfiniteScroll';
 import ObjectUrlImageComponent from './ObjectUrlImageComponent';
 import ComposerToolbarComponent from './ComposerToolbarComponent';
 import { CloseIcon, HeartIcon, ReplyIcon, TipIcon } from './icons';
@@ -171,6 +172,13 @@ function PostComponent(props: PostComponentProps) {
         replyComments.unshift(element);
     }
 
+    const { visibleItems: visibleReplyCommentIds, hasMore: hasMoreReplies, sentinelRef: repliesSentinelRef } = useInfiniteScroll(
+        isPostOutlet && showReplies ? replyComments.map(replyPost => replyPost.postId) : [],
+        locationKey,
+    );
+
+    const visibleReplyComments = replyComments.slice(0, isPostOutlet ? visibleReplyCommentIds.length : showMaxReplies);
+
     let totalNumberOfReplies = replyComments.length;
     const discussionPostsAll = replyComments.reduce((acc, curr) => {
         const discussParentId = discussPrefix + curr.postId;
@@ -216,7 +224,9 @@ function PostComponent(props: PostComponentProps) {
 
     const increaseShowMaxReplies = (increaseAmount: number) => {
         const showMaxReplies = getPostDomSettings(post.postId).showMaxReplies;
-        setPostDomSettings(post.postId, { showMaxReplies: showMaxReplies + increaseAmount }, true);
+        if (showMaxReplies !== undefined) {
+            setPostDomSettings(post.postId, { showMaxReplies: showMaxReplies + increaseAmount }, true);
+        }
     };
 
     const toggleReplyDiscussionHandler = (post: Post) => {
@@ -416,7 +426,7 @@ function PostComponent(props: PostComponentProps) {
             </div>
             {showReplies && <div>
                 <ul>
-                    {replyComments.slice(0, showMaxReplies).map((replyPost, index) => {
+                    {visibleReplyComments.map((replyPost, index) => {
 
                         const postTips = postTipsRef.current[replyPost.postId] ?? { totalAmount: 0, tips: [] };
                         const posterDisplayAddress = getDisplayAddress(replyPost.poster);
@@ -597,7 +607,8 @@ function PostComponent(props: PostComponentProps) {
                         );
                     })}
                 </ul>
-                {replyComments.length > showMaxReplies && <button type="button" className={`block w-full cursor-pointer py-3 text-left text-[15px] text-link hover:bg-ink/[0.03] ${isPostOutlet ? 'border-t border-line px-4' : 'pr-4 pl-[68px]'}`} onClick={() => increaseShowMaxReplies(10)}>Show more replies</button>}
+                {isPostOutlet && hasMoreReplies && <div ref={repliesSentinelRef} className="h-px" aria-hidden="true" />}
+                {showMaxReplies !== undefined && replyComments.length > showMaxReplies && <button type="button" className="block w-full cursor-pointer py-3 pr-4 pl-[68px] text-left text-[15px] text-link hover:bg-ink/[0.03]" onClick={() => increaseShowMaxReplies(10)}>Show more replies</button>}
             </div>}
         </div>
     </>);
