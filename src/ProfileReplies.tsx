@@ -1,8 +1,9 @@
 import { type Post, type Poster, type PostTips } from './logic/asyncUtils';
-import { useOutletContext } from 'react-router';
+import { useLocation, useOutletContext } from 'react-router';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity, defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
+import { useInfiniteScroll } from './logic/useInfiniteScroll';
 
 type ProfileRepliesProps = {
     address: string,
@@ -66,9 +67,16 @@ function ProfileReplies() {
         profileActivityRef,
     } = useOutletContext() as ProfileRepliesProps;
 
+    const { key: locationKey } = useLocation();
+
+    const { visibleItems: visibleReplyPostIds, hasMore, sentinelRef } = useInfiniteScroll(
+        (profileActivityRef.current[address] ?? defaultProfileActivity).replies,
+        locationKey,
+    );
+
     return (<>
         <ul>
-            {(profileActivityRef.current[address] ?? defaultProfileActivity).replies.map((replyPostId: string) => {
+            {visibleReplyPostIds.map((replyPostId: string) => {
 
                 const replyPost = postsRef.current[replyPostId];
 
@@ -116,6 +124,7 @@ function ProfileReplies() {
                 </li>;
             })}
         </ul>
+        {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
     </>);
 }
 

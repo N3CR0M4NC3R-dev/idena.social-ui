@@ -3,6 +3,7 @@ import { useLocation, useOutletContext } from 'react-router';
 import PostComponent from './components/PostComponent';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from './App.exports';
 import SortPostsByComponent from './components/SortPostsByComponent';
+import { useInfiniteScroll } from './logic/useInfiniteScroll';
 
 type ProfilePostsProps = {
     address: string,
@@ -82,12 +83,17 @@ function ProfilePosts() {
         return post.poster === address;
     });
 
+    const { visibleItems: visiblePostIds, hasMore, sentinelRef } = useInfiniteScroll(
+        filteredOrderedPosts,
+        `${locationKey}-${sortPostsBy}`,
+    );
+
     return (<>
         <div className="border-b border-line">
             <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} variant="pills" />
         </div>
         <ul>
-            {filteredOrderedPosts.map((postId: string) => (
+            {visiblePostIds.map((postId: string) => (
                 <li key={postId}>
                     <PostComponent
                         uniqueKey={postId}
@@ -121,6 +127,7 @@ function ProfilePosts() {
                 </li>
             ))}
         </ul>
+        {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
     </>);
 }
 

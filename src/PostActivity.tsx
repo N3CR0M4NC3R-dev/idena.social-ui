@@ -1,5 +1,5 @@
 import { type Post, type Poster, type PostTips, type Tip } from './logic/asyncUtils';
-import { Link, useOutletContext } from 'react-router';
+import { Link, useLocation, useOutletContext } from 'react-router';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostActivityItem, type PostMediaAttachment } from './App.exports';
 import PostComponent from './components/PostComponent';
 import ObjectUrlImageComponent from './components/ObjectUrlImageComponent';
@@ -7,6 +7,7 @@ import PageHeaderComponent from './components/PageHeaderComponent';
 import { BellIcon, HeartIcon, ReplyIcon, TipIcon } from './components/icons';
 import { getDisplayAddressShort, getPostActivityKey, getProfilePic, getSpotlightPostDetails } from './logic/utils';
 import { cachePostActivity } from './logic/postActivityStore';
+import { useInfiniteScroll } from './logic/useInfiniteScroll';
 
 const sortFn = (a: PostActivityItem, b: PostActivityItem) => b.timestamp - a.timestamp;
 
@@ -76,11 +77,19 @@ function PostActivity() {
         postersAddress,
     } = useOutletContext() as PostActivityProps;
 
+    const { key: locationKey } = useLocation();
+
+    const { visibleItems: visiblePostActivityKeys, hasMore, sentinelRef } = useInfiniteScroll(
+        [...postActivityRef.current.values()].sort(sortFn).map(getPostActivityKey),
+        locationKey,
+    );
+
     return (<>
         <PageHeaderComponent title="Post Activity" />
         <ul>
             {
-                [...postActivityRef.current.values()].sort(sortFn).map((postActivity: PostActivityItem) => {
+                visiblePostActivityKeys.map((postActivityKey: string) => {
+                    const postActivity = postActivityRef.current.get(postActivityKey)!;
                     const { postId, type: postType, tipTxHash } = postActivity;
                     const post = postsRef.current[postId];
                     const spotlightPost = post?.isLike ? postsRef.current[post.replyToPostId] : post;
@@ -131,7 +140,6 @@ function PostActivity() {
                         return null;
                     }
 
-                    const postActivityKey = getPostActivityKey(postActivity);
                     if (postActivity.read === false) {
                         unreadPostActivityThisVisitRef.current.add(postActivityKey);
                         const newPostActivity = { ...postActivity, read: true };
@@ -183,6 +191,7 @@ function PostActivity() {
                     </li>;
                 })}
         </ul>
+        {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
     </>);
 }
 

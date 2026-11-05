@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useState } from "react";
-import { useOutletContext } from "react-router";
+import { useLocation, useOutletContext } from "react-router";
 import { getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, type Message, type Poster, getPosterPromise } from "./logic/asyncUtils";
 import { type BrowserStateHistorySettings, type Conversation, type MouseEventLocal, type PostMediaAttachment } from "./App.exports";
 import ConversationComponent from "./components/ConversationComponent";
@@ -7,6 +7,7 @@ import ObjectUrlImageComponent from "./components/ObjectUrlImageComponent";
 import PageHeaderComponent from "./components/PageHeaderComponent";
 import ComposerToolbarComponent from "./components/ComposerToolbarComponent";
 import { CloseIcon, UserPlusIcon } from "./components/icons";
+import { useInfiniteScroll } from "./logic/useInfiniteScroll";
 
 type MessagesProps = {
     copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
@@ -92,6 +93,10 @@ function Messages() {
     const [recipients, setRecipients] = useState<string[]>([]);
 
     const [, forceUpdate] = useReducer(x => x + 1, 0);
+
+    const { key: locationKey } = useLocation();
+
+    const { visibleItems: visibleConversationKeys, hasMore, sentinelRef } = useInfiniteScroll(latestConversationActivity, locationKey);
 
     const mainPostMediaAttachment = postMediaAttachmentsRef.current['message-main'];
 
@@ -236,7 +241,7 @@ function Messages() {
             />
         </div>
         <div>
-            {!!latestConversationActivity.length && latestConversationActivity.map(conversationKey => {
+            {visibleConversationKeys.map(conversationKey => {
                 return <ConversationComponent
                     key={conversationKey}
                     conversationKey={conversationKey}
@@ -270,6 +275,7 @@ function Messages() {
                 />;
             })}
         </div>
+        {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
     </>);
 }
 

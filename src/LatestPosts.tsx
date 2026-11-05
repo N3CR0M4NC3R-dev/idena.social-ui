@@ -9,6 +9,7 @@ import PageHeaderComponent from './components/PageHeaderComponent';
 import ComposerToolbarComponent from './components/ComposerToolbarComponent';
 import { CloseIcon } from './components/icons';
 import { getProfilePic } from './logic/utils';
+import { useInfiniteScroll } from './logic/useInfiniteScroll';
 
 type LatestPostsProps = {
     latestPosts: string[],
@@ -85,6 +86,11 @@ function LatestPosts() {
 
     const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
 
+    const { visibleItems: visiblePostIds, hasMore, sentinelRef } = useInfiniteScroll(
+        sortPostsBy === 'latest-posts' ? latestPosts : latestActivity,
+        `${locationKey}-${sortPostsBy}`,
+    );
+
     const mainPostMediaAttachment = postMediaAttachmentsRef.current['post-main'];
 
     const removeMediaHandler = (e: MouseEventLocal, location: string) => {
@@ -131,7 +137,7 @@ function LatestPosts() {
             <SortPostsByComponent sortPostsBy={sortPostsBy} setBrowserStateHistorySettings={setBrowserStateHistorySettings} />
         </PageHeaderComponent>
         <ul>
-            {(sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).map((postId) => (
+            {visiblePostIds.map((postId) => (
                 <li key={postId}>
                     <PostComponent
                         uniqueKey={postId}
@@ -165,6 +171,7 @@ function LatestPosts() {
                 </li>
             ))}
         </ul>
+        {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
     </>);
 }
 

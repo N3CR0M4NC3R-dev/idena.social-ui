@@ -1,8 +1,9 @@
 import { type Post, type Poster, type PostTips } from './logic/asyncUtils';
-import { useOutletContext } from 'react-router';
+import { useLocation, useOutletContext } from 'react-router';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity, defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
+import { useInfiniteScroll } from './logic/useInfiniteScroll';
 
 type ProfileCommentsProps = {
     address: string,
@@ -66,9 +67,16 @@ function ProfileComments() {
         profileActivityRef,
     } = useOutletContext() as ProfileCommentsProps;
 
+    const { key: locationKey } = useLocation();
+
+    const { visibleItems: visibleDiscussionPostIds, hasMore, sentinelRef } = useInfiniteScroll(
+        (profileActivityRef.current[address] ?? defaultProfileActivity).comments,
+        locationKey,
+    );
+
     return (<>
         <ul>
-            {(profileActivityRef.current[address] ?? defaultProfileActivity).comments.map((discussionPostId: string) => {
+            {visibleDiscussionPostIds.map((discussionPostId: string) => {
 
                 const discussionPost = postsRef.current[discussionPostId];
 
@@ -118,6 +126,7 @@ function ProfileComments() {
                 </li>;
             })}
         </ul>
+        {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
     </>);
 }
 

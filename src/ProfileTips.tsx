@@ -1,8 +1,9 @@
 import { type Post, type Poster, type PostTips } from './logic/asyncUtils';
-import { useOutletContext } from 'react-router';
+import { useLocation, useOutletContext } from 'react-router';
 import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment, type ProfileActivity, defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
+import { useInfiniteScroll } from './logic/useInfiniteScroll';
 
 type ProfileTipsProps = {
     address: string,
@@ -66,9 +67,16 @@ function ProfileTips() {
         profileActivityRef,
     } = useOutletContext() as ProfileTipsProps;
 
+    const { key: locationKey } = useLocation();
+
+    const { visibleItems: visibleTipPostIdTxHashes, hasMore, sentinelRef } = useInfiniteScroll(
+        (profileActivityRef.current[address] ?? defaultProfileActivity).tips,
+        locationKey,
+    );
+
     return (<>
         <ul>
-            {(profileActivityRef.current[address] ?? defaultProfileActivity).tips.map((tipPostIdTxHash: string) => {
+            {visibleTipPostIdTxHashes.map((tipPostIdTxHash: string) => {
                 const [tipPostId, txHash] = tipPostIdTxHash.split('|');
                 const post = postsRef.current[tipPostId];
 
@@ -121,6 +129,7 @@ function ProfileTips() {
                 </li>;
             })}
         </ul>
+        {hasMore && <div ref={sentinelRef} className="h-px" aria-hidden="true" />}
     </>);
 }
 
