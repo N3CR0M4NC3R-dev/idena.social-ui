@@ -174,7 +174,7 @@ function PostComponent(props: PostComponentProps) {
 
     const { visibleItems: visibleReplyCommentIds, hasMore: hasMoreReplies, sentinelRef: repliesSentinelRef } = useInfiniteScroll(
         isPostOutlet && showReplies ? replyComments.map(replyPost => replyPost.postId) : [],
-        locationKey,
+        `${locationKey}-replies-${uniqueKey}-${postId}`,
     );
 
     const visibleReplyComments = replyComments.slice(0, isPostOutlet ? visibleReplyCommentIds.length : showMaxReplies);

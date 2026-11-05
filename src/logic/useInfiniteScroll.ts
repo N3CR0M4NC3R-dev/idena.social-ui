@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 
 // Renders a long list a page at a time: only the first `visibleCount` items are returned, and
 // the next page is revealed when the sentinel element (placed after the list) nears the viewport.
+//
+// `resetKey` must be unique to one list in one history entry (derive it from the location key).
+// How far each list was paged is remembered under that key, so returning to the entry with the
+// back button renders as many items as before and the browser can restore the scroll position.
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -12,8 +16,22 @@ const SENTINEL_ROOT_MARGIN = '0px 0px 150% 0px';
 // .filter), and treating each new array as a change would set state on every render forever.
 const sameItems = <T>(a: T[], b: T[]) => a === b || (a.length === b.length && a.every((item, index) => item === b[index]));
 
+// Lists paged past the first page, by resetKey. The last rendered item is kept as well as the
+// count, in case items arrived above it while the user was away.
+const pagedLists = new Map<string, { visibleCount: number, lastVisibleItem: unknown }>();
+
+const getInitialVisibleCount = <T>(items: T[], resetKey: string, pageSize: number) => {
+    const pagedList = pagedLists.get(resetKey);
+
+    if (!pagedList) {
+        return pageSize;
+    }
+
+    return Math.max(pagedList.visibleCount, items.indexOf(pagedList.lastVisibleItem as T) + 1);
+};
+
 export function useInfiniteScroll<T>(items: T[], resetKey: string, pageSize = DEFAULT_PAGE_SIZE) {
-    const [visibleCount, setVisibleCount] = useState(pageSize);
+    const [visibleCount, setVisibleCount] = useState(() => getInitialVisibleCount(items, resetKey, pageSize));
     const [prevItems, setPrevItems] = useState(items);
     const [prevResetKey, setPrevResetKey] = useState(resetKey);
     const sentinelRef = useRef<HTMLDivElement>(null);
@@ -36,6 +54,16 @@ export function useInfiniteScroll<T>(items: T[], resetKey: string, pageSize = DE
     }
 
     const hasMore = visibleCount < items.length;
+
+    const lastVisibleItem = items[Math.min(visibleCount, items.length) - 1];
+
+    useEffect(() => {
+        if (visibleCount > pageSize) {
+            pagedLists.set(resetKey, { visibleCount, lastVisibleItem });
+        } else {
+            pagedLists.delete(resetKey);
+        }
+    }, [resetKey, visibleCount, lastVisibleItem, pageSize]);
 
     // Re-created whenever visibleCount changes: a new observer reports the sentinel's current
     // state straight away, so if it is still near the viewport after a page renders (short posts,
