@@ -32,6 +32,7 @@ import { addBlocksCapturedRange, clearBlocksCapturedRange, getBlocksCapturedRang
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
 const initIndexerApiUrl = 'https://api.idena.io';
+const defaultWebAppUrl = 'https://app.idena.io';
 const contractAddressCurrent = '0x840e092e31e9656fF15E541505039ed77585338E'; // idena.social-ui v12
 const contractAddress5 = '0x18b0a55eb99AcA113f50eEBbdeAf6f96E789277f'; // idena.social-ui v11
 const contractAddress4 = '0xa1c5c1A8c6a1Af596078A5c9653F24c216fE1cb2'; // idena.social-ui v10
@@ -73,6 +74,7 @@ export const defaultSettings = {
     nodeUrl: defaultNodeUrl,
     nodeKey: defaultNodeApiKey,
     makePostsWith: 'idena-app',
+    webAppUrl: defaultWebAppUrl,
     postersAddress: zeroAddress,
     findPostsWith: 'indexer-api',
     indexerApiUrl: initIndexerApiUrl,
@@ -86,6 +88,7 @@ const initSettings = {
     nodeUrl: localStorage.getItem('nodeUrl') || defaultSettings.nodeUrl,
     nodeKey: localStorage.getItem('nodeKey') || defaultSettings.nodeKey,
     makePostsWith: localStorage.getItem('makePostsWith') || defaultSettings.makePostsWith,
+    webAppUrl: localStorage.getItem('webAppUrl') || defaultSettings.webAppUrl,
     postersAddress: localStorage.getItem('postersAddress') || defaultSettings.postersAddress,
     findPostsWith: localStorage.getItem('findPostsWith') || defaultSettings.findPostsWith,
     indexerApiUrl: localStorage.getItem('indexerApiUrl') || defaultSettings.indexerApiUrl,
@@ -124,17 +127,11 @@ function App() {
 
     const { key: locationKey, pathname } = location;
 
-    // inputs for settings
-    const [inputNodeApplied, setInputNodeApplied] = useState<boolean>(true);
-    const [inputPostersAddress, setInputPostersAddress] = useState<string>(initSettings.postersAddress);
-    const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState<boolean>(true);
+    // settings validation
     const [postersAddressInvalid, setPostersAddressInvalid] = useState<boolean>(false);
     const postersAddressInvalidRef = useRef<boolean>(postersAddressInvalid);
-    const [inputIdenaIndexerApiUrl, setInputIdenaIndexerApiUrl] = useState<string>(initSettings.indexerApiUrl);
-    const [inputIdenaIndexerApiUrlApplied, setInputIdenaIndexerApiUrlApplied] = useState<boolean>(true);
     const [indexerApiUrlInvalid, setIdenaIndexerApiUrlInvalid] = useState<boolean>(false);
     const indexerApiUrlInvalidRef = useRef(indexerApiUrlInvalid);
-    const [inputCredentialsApplied, setInputCredentialsApplied] = useState<boolean>(true);
     const [credentialsInvalid, setCredentialsInvalid] = useState<string>('Invalid key or password');
     const [messageSettingsInvalid, setMessageSettingsInvalid] = useState<boolean>(false);
 
@@ -142,6 +139,7 @@ function App() {
     const [nodeUrl, setNodeUrl] = useState<string>(initSettings.nodeUrl);
     const [nodeKey, setNodeKey] = useState<string>(initSettings.nodeKey);
     const [makePostsWith, setMakePostsWith] = useState<string>(initSettings.makePostsWith);
+    const [webAppUrl, setWebAppUrl] = useState<string>(initSettings.webAppUrl);
     const [postersAddress, setPostersAddress] = useState<string>(initSettings.postersAddress);
     const postersAddressRef = useRef<string>(postersAddress);
     const [findPostsWith, setFindPostsWith] = useState<string>(initSettings.findPostsWith);
@@ -428,51 +426,14 @@ function App() {
     }, [postersAddress, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode]);
 
     useEffect(() => {
-        if (!inputPostersAddressApplied || makePostsWith !== 'idena-app') {
-            return;
+        if (makePostsWith === 'idena-app') {
+            validatePostersAddress(postersAddress);
         }
-        validatePostersAddress(inputPostersAddress);
-    }, [inputPostersAddressApplied]);
-
-    useEffect(() => {
-        if (inputIdenaIndexerApiUrlApplied && findPostsWith === 'indexer-api') {
-            setIndexerApiUrl(inputIdenaIndexerApiUrl);
-            localStorage.setItem('indexerApiUrl', inputIdenaIndexerApiUrl);
-
-            (async function() {
-                const { result, error } = await getPastTxsWithIdenaIndexerApi(inputIdenaIndexerApiUrl, contractAddressCurrent, 1);
-
-                if (!error && result?.length === 1 && result?.[0]?.contractAddress === contractAddressCurrent) {
-                    setIdenaIndexerApiUrlInvalid(false);
-                } else {
-                    setIdenaIndexerApiUrlInvalid(true);
-                }
-            })();
-        }
-    }, [inputIdenaIndexerApiUrlApplied]);
-
-    useEffect(() => {
-        if (!inputCredentialsApplied) {
-            return;
+        if (findPostsWith === 'indexer-api') {
+            applyIndexerApiUrl(indexerApiUrl);
         }
         validateCredentials();
-    }, [inputCredentialsApplied]);
-
-    // special case for restoring defaults
-    useEffect(() => {
-        if (inputPostersAddress !== zeroAddress || makePostsWith !== 'idena-app' || !inputPostersAddressApplied) {
-            return;
-        }
-        validatePostersAddress(inputPostersAddress);
-    }, [inputPostersAddress, makePostsWith]);
-
-    // special case for restoring defaults
-    useEffect(() => {
-        if (password || encryptedPrivateKey || !inputCredentialsApplied) {
-            return;
-        }
-        validateCredentials();
-    }, [password, encryptedPrivateKey]);
+    }, []);
 
     useEffect(() => {
         setCurrentAd(ads[0]);
@@ -618,20 +579,35 @@ function App() {
         }
     };
 
-    const validateCredentials = () => {
-        if (encryptedPrivateKey.length !== 120) {
+    const applyIndexerApiUrl = (newIndexerApiUrl: string) => {
+        setIndexerApiUrl(newIndexerApiUrl);
+        localStorage.setItem('indexerApiUrl', newIndexerApiUrl);
+
+        (async function() {
+            const { result, error } = await getPastTxsWithIdenaIndexerApi(newIndexerApiUrl, contractAddressCurrent, 1);
+
+            if (!error && result?.length === 1 && result?.[0]?.contractAddress === contractAddressCurrent) {
+                setIdenaIndexerApiUrlInvalid(false);
+            } else {
+                setIdenaIndexerApiUrlInvalid(true);
+            }
+        })();
+    };
+
+    const validateCredentials = (encryptedPrivateKeyToValidate = encryptedPrivateKey, passwordToValidate = password) => {
+        if (encryptedPrivateKeyToValidate.length !== 120) {
             setCredentialsInvalid('Key must be 120 chars');
             return;
         }
 
-        if (!password.length) {
+        if (!passwordToValidate.length) {
             setCredentialsInvalid('Password missing');
             return;
         }
 
-        const keyData = new Uint8Array(sha3_256.array(password));
+        const keyData = new Uint8Array(sha3_256.array(passwordToValidate));
 
-        decryptAESGCM(encryptedPrivateKey, keyData).then((privateKey) => {
+        decryptAESGCM(encryptedPrivateKeyToValidate, keyData).then((privateKey) => {
             const { address: calculatedAddress } = extractPubkeyAddressFromPrivateKey(privateKey);
 
             if (calculatedAddress !== postersAddress.toLowerCase()) {
@@ -640,11 +616,11 @@ function App() {
             }
 
             if (saveEncryptedKey) {
-                localStorage.setItem('encryptedPrivateKey', encryptedPrivateKey);
+                localStorage.setItem('encryptedPrivateKey', encryptedPrivateKeyToValidate);
             }
 
             if (savePassword) {
-                localStorage.setItem('password', password);
+                localStorage.setItem('password', passwordToValidate);
             }
 
             setCredentialsInvalid('');
@@ -659,18 +635,15 @@ function App() {
         localStorage.setItem('makePostsWith', value);
 
         if (value === 'rpc') {
-            setInputPostersAddress('');
             setPostersAddressInvalid(false);
             setRpcClient(nodeUrl, nodeKey, setNodeAvailable);
         }
 
         if (value === 'idena-app') {
             if (postersAddress) {
-                setInputPostersAddress(postersAddress);
                 validatePostersAddress(postersAddress);
                 localStorage.setItem('postersAddress', postersAddress);
             } else {
-                setInputPostersAddress(zeroAddress);
                 setPostersAddress(zeroAddress);
                 setPostersAddressInvalid(true);
             }
@@ -696,7 +669,6 @@ function App() {
                 setPostersAddressInvalid(false);
                 localStorage.setItem('indexerApiUrl', indexerApiUrl);
             } else {
-                setInputIdenaIndexerApiUrl(initIndexerApiUrl);
                 setIndexerApiUrl(initIndexerApiUrl);
             }
 
@@ -1724,7 +1696,7 @@ function App() {
 
         setSubmittingPost(location);
 
-        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, inputText, media, mediaType, replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, callbackUrl, webAppUrl);
     };
 
     const submitLikeHandler = async (emoji: string, location: string, replyToPostId?: string, channelId?: string) => {
@@ -1735,7 +1707,7 @@ function App() {
 
         setSubmittingLike(location);
 
-        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, callbackUrl);
+        await submitPost(postersAddress, contractAddressCurrent, makePostMethod, emoji, [], [], replyToPostId ?? null, channelId ?? null, makePostsWith, rpcClientRef.current!, callbackUrl, webAppUrl);
     };
 
     const submitSendTipHandler = async (location: string, tipToPostId: string, tipAmount: string) => {
@@ -1746,7 +1718,7 @@ function App() {
 
         setSubmittingTip(location);
 
-        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, makePostsWith, rpcClientRef.current!, callbackUrl);
+        await submitSendTip(postersAddress, contractAddressCurrent, sendTipMethod, tipToPostId, tipAmount, makePostsWith, rpcClientRef.current!, callbackUrl, webAppUrl);
     };
 
     const copyMessageTxHandler = async (location: string, recipients: string[], replyToMessageId?: string) => {
@@ -1920,7 +1892,7 @@ function App() {
 
         setSubmittingMessage(location);
 
-        await submitMessage(postersAddress, contractAddressCurrent, sendMessageMethod, message, rawMessageHash, makePostsWith, rpcClientRef.current!, callbackUrl);
+        await submitMessage(postersAddress, contractAddressCurrent, sendMessageMethod, message, rawMessageHash, makePostsWith, rpcClientRef.current!, callbackUrl, webAppUrl);
     };
 
     const submitMessageLikeHandler = async (emoji: string, location: string, recipients: string[], replyToMessageId: string) => {
@@ -1953,7 +1925,7 @@ function App() {
             replyToMessageId,
         );
 
-        await submitMessage(postersAddress, contractAddressCurrent, sendMessageMethod, message, rawMessageHash, makePostsWith, rpcClientRef.current!, callbackUrl);
+        await submitMessage(postersAddress, contractAddressCurrent, sendMessageMethod, message, rawMessageHash, makePostsWith, rpcClientRef.current!, callbackUrl, webAppUrl);
     };
 
     const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
@@ -1979,7 +1951,7 @@ function App() {
         }
 
         (async function() {
-            const { result: getBalanceResult } = await rpcClientRef.current!('dna_getBalance', [inputPostersAddress]);
+            const { result: getBalanceResult } = await rpcClientRef.current!('dna_getBalance', [postersAddress]);
             if (!getBalanceResult) {
                 return;
             }
@@ -2143,28 +2115,23 @@ function App() {
                 </div>
                 <Outlet
                     context={{
-                        inputNodeApplied,
                         nodeUrl,
                         setNodeUrl,
                         nodeAvailable,
                         nodeKey,
                         setNodeKey,
-                        setInputNodeApplied,
                         makePostsWith,
                         handleMakePostsWithToggle,
+                        webAppUrl,
+                        setWebAppUrl,
                         viewOnlyNode,
-                        inputPostersAddressApplied,
-                        inputPostersAddress,
-                        setInputPostersAddress,
                         postersAddressInvalid,
-                        setInputPostersAddressApplied,
+                        validatePostersAddress,
                         findPostsWith,
                         handleInputFindPostsWithToggle,
-                        inputIdenaIndexerApiUrlApplied,
-                        inputIdenaIndexerApiUrl,
-                        setInputIdenaIndexerApiUrl,
+                        indexerApiUrl,
                         indexerApiUrlInvalid,
-                        setInputIdenaIndexerApiUrlApplied,
+                        applyIndexerApiUrl,
                         latestPosts,
                         latestActivity,
                         postsRef,
@@ -2204,13 +2171,12 @@ function App() {
                         setEncryptedPrivateKey,
                         password,
                         setPassword,
-                        inputCredentialsApplied,
                         credentialsInvalid,
+                        validateCredentials,
                         saveEncryptedKey,
                         setSaveEncryptedKey,
                         savePassword,
                         setSavePassword,
-                        setInputCredentialsApplied,
                         zeroAddress,
                         latestConversationActivity,
                         postersAddress,

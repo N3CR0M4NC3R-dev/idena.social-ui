@@ -18,7 +18,7 @@ function ModalSendTipComponent(props: ModalSendTipComponentProps) {
         closeModal,
     } = props;
 
-    const [tipAmount, setTipAmount] = useState<string>('0');
+    const [tipAmount, setTipAmount] = useState<string>('');
     const [insufficientFunds, setInsufficientFunds] = useState<boolean>(false);
 
     const localSubmitTipHandler = async (e?: MouseEventLocal) => {
@@ -55,7 +55,7 @@ function ModalSendTipComponent(props: ModalSendTipComponentProps) {
                 </div>
                 <label className="mt-5 block">
                     <span className="block">How much iDNA would you like to tip?</span>
-                    <input className="form-field mt-2 w-32 text-[15px]" onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} value={tipAmount} onChange={e => handleChangeTipAmount(e)} />
+                    <input className="form-field mt-2 w-32 text-[15px]" placeholder='0' onKeyDown={(e) => !(/[0-9.]/.test(e.key) || e.key === 'Backspace') && e.preventDefault()} value={tipAmount} onChange={e => handleChangeTipAmount(e)} />
                 </label>
                 <div className="mt-5 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
                     {insufficientFunds && <p className="mr-auto text-[13px] text-danger">Send Tip will likely fail due to insufficient balance.</p>}

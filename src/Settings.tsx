@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router";
 import { defaultSettings } from "./App";
 import { clearMessagesCache } from "./logic/messagesStore";
@@ -13,42 +13,37 @@ import { type Theme, applyTheme, defaultTheme, getTheme, saveTheme } from "./log
 import PageHeaderComponent from "./components/PageHeaderComponent";
 
 type SettingsProps = {
-    inputNodeApplied: boolean,
     nodeUrl: string,
     setNodeUrl: React.Dispatch<React.SetStateAction<string>>,
     nodeAvailable: boolean,
     nodeKey: string,
     setNodeKey: React.Dispatch<React.SetStateAction<string>>,
-    setInputNodeApplied: React.Dispatch<React.SetStateAction<boolean>>,
     makePostsWith: string,
     handleMakePostsWithToggle: (value: string) => void,
+    webAppUrl: string,
+    setWebAppUrl: React.Dispatch<React.SetStateAction<string>>,
     viewOnlyNode: boolean,
-    inputPostersAddressApplied: boolean,
-    inputPostersAddress: string,
-    setInputPostersAddress: React.Dispatch<React.SetStateAction<string>>,
     postersAddressInvalid: boolean,
-    setInputPostersAddressApplied: React.Dispatch<React.SetStateAction<boolean>>,
+    validatePostersAddress: (postersAddress: string) => void,
     findPostsWith: string,
     handleInputFindPostsWithToggle: (value: string) => void,
-    inputIdenaIndexerApiUrlApplied: boolean,
-    inputIdenaIndexerApiUrl: string,
-    setInputIdenaIndexerApiUrl: React.Dispatch<React.SetStateAction<string>>,
+    indexerApiUrl: string,
     indexerApiUrlInvalid: boolean,
-    setInputIdenaIndexerApiUrlApplied: React.Dispatch<React.SetStateAction<boolean>>,
+    applyIndexerApiUrl: (indexerApiUrl: string) => void,
     encryptedPrivateKey: string,
     setEncryptedPrivateKey: React.Dispatch<React.SetStateAction<string>>,
     password: string,
     setPassword: React.Dispatch<React.SetStateAction<string>>,
-    inputCredentialsApplied: boolean,
     credentialsInvalid: string,
+    validateCredentials: (encryptedPrivateKey?: string, password?: string) => void,
     saveEncryptedKey: boolean,
     setSaveEncryptedKey: React.Dispatch<React.SetStateAction<boolean>>,
     savePassword: boolean,
     setSavePassword: React.Dispatch<React.SetStateAction<boolean>>,
-    setInputCredentialsApplied: React.Dispatch<React.SetStateAction<boolean>>,
     setMakePostsWith: React.Dispatch<React.SetStateAction<string>>,
     setIndexerApiUrl: React.Dispatch<React.SetStateAction<string>>,
     postersAddress: string,
+    zeroAddress: string,
 };
 
 const radioClassName = 'col-start-1 row-start-1 cursor-pointer appearance-none rounded-full border-2 border-line-strong bg-transparent checked:bg-btn focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent forced-colors:appearance-auto';
@@ -58,6 +53,18 @@ const themeOptions: { value: Theme, label: string }[] = [
     { value: 'dark', label: 'Dark' },
     { value: 'system', label: 'Match device' },
 ];
+
+const normalizeWebAppUrl = (value: string) => {
+    try {
+        const url = new URL(value.trim());
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+            return null;
+        }
+        return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+    } catch {
+        return null;
+    }
+};
 
 function RadioCheckMark() {
     return (
@@ -71,47 +78,52 @@ function Settings() {
     const navigate = useNavigate();
 
     const {
-        inputNodeApplied,
         nodeUrl,
         setNodeUrl,
         nodeAvailable,
         nodeKey,
         setNodeKey,
-        setInputNodeApplied,
         makePostsWith,
         handleMakePostsWithToggle,
+        webAppUrl,
+        setWebAppUrl,
         viewOnlyNode,
-        inputPostersAddressApplied,
-        inputPostersAddress,
-        setInputPostersAddress,
         postersAddressInvalid,
-        setInputPostersAddressApplied,
+        validatePostersAddress,
         findPostsWith,
         handleInputFindPostsWithToggle,
-        inputIdenaIndexerApiUrlApplied,
-        inputIdenaIndexerApiUrl,
-        setInputIdenaIndexerApiUrl,
+        indexerApiUrl,
         indexerApiUrlInvalid,
-        setInputIdenaIndexerApiUrlApplied,
+        applyIndexerApiUrl,
         encryptedPrivateKey,
         setEncryptedPrivateKey,
         password,
         setPassword,
-        inputCredentialsApplied,
         credentialsInvalid,
+        validateCredentials,
         saveEncryptedKey,
         setSaveEncryptedKey,
         savePassword,
         setSavePassword,
-        setInputCredentialsApplied,
         setMakePostsWith,
         setIndexerApiUrl,
         postersAddress,
+        zeroAddress,
     } = useOutletContext() as SettingsProps;
 
-    const initNodeUrlRef = useRef({ nodeUrl: '', nodeKey: ''});
-
     const [theme, setTheme] = useState(getTheme);
+
+    const [inputNodeUrl, setInputNodeUrl] = useState(nodeUrl);
+    const [inputNodeKey, setInputNodeKey] = useState(nodeKey);
+    const [inputNodeApplied, setInputNodeApplied] = useState(true);
+    const [inputWebAppUrl, setInputWebAppUrl] = useState(webAppUrl);
+    const [inputWebAppUrlApplied, setInputWebAppUrlApplied] = useState(true);
+    const [webAppUrlInvalid, setWebAppUrlInvalid] = useState(false);
+    const [inputPostersAddress, setInputPostersAddress] = useState(postersAddress);
+    const [inputPostersAddressApplied, setInputPostersAddressApplied] = useState(true);
+    const [inputCredentialsApplied, setInputCredentialsApplied] = useState(true);
+    const [inputIdenaIndexerApiUrl, setInputIdenaIndexerApiUrl] = useState(indexerApiUrl);
+    const [inputIdenaIndexerApiUrlApplied, setInputIdenaIndexerApiUrlApplied] = useState(true);
 
     const handleThemeChange = (value: Theme) => {
         saveTheme(value);
@@ -131,25 +143,54 @@ function Settings() {
     };
 
     useEffect(() => {
-        setInputCredentialsApplied(true);
-        initNodeUrlRef.current.nodeUrl = nodeUrl;
-        initNodeUrlRef.current.nodeKey = nodeKey;
+        validateCredentials();
     }, []);
 
     const setInputNodeAppliedLocal = (value: boolean) => {
         setInputNodeApplied(value);
-        if (value && (nodeUrl !== initNodeUrlRef.current.nodeUrl || nodeKey !== initNodeUrlRef.current.nodeKey)) {
-            localStorage.setItem('nodeUrl', nodeUrl);
-            localStorage.setItem('nodeKey', nodeKey);
+        if (value && (inputNodeUrl !== nodeUrl || inputNodeKey !== nodeKey)) {
+            localStorage.setItem('nodeUrl', inputNodeUrl);
+            localStorage.setItem('nodeKey', inputNodeKey);
             clearBlocksCapturedRange().then(() => navigate(0));
         }
+    };
+
+    const handleMakePostsWithToggleLocal = (value: string) => {
+        handleMakePostsWithToggle(value);
+        if (value === 'idena-app') {
+            setInputPostersAddress(postersAddress || zeroAddress);
+        }
+    };
+
+    const setInputWebAppUrlAppliedLocal = (value: boolean) => {
+        if (!value) {
+            setInputWebAppUrlApplied(false);
+            return;
+        }
+
+        const normalizedWebAppUrl = normalizeWebAppUrl(inputWebAppUrl);
+
+        if (!normalizedWebAppUrl) {
+            setWebAppUrlInvalid(true);
+            return;
+        }
+
+        setWebAppUrlInvalid(false);
+        setInputWebAppUrl(normalizedWebAppUrl);
+        setWebAppUrl(normalizedWebAppUrl);
+        localStorage.setItem('webAppUrl', normalizedWebAppUrl);
+        setInputWebAppUrlApplied(true);
     };
 
     const setInputPostersAddressAppliedLocal = (value: boolean) => {
         setInputPostersAddressApplied(value);
 
         if (value) {
-            if (inputPostersAddress === postersAddress) {
+            const postersAddressChanged = inputPostersAddress !== postersAddress;
+
+            validatePostersAddress(inputPostersAddress);
+
+            if (!postersAddressChanged) {
                 return;
             }
 
@@ -159,25 +200,52 @@ function Settings() {
         }
     };
 
+    const setInputCredentialsAppliedLocal = (value: boolean) => {
+        setInputCredentialsApplied(value);
+        if (value) {
+            validateCredentials();
+        }
+    };
+
+    const setInputIdenaIndexerApiUrlAppliedLocal = (value: boolean) => {
+        setInputIdenaIndexerApiUrlApplied(value);
+        if (value) {
+            applyIndexerApiUrl(inputIdenaIndexerApiUrl);
+        }
+    };
+
     const handleRestoreDefaultSettings = () => {
         const userConfirmed = confirm('Are you sure you want to restore default settings?');
 
         if (userConfirmed) {
             setNodeUrl(defaultSettings.nodeUrl);
             setNodeKey(defaultSettings.nodeKey);
+            setInputNodeUrl(defaultSettings.nodeUrl);
+            setInputNodeKey(defaultSettings.nodeKey);
             setInputNodeApplied(true);
 
             setMakePostsWith(defaultSettings.makePostsWith);
+            setWebAppUrl(defaultSettings.webAppUrl);
+            setInputWebAppUrl(defaultSettings.webAppUrl);
+            setWebAppUrlInvalid(false);
+            setInputWebAppUrlApplied(true);
             setInputPostersAddress(defaultSettings.postersAddress);
             setInputPostersAddressApplied(true);
+            validatePostersAddress(defaultSettings.postersAddress);
 
             setEncryptedPrivateKey(defaultSettings.encryptedPrivateKey);
             setPassword(defaultSettings.password);
             setInputCredentialsApplied(true);
+            validateCredentials(defaultSettings.encryptedPrivateKey, defaultSettings.password);
+
             onChangeSaveEncryptedKeyHandler(defaultSettings.saveEncryptedKey);
             onChangeSavePasswordHandler(defaultSettings.savePassword);
 
-            setIndexerApiUrl(defaultSettings.indexerApiUrl);
+            if (findPostsWith === 'indexer-api') {
+                applyIndexerApiUrl(defaultSettings.indexerApiUrl);
+            } else {
+                setIndexerApiUrl(defaultSettings.indexerApiUrl);
+            }
             setInputIdenaIndexerApiUrl(defaultSettings.indexerApiUrl);
             setInputIdenaIndexerApiUrlApplied(true);
 
@@ -209,11 +277,11 @@ function Settings() {
             <h3 className="text-[17px]/6 font-extrabold">Node</h3>
             <label className="flex flex-col gap-1">
                 <span className="text-[13px] text-ink-muted">RPC URL</span>
-                <input className="form-field text-[15px]" disabled={inputNodeApplied} value={nodeUrl} onChange={e => setNodeUrl(e.target.value)} />
+                <input className="form-field text-[15px]" disabled={inputNodeApplied} value={inputNodeUrl} onChange={e => setInputNodeUrl(e.target.value)} />
             </label>
             <label className="flex flex-col gap-1">
                 <span className="text-[13px] text-ink-muted">API key</span>
-                <input className="form-field text-[15px]" disabled={inputNodeApplied} value={nodeKey} onChange={e => setNodeKey(e.target.value)} />
+                <input className="form-field text-[15px]" disabled={inputNodeApplied} value={inputNodeKey} onChange={e => setInputNodeKey(e.target.value)} />
             </label>
             {!nodeAvailable && <p className="text-[13px] text-danger">Node Unavailable. Please try again.</p>}
             <div className="flex flex-row items-center gap-3">
@@ -226,7 +294,7 @@ function Settings() {
             <div className="flex flex-col gap-1">
                 <div className="flex flex-row items-center gap-3 py-1">
                     <div className="group grid size-5 flex-none grid-cols-1">
-                        <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} className={radioClassName} />
+                        <input id="useRpc" type="radio" name="useRpc" value="rpc" checked={makePostsWith === 'rpc'} onChange={(e) => handleMakePostsWithToggleLocal(e.target.value)} className={radioClassName} />
                         <RadioCheckMark />
                     </div>
                     <label htmlFor="useRpc" className="cursor-pointer text-[15px]/5">RPC</label>
@@ -234,7 +302,7 @@ function Settings() {
                 {makePostsWith === 'rpc' && viewOnlyNode && <p className="pl-8 text-[13px] text-danger">Your RPC is View-Only. Switch to: Idena Web App for making posts. (Posting, liking, tipping is disabled)</p>}
                 <div className="flex flex-row items-start gap-3 py-1">
                     <div className="group grid size-5 flex-none grid-cols-1">
-                        <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={(e) => handleMakePostsWithToggle(e.target.value)} className={radioClassName} />
+                        <input id="notUseRpc" type="radio" name="useRpc" value="idena-app" checked={makePostsWith === 'idena-app'} onChange={(e) => handleMakePostsWithToggleLocal(e.target.value)} className={radioClassName} />
                         <RadioCheckMark />
                     </div>
                     <label htmlFor="notUseRpc" className="flex cursor-pointer flex-col text-[15px]/5">
@@ -245,6 +313,17 @@ function Settings() {
             </div>
             {makePostsWith === 'idena-app' && (
                 <div className="flex flex-col gap-6 sm:pl-8">
+                    <div className="flex flex-col gap-3">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[13px] text-ink-muted">Web App URL</span>
+                            <input className="form-field text-[15px]" disabled={inputWebAppUrlApplied} value={inputWebAppUrl} onChange={e => setInputWebAppUrl(e.target.value)} />
+                        </label>
+                        {webAppUrlInvalid && <p className="text-[13px] text-danger">Invalid URL. It must start with https:// or http://</p>}
+                        <div className="flex flex-row items-center gap-3">
+                            <button type="button" className={`${inputWebAppUrlApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputWebAppUrlAppliedLocal(!inputWebAppUrlApplied)}>{inputWebAppUrlApplied ? 'Change' : 'Apply'}</button>
+                            {!inputWebAppUrlApplied && <p className="text-[13px] text-ink-muted">Apply changes to take effect</p>}
+                        </div>
+                    </div>
                     <div className="flex flex-col gap-3">
                         <label className="flex flex-col gap-1">
                             <span className="text-[13px] text-ink-muted">Your Idena address</span>
@@ -258,7 +337,7 @@ function Settings() {
                     </div>
                     <div className="flex flex-col gap-3">
                         <label className="flex flex-col gap-1">
-                            <span className="text-[13px] text-ink-muted">Encrypted private key (Required for messaging functionality)</span>
+                            <span className="text-[13px] text-ink-muted">Encrypted private key (Optional, but required for messaging functionality)</span>
                             <input className="form-field text-[15px]" disabled={inputCredentialsApplied} value={encryptedPrivateKey} onChange={e => setEncryptedPrivateKey(e.target.value)} />
                         </label>
                         <label className="flex flex-col gap-1">
@@ -266,7 +345,7 @@ function Settings() {
                             <input type="password" className="form-field text-[15px]" disabled={inputCredentialsApplied} value={password} onChange={e => setPassword(e.target.value)} />
                         </label>
                         <div className="flex flex-row items-center gap-3">
-                            <button type="button" className={`${inputCredentialsApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputCredentialsApplied(!inputCredentialsApplied)}>{inputCredentialsApplied ? 'Change' : 'Apply'}</button>
+                            <button type="button" className={`${inputCredentialsApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputCredentialsAppliedLocal(!inputCredentialsApplied)}>{inputCredentialsApplied ? 'Change' : 'Apply'}</button>
                             {!inputCredentialsApplied && <p className="text-[13px] text-ink-muted">Apply changes to take effect</p>}
                         </div>
                         {credentialsInvalid && inputCredentialsApplied && <p className="text-[13px] text-danger">Invalid credentials: {credentialsInvalid}. (Messaging is disabled)</p>}
@@ -339,7 +418,7 @@ function Settings() {
                     </label>
                     {indexerApiUrlInvalid && <p className="text-[13px] text-danger">Invalid Api Url.</p>}
                     <div className="flex flex-row items-center gap-3">
-                        <button type="button" className={`${inputIdenaIndexerApiUrlApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputIdenaIndexerApiUrlApplied(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
+                        <button type="button" className={`${inputIdenaIndexerApiUrlApplied ? 'btn-outline' : 'btn-primary'} h-9 px-4 text-[15px]`} onClick={() => setInputIdenaIndexerApiUrlAppliedLocal(!inputIdenaIndexerApiUrlApplied)}>{inputIdenaIndexerApiUrlApplied ? 'Change' : 'Apply'}</button>
                         {!inputIdenaIndexerApiUrlApplied && <p className="text-[13px] text-ink-muted">Apply changes to take effect</p>}
                     </div>
                 </div>

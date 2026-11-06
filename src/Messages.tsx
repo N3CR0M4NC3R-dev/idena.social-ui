@@ -37,7 +37,7 @@ type MessagesProps = {
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
     handleOpenRpcSendMessageModal: (location: string, recipients: string[], replyToMessageId?: string | undefined) => void,
     messageSettingsInvalid: boolean,
-    setInputCredentialsApplied: React.Dispatch<React.SetStateAction<boolean>>,
+    validateCredentials: () => void,
     findPostsWithRef: React.RefObject<string>,
     indexerApiUrlRef: React.RefObject<string>,
     replyPostsTreeRef: React.RefObject<Record<string, string>>,
@@ -75,7 +75,7 @@ function Messages() {
         handleSubmitPubkeyModal,
         handleOpenRpcSendMessageModal,
         messageSettingsInvalid,
-        setInputCredentialsApplied,
+        validateCredentials,
         findPostsWithRef,
         indexerApiUrlRef,
         replyPostsTreeRef,
@@ -101,7 +101,7 @@ function Messages() {
     const mainPostMediaAttachment = postMediaAttachmentsRef.current['message-main'];
 
     useEffect(() => {
-        setInputCredentialsApplied(true);
+        validateCredentials();
     }, []);
 
     const addRecipient = async () => {

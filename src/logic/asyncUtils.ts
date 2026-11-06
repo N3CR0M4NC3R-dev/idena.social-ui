@@ -1138,6 +1138,7 @@ export const submitPost = async (
     makePostsWith: string,
     rpcClient: RpcClient,
     callbackUrl: string,
+    webAppUrl: string,
 ) => {
     const { txAmount, args, payload } = getMakePostTransactionPayload(makePostMethod, inputPost, replyToPostId, channelId, media, mediaType);
     const inputPostLength = inputPost.length + JSON.stringify(media).length;
@@ -1149,6 +1150,7 @@ export const submitPost = async (
         makePostsWith,
         rpcClient,
         callbackUrl,
+        webAppUrl,
         txAmount,
         args,
         payload,
@@ -1165,6 +1167,7 @@ export const submitSendTip = async (
     makePostsWith: string,
     rpcClient: RpcClient,
     callbackUrl: string,
+    webAppUrl: string,
 ) => {
     const txAmount = new Decimal(amount);
     const args = [
@@ -1185,6 +1188,7 @@ export const submitSendTip = async (
         makePostsWith,
         rpcClient,
         callbackUrl,
+        webAppUrl,
         txAmount,
         args,
         payload,
@@ -1224,6 +1228,7 @@ export const submitMessage = async (
     makePostsWith: string,
     rpcClient: RpcClient,
     callbackUrl: string,
+    webAppUrl: string,
 ) => {
     const { txAmount, args, payload } = getSendMessageTransactionPayload(sendMessageMethod, inputMessage, inputMessageHash);
     const inputMessageLength = JSON.stringify(inputMessage).length + inputMessageHash.length;
@@ -1235,6 +1240,7 @@ export const submitMessage = async (
         makePostsWith,
         rpcClient,
         callbackUrl,
+        webAppUrl,
         txAmount,
         args,
         payload,
@@ -1254,6 +1260,7 @@ export const makeCallTransaction = async (
     makePostsWith: string,
     rpcClient: RpcClient,
     callbackUrl: string,
+    webAppUrl: string,
     txAmount: Decimal,
     args: CallContractArg[],
     payload: CallContractAttachment,
@@ -1287,7 +1294,7 @@ export const makeCallTransaction = async (
 
         const txHex = getCallTransaction(to, txAmount, nonce, epoch, maxFeeDna, payload);
 
-        const dnaLink = `https://app.idena.io/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${method}`;
+        const dnaLink = `${webAppUrl}/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${method}`;
         window.open(dnaLink, '_blank');
     }
 };
