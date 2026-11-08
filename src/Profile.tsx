@@ -6,8 +6,9 @@ import { type BrowserStateHistorySettings, type Conversation, type PostMediaAtta
 import LdsSpinnerComponent from "./components/LdsSpinnerComponent";
 import ObjectUrlImageComponent from "./components/ObjectUrlImageComponent";
 import PageHeaderComponent from "./components/PageHeaderComponent";
-import { ExternalLinkIcon, MessagesIcon } from "./components/icons";
+import { ExternalLinkIcon, MessagesIcon, SpinnerIcon } from "./components/icons";
 import { keccak256 } from "js-sha3";
+import { useState } from "react";
 
 type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
 
@@ -54,6 +55,7 @@ type ProfileIdentityComponentProps = {
     posterDisplayAddress: string,
     handleConversationClick: () => void,
     handleOpenEditProfileModal?: (e: MouseEventLocal) => void,
+    editProfileLoading: boolean,
 };
 
 function ProfileIdentityComponent(props: ProfileIdentityComponentProps) {
@@ -62,6 +64,7 @@ function ProfileIdentityComponent(props: ProfileIdentityComponentProps) {
         posterDisplayAddress,
         handleConversationClick,
         handleOpenEditProfileModal,
+        editProfileLoading,
     } = props;
 
     return (<>
@@ -69,7 +72,10 @@ function ProfileIdentityComponent(props: ProfileIdentityComponentProps) {
         <div className="flex flex-row items-start justify-between gap-3 px-4">
             <ObjectUrlImageComponent className="-mt-[45px] sm:-mt-[67px] size-[90px] sm:size-[134px] flex-none rounded-full border-4 border-canvas bg-surface object-cover" file={getProfilePic(poster)} />
             <div className="flex flex-row gap-2 pt-3">
-                {handleOpenEditProfileModal && <button type="button" className="btn-outline h-9 px-4 text-[15px]" onClick={handleOpenEditProfileModal}>Edit profile</button>}
+                {handleOpenEditProfileModal && <button type="button" className="btn-outline h-9 px-4 text-[15px]" disabled={editProfileLoading} aria-busy={editProfileLoading} onClick={handleOpenEditProfileModal}>
+                    {editProfileLoading && <SpinnerIcon className="size-4" />}
+                    Edit profile
+                </button>}
                 <button type="button" aria-label="Message" title="Message" className="size-9 flex flex-none items-center justify-center rounded-full border border-line-strong cursor-pointer hover:bg-ink/10" onClick={handleConversationClick}>
                     <MessagesIcon className="size-5" />
                 </button>
@@ -120,6 +126,7 @@ function Profile() {
     const navigate = useNavigate();
     const location = useLocation();
     const subTab = useMatch('/profile/:address/:subTab')?.params.subTab;
+    const [editProfileLoading, setEditProfileLoading] = useState(false);
 
     const {
         latestPosts,
@@ -182,14 +189,24 @@ function Profile() {
     const handleEditProfileClick = async (e: MouseEventLocal) => {
         e.stopPropagation();
 
-        const validated = ['Newbie', 'Verified', 'Human'].includes(poster.state);
-
-        if (!validated && (await getEditStanding(rpcClientRef.current!, poster.address)).standing === 'none') {
-            alert(CANNOT_EDIT_PROFILE);
+        if (editProfileLoading) {
             return;
         }
 
-        handleOpenEditProfileModal(e);
+        setEditProfileLoading(true);
+
+        try {
+            const validated = ['Newbie', 'Verified', 'Human'].includes(poster.state);
+
+            if (!validated && (await getEditStanding(rpcClientRef.current!, poster.address)).standing === 'none') {
+                alert(CANNOT_EDIT_PROFILE);
+                return;
+            }
+
+            handleOpenEditProfileModal(e);
+        } finally {
+            setEditProfileLoading(false);
+        }
     };
 
     const handleGoBack = () => {
@@ -222,7 +239,7 @@ function Profile() {
         <PageHeaderComponent title={posterDisplayAddress || 'Profile'} subtitle={poster.address ? getIdentityStatus(poster.state) : undefined} onBack={handleGoBack} />
         {!poster.address && <LdsSpinnerComponent />}
         {poster.address && <>
-            <ProfileIdentityComponent poster={poster} posterDisplayAddress={posterDisplayAddress} handleConversationClick={handleConversationClick} handleOpenEditProfileModal={canEditProfile ? handleEditProfileClick : undefined} />
+            <ProfileIdentityComponent poster={poster} posterDisplayAddress={posterDisplayAddress} handleConversationClick={handleConversationClick} handleOpenEditProfileModal={canEditProfile ? handleEditProfileClick : undefined} editProfileLoading={editProfileLoading} />
             <div className="flex flex-row px-2 sm:px-0 border-b border-line overflow-x-auto no-scrollbar" role="tablist">
                 <ProfileTabComponent label="Posts" isActive={location.pathname === profilePath} onClick={(e) => handleClickAddress(e, profilePath)} />
                 <ProfileTabComponent label="Replies" isActive={location.pathname === `${profilePath}/replies`} onClick={(e) => handleClickAddress(e, `${profilePath}/replies`)} />

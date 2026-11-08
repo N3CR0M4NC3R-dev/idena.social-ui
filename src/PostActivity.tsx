@@ -5,7 +5,7 @@ import PostComponent from './components/PostComponent';
 import ObjectUrlImageComponent from './components/ObjectUrlImageComponent';
 import PageHeaderComponent from './components/PageHeaderComponent';
 import { BellIcon, HeartIcon, ReplyIcon, TipIcon } from './components/icons';
-import { getDisplayAddressShort, getPostActivityKey, getProfilePic, getSpotlightPostDetails } from './logic/utils';
+import { getPostActivityKey, getProfilePic, getSpotlightPostDetails } from './logic/utils';
 import { cachePostActivity } from './logic/postActivityStore';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
 
@@ -155,7 +155,7 @@ function PostActivity() {
                             <div className="w-10 flex-none flex justify-end">
                                 {notificationIcon}
                             </div>
-                            <p className="min-w-0 flex-1 pt-1 text-[15px]/5 text-ink [word-break:break-word]">{notificationMessage} from <Link to={`/profile/${notificationFrom}`} className="group inline-flex items-center gap-1 align-top"><ObjectUrlImageComponent file={notificationFromPic} className="size-5 flex-none rounded-full bg-surface object-cover group-hover:opacity-85" /><span className="group-hover:underline">{getDisplayAddressShort(notificationFrom, postersRef.current[notificationFrom])}</span></Link></p>
+                            <p className="min-w-0 flex-1 pt-1 text-[15px]/5 text-ink [word-break:break-word]">{notificationMessage} from <Link to={`/profile/${notificationFrom}`} className="group inline-flex items-center gap-1 align-top"><ObjectUrlImageComponent file={notificationFromPic} className="size-5 flex-none rounded-full bg-surface object-cover group-hover:opacity-85" /></Link></p>
                         </div>
                         <PostComponent
                             uniqueKey={postItemKeyUnique}
