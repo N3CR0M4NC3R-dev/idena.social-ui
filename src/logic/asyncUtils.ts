@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import imageType from 'image-type';
 import isSvg from 'is-svg';
 import { decrypt, encrypt } from "eciesjs";
-import { calculateMaxFee, dna2num, getCallTransaction, getMakePostTransactionPayload, getSendMessageTransactionPayload, hex2str, hexToDecimal, isValidLowerCaseAddress, sanitizeStr, decryptAESGCM, extractSenderInfoFromRawTx, extractPubkeyAddressFromPrivateKey, likeEmoji } from "./utils";
+import { calculateMaxFee, cleanDisplayText, dna2num, getCallTransaction, getMakePostTransactionPayload, getSendMessageTransactionPayload, hex2str, hexToDecimal, isValidLowerCaseAddress, sanitizeStr, decryptAESGCM, extractSenderInfoFromRawTx, extractPubkeyAddressFromPrivateKey, likeEmoji } from "./utils";
 import { BlockBody, CallContractAttachment, contractArgumentFormat, hexToUint8Array, toHexString, Transaction, transactionType, type ContractArgumentFormatValue, type TransactionTypeValue } from "idena-sdk-js-lite";
 import ErrorLoadingMedia from '../assets/error-loading-media.png';
 import type { EventTransaction } from "../App.exports";
@@ -80,7 +80,7 @@ export type Message = {
     orphaned: boolean,
 };
 
-export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, robohash1?: File, robohash5?: File, fetchedAt: number };
+export type Poster = { address: string, stake: string, age: number, pubkey: string, state: string, name?: string, bio?: string, picture?: File | null, robohash1?: File, robohash5?: File, fetchedAt: number };
 export type Tip = { postId: string, txHash: string, timestamp: number, tipper: string, tipperDetails_atTimeOfTip: { stake: number, state: string, age: number }, amount: number, burnAmount: number };
 export type PostTips = { postId: string, totalAmount: number, tips: string[] };
 
@@ -770,9 +770,10 @@ export const getPosterPromise = (
     indexerApiUrlRef?: React.RefObject<string>,
 ) => {
     const poster = postersRef.current[address];
-    if (isPosterMissingOrStale(poster) && !postersPromised[address]) {
+    // Both fetchers read the profile with the RPC client, which App creates after its first render: fetch on a later one.
+    if (rpcClient && isPosterMissingOrStale(poster) && !postersPromised[address]) {
         postersPromised[address] = true;
-        const posterPromise = (useIndexer ? getPosterWithIndexerApi(indexerApiUrlRef!.current, address) : getPosterWithRpc(rpcClient!, address)) as Promise<Poster>;
+        const posterPromise = (useIndexer ? getPosterWithIndexerApi(indexerApiUrlRef!.current, address, rpcClient!) : getPosterWithRpc(rpcClient!, address)) as Promise<Poster>;
         return posterPromise
             .then((newPoster) => {
                 postersRef.current = { ...postersRef.current, [address]: newPoster };
@@ -797,12 +798,12 @@ export const getPosterWithRpc = async (rpcClient: RpcClient, posterAddress: stri
 
     const { address, stake, age, pubkey, state } = getDnaIdentityResult;
 
-    const [ robohash1, robohash5 ] = await Promise.all([getRobohash(address, '1'), getRobohash(address, '5')]);
+    const [ robohash1, robohash5, { name, bio, picture } ] = await Promise.all([getRobohash(address, '1'), getRobohash(address, '5'), getProfileWithRpc(rpcClient, address)]);
 
-    return { address, stake, age, pubkey, state, robohash1, robohash5, fetchedAt: Date.now() };
+    return { address, stake, age, pubkey, state, name, bio, picture, robohash1, robohash5, fetchedAt: Date.now() };
 };
 
-export const getPosterWithIndexerApi = async (indexerApiUrl: string, posterAddress: string) => {
+export const getPosterWithIndexerApi = async (indexerApiUrl: string, posterAddress: string, rpcClient: RpcClient) => {
     const getAddressPromise = getAddressWithIndexerApi(indexerApiUrl, posterAddress);
     const getIdentityPromise = getIdentityWithIndexerApi(indexerApiUrl, posterAddress); // error no identity found...
     const getIdentityAgePromise = getIdentityAgeWithIndexerApi(indexerApiUrl, posterAddress); // result: 0
@@ -829,9 +830,81 @@ export const getPosterWithIndexerApi = async (indexerApiUrl: string, posterAddre
 
     const pubkey = await getPubkeyWithIdenaIndexerApi(indexerApiUrl, posterAddress) ?? '';
 
-    const [ robohash1, robohash5 ] = await Promise.all([getRobohash(address, '1'), getRobohash(address, '5')]);
+    const [ robohash1, robohash5, { name, bio, picture } ] = await Promise.all([getRobohash(address, '1'), getRobohash(address, '5'), getProfileWithRpc(rpcClient, address)]);
 
-    return { address, stake, age, pubkey, state, robohash1, robohash5, fetchedAt: Date.now() };
+    return { address, stake, age, pubkey, state, name, bio, picture, robohash1, robohash5, fetchedAt: Date.now() };
+};
+
+// idena-profile contract (github.com/truongfelix/idena-profile), mainnet. Maps keyed by address: 'a:' name, 'b:' bio,
+// 'p:' picture ("ipfs://<cid>").
+export const PROFILE_CONTRACT_ADDRESS = '0xd558483330925f169bbe692d8ea15b2faa83c17f';
+const PROFILE_NAME_REGEX = /^[a-z0-9_]{3,20}$/;
+const PROFILE_BIO_MAX_LENGTH = 160;
+const PROFILE_BIO_MAX_LINE_BREAKS = 4;
+const PROFILE_PICTURE_MAX_BYTES = 32 * 1024;
+const PROFILE_PICTURE_MAX_SIDE = 256;
+
+// Returns '' when unset ("data is nil") and on a failed read; the poster TTL retries it later.
+export const readProfileMapWithRpc = async (rpcClient: RpcClient, map: string, address: string) => {
+    const key = toHexString(new TextEncoder().encode(address.toLowerCase()), true);
+    const { result } = await rpcClient('contract_readMap', [PROFILE_CONTRACT_ADDRESS, map, key, 'string'], true);
+
+    return typeof result === 'string' ? result : '';
+};
+
+export const getProfileWithRpc = async (rpcClient: RpcClient, address: string) => {
+    const [ name, bio, pictureUrl ] = await Promise.all([
+        readProfileMapWithRpc(rpcClient, 'a:', address),
+        readProfileMapWithRpc(rpcClient, 'b:', address),
+        readProfileMapWithRpc(rpcClient, 'p:', address),
+    ]);
+    const picture = await getProfilePictureWithRpc(rpcClient, pictureUrl, address);
+
+    return { name: PROFILE_NAME_REGEX.test(name) ? name : '', bio: cleanBio(bio), picture };
+};
+
+// The idena-profile apps store a still WebP of 256x256 at most 32 KB and refuse to show a larger one. Returns null
+// for no picture, a failed fetch, or one that breaks those rules; the poster TTL retries it later.
+export const getProfilePictureWithRpc = async (rpcClient: RpcClient, pictureUrl: string, address: string) => {
+    if (!pictureUrl.startsWith('ipfs://')) return null;
+
+    const { result } = await rpcClient('ipfs_get', [pictureUrl.slice('ipfs://'.length)], true);
+    if (typeof result !== 'string' || result.length > 2 + 2 * PROFILE_PICTURE_MAX_BYTES) return null;
+
+    const bytes = hexToUint8Array(result);
+    const size = getStillWebpSize(bytes);
+    if (!size || size.width > PROFILE_PICTURE_MAX_SIDE || size.height > PROFILE_PICTURE_MAX_SIDE) return null;
+
+    return new File([new Uint8Array(bytes)], `picture-${address}`, { type: 'image/webp' });
+};
+
+// Reads a WebP's size from its header without decoding it: a tiny WebP can declare a huge canvas, and decoding that
+// can exhaust the browser's memory. Returns undefined for anything that isn't a still WebP.
+const getStillWebpSize = (bytes: Uint8Array) => {
+    const fourCC = (start: number) => String.fromCharCode(...bytes.subarray(start, start + 4));
+    if (bytes.length < 30 || fourCC(0) !== 'RIFF' || fourCC(8) !== 'WEBP') return;
+
+    switch (fourCC(12)) {
+    case 'VP8X': // extended: 24-bit canvas width - 1 and height - 1; flag 0x02 = animated
+        if (bytes[20] & 0x02) return;
+        return { width: 1 + (bytes[24] | bytes[25] << 8 | bytes[26] << 16), height: 1 + (bytes[27] | bytes[28] << 8 | bytes[29] << 16) };
+    case 'VP8L': { // lossless: signature 0x2f, then 14-bit width - 1 and height - 1
+        if (bytes[20] !== 0x2f) return;
+        const bits = bytes[21] | bytes[22] << 8 | bytes[23] << 16 | bytes[24] << 24;
+        return { width: 1 + (bits & 0x3fff), height: 1 + ((bits >>> 14) & 0x3fff) };
+    }
+    case 'VP8 ': // lossy: start code 9d 01 2a, then 14-bit width and height
+        if (bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return;
+        return { width: (bytes[26] | bytes[27] << 8) & 0x3fff, height: (bytes[28] | bytes[29] << 8) & 0x3fff };
+    }
+};
+
+// The contract caps bios at 160 characters; capping again guards against a misbehaving node. Line breaks past the
+// first 4 become spaces, so a bio of short lines can't push the profile page down.
+const cleanBio = (bio: string) => {
+    let lineBreaks = 0;
+    return cleanDisplayText(bio.slice(0, PROFILE_BIO_MAX_LENGTH)).trim()
+        .replace(/\r?\n/g, (lineBreak) => ++lineBreaks <= PROFILE_BIO_MAX_LINE_BREAKS ? lineBreak : ' ');
 };
 
 export const getRobohash = async (address: string, setNumber: string) => {

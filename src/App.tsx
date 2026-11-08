@@ -18,6 +18,8 @@ import MenuComponent from './components/MenuComponent';
 import ModalRpcSendMessageComponent from './components/ModalRpcSendMessageComponent';
 import ScanBlocksComponent from './components/ScanBlocksComponent';
 import ModalSubmitPubkeyComponent from './components/ModalSubmitPubkeyComponent';
+import ModalEditProfileComponent from './components/ModalEditProfileComponent';
+import { sendProfileCall, type PreparedProfileCall } from './logic/profileEdit';
 import ScrollToTopButtonComponent from './components/ScrollToTopButtonComponent';
 import { CloseIcon } from './components/icons';
 import { loadPostsCache } from './logic/postsStore';
@@ -513,8 +515,11 @@ function App() {
         let recurseForwardIntervalId: NodeJS.Timeout | undefined;
 
         if (initialBlock && nodeAvailable && cacheLoaded) {
+            // Cleanup can only clear a pending timeout: a scan in flight still calls recurse when done, so it must stop there or two loops run.
+            let cancelled = false;
+
             (async function recurseForward() {
-                if (nodeAvailableRef.current) {
+                if (!cancelled && nodeAvailableRef.current) {
                     const recurseDirection = 'forward';
                     const contentSource = findPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
                     const pendingBlock = currentBlockCapturedRef.current ? currentBlockCapturedRef.current + 1 : initialBlock;
@@ -523,7 +528,10 @@ function App() {
                 }
             } as RecurseForward)();
 
-            return () => clearInterval(recurseForwardIntervalId);
+            return () => {
+                cancelled = true;
+                clearInterval(recurseForwardIntervalId);
+            };
         } else {
             recurseForwardIntervalId && clearInterval(recurseForwardIntervalId);
         }
@@ -536,8 +544,11 @@ function App() {
         if (scanningPastBlocks && initialBlock && initialBlockTimestamp && nodeAvailable && cacheLoaded) {
             const timeNow = Math.floor(Date.now() / 1000);
             const ttl = timeNow + SCAN_PAST_POSTS_TTL;
+            let cancelled = false;
 
             (async function recurseBackward(time: number) {
+                if (cancelled) return;
+
                 if (scanningPastBlocksRef.current && nodeAvailableRef.current && time < ttl) {
                     const recurseDirection = 'backward';
                     const contentSource = findPostsWithRef.current === 'rpc' ? 'rpc' : 'indexer-api';
@@ -549,7 +560,10 @@ function App() {
                 }
             } as RecurseBackward)(timeNow);
 
-            return () => clearInterval(recurseBackwardIntervalId);
+            return () => {
+                cancelled = true;
+                clearInterval(recurseBackwardIntervalId);
+            };
         } else {
             recurseBackwardIntervalId && clearInterval(recurseBackwardIntervalId);
         }
@@ -951,7 +965,9 @@ function App() {
 
                     if ([sendTipMethod].includes(transaction.method)) {
 
-                        const { newTip, continued } = cachedTx ? { newTip: (cachedTx as Tip) } : await processTip(transaction as EventTransaction, tipsRef);
+                        const { newTip, continued: tipContinued } = cachedTx ? { newTip: (cachedTx as Tip) } : await processTip(transaction as EventTransaction, tipsRef);
+
+                        const continued = newTip && tipsRef.current[newTip.txHash] ? 'already-captured' : tipContinued;
 
                         if (continued) {
                             if (continued === 'already-captured') {
@@ -1032,13 +1048,15 @@ function App() {
 
                     const {
                         newPost,
-                        continued,
+                        continued: postContinued,
                     } = cachedTx ? { newPost: (cachedTx as Post) } : await getNewPost(
                         transaction as EventTransaction,
                         thisChannelId,
                         discussPrefix,
                         postsRef,
                     );
+
+                    const continued = newPost && postsRef.current[newPost.postId] ? 'already-captured' : postContinued;
 
                     if (continued) {
                         if (continued === 'already-captured') {
@@ -1271,7 +1289,7 @@ function App() {
 
                     const firstBlockCaptured = initialBlock - 1;
                     if (endBlock <= firstBlockCaptured) {
-                        const filterFn = (tx: EventTransaction | TransactionCached) => `${tx.txHash}-${tx.timestamp}}`;
+                        const filterFn = (tx: EventTransaction | TransactionCached) => `${tx.txHash}-${tx.timestamp}`;
                         const transactionTxHashArray = filteredTransactionsAccepted.map(filterFn);
                         const nextBlockTransactionTxHashArray = filteredTransactionsNextBlock.map(filterFn);
                         const indexerApiContinuationDetails = isRecurseBackwardWithIndexerApi ? { nextBlockTransactions: nextBlockTransactionTxHashArray, contract: pastContractAddressRef.current, continuationToken: continuationTokenRef.current } : undefined;
@@ -1329,14 +1347,19 @@ function App() {
         let recurseForwardIntervalId: NodeJS.Timeout | undefined;
 
         if (initialBlock && nodeAvailable && (canUseIdenaApp || canUseRpc)) {
+            let cancelled = false;
+
             (async function recurseForwardMessages() {
-                if (nodeAvailableRef.current) {
+                if (!cancelled && nodeAvailableRef.current) {
                     const recurseDirection = 'forward';
                     recurseForwardIntervalId = setTimeout(messagesProcessorFactory(recurseDirection, recurseForwardMessages, latestMessagesForwardQueueRef), POLLING_INTERVAL);
                 }
             } as RecurseForwardMessages)();
 
-            return () => clearInterval(recurseForwardIntervalId);
+            return () => {
+                cancelled = true;
+                clearInterval(recurseForwardIntervalId);
+            };
         } else {
             recurseForwardIntervalId && clearInterval(recurseForwardIntervalId);
         }
@@ -1350,14 +1373,20 @@ function App() {
         let recurseBackwardIntervalId: NodeJS.Timeout | undefined;
 
         if (initialBlock && nodeAvailable && (canUseIdenaApp || canUseRpc) && messagesCacheLoaded) {
+
+            let cancelled = false;
+
             (async function recurseBackwardMessages() {
-                if (nodeAvailableRef.current && (scanningPastBlocks || latestMessagesBackwardQueueRef.current.length)) {
+                if (!cancelled && nodeAvailableRef.current && (scanningPastBlocks || latestMessagesBackwardQueueRef.current.length)) {
                     const recurseDirection = 'backward';
                     recurseBackwardIntervalId = setTimeout(messagesProcessorFactory(recurseDirection, recurseBackwardMessages, latestMessagesBackwardQueueRef), SCANNING_INTERVAL_MESSAGES);
                 }
             } as RecurseBackwardMessages)();
 
-            return () => clearInterval(recurseBackwardIntervalId);
+            return () => {
+                cancelled = true;
+                clearInterval(recurseBackwardIntervalId);
+            };
         } else {
             recurseBackwardIntervalId && clearInterval(recurseBackwardIntervalId);
         }
@@ -1385,7 +1414,7 @@ function App() {
                     const firstMessage = latestMessagesQueueRef.current.shift();
                     const cachedTx = (firstMessage as TransactionCached).cachedItem;
 
-                    const { newMessage, continued } = cachedTx ? { newMessage: (cachedTx as Message) } : await processMessage(
+                    const { newMessage, continued: messageContinued } = cachedTx ? { newMessage: (cachedTx as Message) } : await processMessage(
                         (firstMessage as EventTransaction),
                         encryptedPrivateKeyActual,
                         passwordyActual,
@@ -1394,9 +1423,11 @@ function App() {
                         thisChannelId,
                     );
 
+                    const continued = newMessage && messagesRef.current[newMessage.messageId] ? 'already-captured' : messageContinued;
+
                     if (continued) {
                         if (continued === 'already-captured') {
-                            // transactionsAccepted.push(firstMessage);
+                            // do nothing
                         } else {
                             await cacheIgnore({ txHash: firstMessage!.txHash, method: firstMessage!.method, reason: 'non-compliance' });
                         }
@@ -2035,6 +2066,27 @@ function App() {
         setModalOpen('submitPubkey');
     };
 
+    const handleOpenEditProfileModal = (e: MouseEventLocal) => {
+        e.stopPropagation();
+        setModalOpen('editProfile');
+    };
+
+    const sendProfileCallHandler = (prepared: PreparedProfileCall) => {
+        return sendProfileCall(rpcClientRef.current!, postersAddress, prepared, makePostsWith, callbackUrl, webAppUrl);
+    };
+
+    const profileUpdatedHandler = async () => {
+        const address = postersAddress.toLowerCase();
+        const poster = postersRef.current[address];
+
+        if (poster) {
+            postersRef.current = { ...postersRef.current, [address]: { ...poster, fetchedAt: 0 } };
+        }
+
+        await getPosterPromise(address, postersRef, findPostsWithRef.current === 'indexer-api', rpcClientRef.current!, indexerApiUrlRef);
+        forceUpdate();
+    };
+
     const addMediaHandler = async (attachmentId: string, file: File, ipfsUrl?: string) => {
         await setPostMediaAttachmentHandler(attachmentId, file, ipfsUrl);
         forceUpdate();
@@ -2050,8 +2102,10 @@ function App() {
         window.scrollTo({ top: 0, behavior: 'instant' });
     };
 
+    const isConversationPage = pathname.startsWith('/conversation/');
+
     return (
-        <div className="flex min-h-screen w-full justify-center">
+        <div className={`flex ${isConversationPage ? 'min-h-dvh' : 'min-h-screen'} w-full justify-center`}>
             <header className="hidden flex-none sm:block">
                 <div className="sticky top-0 flex h-screen w-[88px] flex-col overflow-y-auto no-scrollbar px-2 xl:w-[275px] xl:px-3">
                     <Link to="/" aria-label="Idena Social" title="Idena Social" onClick={scrollToTop} className="mt-0.5 flex justify-center xl:justify-start">
@@ -2077,7 +2131,7 @@ function App() {
                     </footer>
                 </div>
             </header>
-            <main className="min-h-screen w-full min-w-0 max-w-[600px] border-line pb-[calc(53px+env(safe-area-inset-bottom))] [--sticky-top:85px] sm:border-x sm:pb-0 lg:[--sticky-top:0px]">
+            <main className={`${isConversationPage ? 'flex min-h-dvh flex-col' : 'min-h-screen'} w-full min-w-0 max-w-[600px] border-line pb-[calc(53px+env(safe-area-inset-bottom))] [--sticky-top:85px] sm:border-x sm:pb-0 lg:[--sticky-top:0px]`}>
                 <div className="sticky top-0 z-20 h-(--sticky-top) bg-canvas/90 backdrop-blur-md lg:hidden">
                     <div className="flex gap-3 border-b border-line px-4 py-3">
                         <a className="flex-none" href={currentAd?.url ?? defaultAd.url} target="_blank" rel="noopener noreferrer">
@@ -2163,6 +2217,7 @@ function App() {
                         handleOpenRpcSendMessageModal,
                         handleExpandImageModal,
                         handleSubmitPubkeyModal,
+                        handleOpenEditProfileModal,
                         tipsRef,
                         postTipsRef,
                         postMediaAttachmentsRef,
@@ -2261,6 +2316,7 @@ function App() {
                     {modalOpen === 'rpcSendMessage' && <ModalRpcSendMessageComponent modalRpcSendMessageRef={modalRpcSendMessageRef} submitMessageHandler={submitMessageHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'expandImage' && <ModalExpandImageComponent modalExpandImageRef={modalExpandImageRef} />}
                     {modalOpen === 'submitPubkey' && <ModalSubmitPubkeyComponent modalSubmitPubkeyRef={modalSubmitPubkeyRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'editProfile' && <ModalEditProfileComponent rpcClient={rpcClientRef.current!} postersAddress={postersAddress} makePostsWith={makePostsWith} sendProfileCallHandler={sendProfileCallHandler} profileUpdatedHandler={profileUpdatedHandler} />}
                 </Modal>
             </div>
         </div>

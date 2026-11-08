@@ -214,10 +214,10 @@ function ConversationComponent(props: ConversationComponentProps) {
                 </span>}
             </div>
         </div>
-        {showReplies && <div className="border-b border-line">
-            <ul className="flex flex-col flex-col-reverse gap-3 max-h-100 overflow-y-auto scrollbar-thin px-4 py-3">
+        {showReplies && <div className={`border-b border-line ${isConversationOutlet ? 'flex grow flex-col' : ''}`}>
+            <ul className={`flex flex-col flex-col-reverse gap-3 ${isConversationOutlet ? 'min-h-50 grow basis-0' : 'max-h-100'} overflow-y-auto scrollbar-thin px-4 py-3`}>
                 {messages.map((message) => {
-                    const posterDisplayAddress = getDisplayAddressShort(message.sender);
+                    const posterDisplayAddress = getDisplayAddressShort(message.sender, postersRef.current[message.sender]);
                     const posterStake = message.sendersDetails_atTimeOfMessage.stake;
                     const posterState = message.sendersDetails_atTimeOfMessage.state;
                     const posterAge = message.sendersDetails_atTimeOfMessage.age;
@@ -245,7 +245,10 @@ function ConversationComponent(props: ConversationComponentProps) {
                         <li key={message.messageId} className={`flex items-end gap-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                             {!isOwnMessage && <ObjectUrlImageComponent className="mb-8 size-8 flex-none rounded-full bg-surface object-cover" file={posterPic} />}
                             <div className={`flex min-w-0 max-w-[80%] flex-col gap-1 ${isOwnMessage ? 'items-end' : 'items-start'}`}>
-                                <span className={`cursor-pointer text-[13px] font-bold hover:underline ${isOwnMessage ? 'text-ink-muted' : ''}`} title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`} onClick={(e) => handleClickAddress(e, `/profile/${message.sender}`)}>{posterDisplayAddress}</span>
+                                {conversationPartners.length > 1 && <div className="flex max-w-full items-center gap-1 text-[13px]">
+                                    <span className={`cursor-pointer whitespace-nowrap font-bold hover:underline ${isOwnMessage ? 'text-ink-muted' : ''}`} onClick={(e) => handleClickAddress(e, `/profile/${message.sender}`)}>{posterDisplayAddress}</span>
+                                    <span className="min-w-0 truncate text-ink-muted" title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}>{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
+                                </div>}
                                 {replyToMessage && <div className="flex max-w-full items-center gap-1.5 rounded-2xl border border-line px-3 py-1.5 text-[13px] text-ink-muted">
                                     {!awaitingReplyToMessage && <ObjectUrlImageComponent className="size-4 flex-none rounded-full bg-surface object-cover" file={replyToMessagePosterPic} />}
                                     {awaitingReplyToMessage ?
@@ -275,7 +278,7 @@ function ConversationComponent(props: ConversationComponentProps) {
             </ul>
             <div className="flex flex-col gap-2 border-t border-line px-4 py-3">
                 {discussReplyToPost && <div className="flex items-center gap-2 text-[13px] text-ink-muted">
-                    <p className="min-w-0 flex-1 truncate">Replying to {getDisplayAddressShort(discussReplyToPost!.sender)}: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
+                    <p className="min-w-0 flex-1 truncate">Replying to {getDisplayAddressShort(discussReplyToPost!.sender, postersRef.current[discussReplyToPost!.sender])}: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
                     <button type="button" aria-label="Cancel reply" title="Cancel reply" className="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full hover:bg-ink/10" onClick={() => setDiscussReplyToPostIdHandler(conversationKey)}>
                         <CloseIcon className="size-3.5" />
                     </button>

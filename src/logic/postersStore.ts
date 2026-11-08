@@ -47,5 +47,7 @@ export const clearPostersCache = async () => {
 };
 
 export const isPosterMissingOrStale = (poster?: Poster) => {
-    return !poster?.address || !poster.fetchedAt || Date.now() - poster.fetchedAt > POSTER_TTL_MS;
+    return !poster?.address || !poster.fetchedAt || Date.now() - poster.fetchedAt > POSTER_TTL_MS
+        // Cached before profile lookups existed: refetch once to pick up the name, bio and picture.
+        || poster.name === undefined || poster.bio === undefined || poster.picture === undefined;
 };

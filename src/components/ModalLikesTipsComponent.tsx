@@ -1,7 +1,7 @@
 
 import type { MouseEventLocal } from '../App.exports';
 import type { Message, Post, Poster, Tip } from '../logic/asyncUtils';
-import { getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus, getProfilePic } from '../logic/utils';
+import { cleanDisplayText, getDisplayAddressShort, getDisplayDateTime, getDisplayTipAmount, getIdentityStatus, getProfilePic } from '../logic/utils';
 import { useNavigate } from 'react-router';
 import ObjectUrlImageComponent from './ObjectUrlImageComponent';
 
@@ -40,14 +40,14 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                 {modalItemsRef!.current.map((item) => {
                     const address = (item as Post).poster ?? (item as Message).sender ?? (item as Tip).tipper;
                     const posterDetails = (item as Post).posterDetails_atTimeOfPost ?? (item as Message).sendersDetails_atTimeOfMessage ?? (item as Tip).tipperDetails_atTimeOfTip;
-                    const posterDisplayAddress = getDisplayAddressShort(address);
+                    const posterDisplayAddress = getDisplayAddressShort(address, postersRef.current[address]);
                     const posterStake = posterDetails.stake;
                     const posterState = posterDetails.state;
                     const posterAge = posterDetails.age;
                     const posterPic = getProfilePic(postersRef.current[address], posterState);
 
                     const { displayDate, displayTime } = getDisplayDateTime(item.timestamp);
-                    const detail = (item as Post | Message).message ?? getDisplayTipAmount((item as Tip).amount) + ' iDNA';
+                    const detail = cleanDisplayText((item as Post | Message).message ?? getDisplayTipAmount((item as Tip).amount) + ' iDNA');
 
                     return (
                         <li key={item.txHash} className="flex items-center gap-3 px-4 py-3 hover:bg-ink/[0.03]">

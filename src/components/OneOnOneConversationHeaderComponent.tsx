@@ -1,5 +1,5 @@
 import type { MouseEventLocal } from "../App.exports";
-import { getIdentityStatus, getProfilePic } from "../logic/utils";
+import { getProfileName, getIdentityStatus, getProfilePic } from "../logic/utils";
 import type { Poster } from "../logic/asyncUtils";
 import PosterHeaderComponent from "./PosterHeaderComponent";
 
@@ -18,6 +18,7 @@ function OneOnOneConversationHeaderComponent(props: OneOnOneConversationHeaderCo
     return (<>
         <PosterHeaderComponent
             address={conversationPartner.address}
+            name={getProfileName(conversationPartner)}
             age={conversationPartner.age}
             state={getIdentityStatus(conversationPartner.state)}
             stake={parseInt(conversationPartner.stake)}

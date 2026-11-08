@@ -6,16 +6,20 @@ import { type Post, type Poster } from "./asyncUtils";
 export const likeEmoji = '❤️';
 export const dnaBase = 1e18;
 
-export function getDisplayAddress(address: string) {
-    return `${address.slice(0, 7)}...${address.slice(-5)}`;
+export function getProfileName(poster?: Poster) {
+    return poster?.name || undefined;
 }
 
-export function getDisplayAddressShort(address: string) {
-    return `${address.slice(0, 5)}...${address.slice(-3)}`;
+export function getDisplayAddress(address: string, poster?: Poster) {
+    return getProfileName(poster) ?? `${address.slice(0, 7)}...${address.slice(-5)}`;
 }
 
-export function getDisplayAddressVeryShort(address: string) {
-    return `${address.slice(0, 4)}...${address.slice(-2)}`;
+export function getDisplayAddressShort(address: string, poster?: Poster) {
+    return getProfileName(poster) ?? `${address.slice(0, 5)}...${address.slice(-3)}`;
+}
+
+export function getDisplayAddressVeryShort(address: string, poster?: Poster) {
+    return getProfileName(poster) ?? `${address.slice(0, 4)}...${address.slice(-2)}`;
 }
 
 export function getDisplayDateTime(timestamp: number) {
@@ -47,6 +51,16 @@ export function getDisplayFullDate(timestamp: number) {
     return new Date(timestamp * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const STACKED_MARKS_REGEX = /(\p{M}{4})\p{M}+/gu;
+const BLANK_LINES_REGEX = /(\r?\n)(?:[^\S\r\n]*\r?\n){2,}/g;
+
+// Stops untrusted text from breaking the layout. Keeps at most 4 combining marks in a row: stops "zalgo" text, which
+// stacks marks far above and below the line, and is enough for real scripts (Vietnamese, Thai, Hindi, Hebrew).
+// Collapses 2+ blank lines into one, keeping the text's own line break (\r\n or \n) for getMessageLines.
+export function cleanDisplayText(text: string) {
+    return text.replace(STACKED_MARKS_REGEX, '$1').replace(BLANK_LINES_REGEX, '$1$1');
+}
+
 export function getMessageLines(message?: string, calculateViewMoreIndex = false, maxLines = 10) {
     const limit = 30;
 
@@ -54,9 +68,11 @@ export function getMessageLines(message?: string, calculateViewMoreIndex = false
         return { messageLines: [''] };
     }
 
+    message = cleanDisplayText(message);
+
     let messageLines = message.split(/\r\n/g, limit);
     if (messageLines.length === 1) {
-        messageLines = message.split(/\n/g), limit;
+        messageLines = message.split(/\n/g, limit);
     }
 
     if (!calculateViewMoreIndex) {
@@ -455,5 +471,6 @@ export function getNextContract(currentContract: string, allContracts: string[])
 export function getProfilePic(profile: Poster, stateOverride?: string) {
     if (!profile) return;
     const state = stateOverride ?? profile.state;
+    if (profile.picture && state === 'Human') return profile.picture;
     return state === 'Human' ? profile.robohash5 : profile.robohash1;
 }

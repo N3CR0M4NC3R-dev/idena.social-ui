@@ -360,7 +360,7 @@ function PostComponent(props: PostComponentProps) {
                 </div>
                 <div className={isPostOutlet ? 'contents' : 'min-w-0 flex-1 pb-1'}>
                     <div className={`mb-1 min-w-0 text-[15px]/5 ${isPostOutlet ? 'flex-1' : 'flex flex-wrap items-center gap-x-1 sm:flex-nowrap'}`}>
-                        <span className={`cursor-pointer font-bold text-ink hover:underline ${isPostOutlet ? 'block w-fit max-w-full truncate' : 'whitespace-nowrap'}`} onClick={(e) => handleClickAddress(e, `/profile/${post.poster}`)}>{getDisplayAddress(post.poster)}</span>
+                        <span className={`cursor-pointer font-bold text-ink hover:underline ${isPostOutlet ? 'block w-fit max-w-full truncate' : 'whitespace-nowrap'}`} onClick={(e) => handleClickAddress(e, `/profile/${post.poster}`)}>{getDisplayAddress(post.poster, postersRef.current[post.poster])}</span>
                         <span className={`truncate text-ink-muted ${isPostOutlet ? 'block' : 'min-w-0 max-sm:order-last max-sm:basis-full max-sm:text-[13px]/4'}`}>{`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}</span>
                         {!isPostOutlet && <>
                             <span className="text-ink-muted" aria-hidden="true">·</span>
@@ -429,7 +429,7 @@ function PostComponent(props: PostComponentProps) {
                     {visibleReplyComments.map((replyPost, index) => {
 
                         const postTips = postTipsRef.current[replyPost.postId] ?? { totalAmount: 0, tips: [] };
-                        const posterDisplayAddress = getDisplayAddress(replyPost.poster);
+                        const posterDisplayAddress = getDisplayAddress(replyPost.poster, postersRef.current[replyPost.poster]);
                         const posterStake = replyPost.posterDetails_atTimeOfPost.stake;
                         const posterState = replyPost.posterDetails_atTimeOfPost.state;
                         const posterAge = replyPost.posterDetails_atTimeOfPost.age;
@@ -504,7 +504,7 @@ function PostComponent(props: PostComponentProps) {
                                                 {discussionPostComments.length === 0 && <li className="py-3"><p className="text-center text-[13px] text-ink-muted">No comments yet</p></li>}
                                                 {discussionPostComments.map((discussionPost) => {
                                                     const postTips = postTipsRef.current[discussionPost.postId] ?? { totalAmount: 0, tips: [] };
-                                                    const posterDisplayAddress = getDisplayAddressShort(discussionPost.poster);
+                                                    const posterDisplayAddress = getDisplayAddressShort(discussionPost.poster, postersRef.current[discussionPost.poster]);
                                                     const posterStake = discussionPost.posterDetails_atTimeOfPost.stake;
                                                     const posterState = discussionPost.posterDetails_atTimeOfPost.state;
                                                     const posterAge = discussionPost.posterDetails_atTimeOfPost.age;
@@ -569,7 +569,7 @@ function PostComponent(props: PostComponentProps) {
                                             </ul>
                                             {!isBreakingChangeDisabled && <>
                                                 {discussReplyToPost && <div className="flex items-center gap-2 border-t border-line px-3 py-1.5 text-[13px] text-ink-muted">
-                                                    <p className="min-w-0 flex-1 truncate">Replying to <span className="text-link">{getDisplayAddressShort(discussReplyToPost!.poster)}</span>: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
+                                                    <p className="min-w-0 flex-1 truncate">Replying to <span className="text-link">{getDisplayAddressShort(discussReplyToPost!.poster, postersRef.current[discussReplyToPost!.poster])}</span>: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
                                                     <button type="button" aria-label="Cancel reply" title="Cancel reply" className="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full text-ink hover:bg-ink/10" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>
                                                         <CloseIcon className="size-3.5" />
                                                     </button>

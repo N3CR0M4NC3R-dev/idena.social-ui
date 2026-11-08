@@ -34,7 +34,7 @@ function GroupConversationHeaderComponent(props: GroupConversationHeaderComponen
             <div className="flex flex-row gap-3 overflow-x-auto scrollbar-thin pb-1">
                 {conversationPartners.map(conversationPartner => <div key={conversationPartner.address} className="flex w-16 flex-none flex-col items-center gap-1 text-center">
                     <ObjectUrlImageComponent className="size-10 rounded-full bg-surface object-cover" file={getProfilePic(conversationPartner)} />
-                    <p className="whitespace-nowrap text-[12px] text-ink-muted hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${conversationPartner.address}`)}>{getDisplayAddressVeryShort(conversationPartner.address)}</p>
+                    <p className="max-w-full truncate text-[12px] text-ink-muted hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${conversationPartner.address}`)}>{getDisplayAddressVeryShort(conversationPartner.address, conversationPartner)}</p>
                     {!conversationPartner.pubkey && <div className="text-[11px]/3.5">
                         <p className="text-danger">pubkey missing</p>
                         <p className="text-link hover:cursor-pointer hover:underline" onClick={(e) => handleSubmitPubkeyModal(e, conversationPartner.address)}>Fix here</p>
