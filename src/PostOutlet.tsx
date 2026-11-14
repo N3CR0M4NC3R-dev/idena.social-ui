@@ -1,40 +1,8 @@
-import { useLocation, useNavigate, useOutletContext, useParams } from "react-router";
-import type { Post, Poster, PostTips } from "./logic/asyncUtils";
+import { useLocation, useNavigate, useParams } from "react-router";
+import { useAppContext } from "./AppContext";
 import PostComponent from "./components/PostComponent";
 import PageHeaderComponent from "./components/PageHeaderComponent";
 import LdsSpinnerComponent from "./components/LdsSpinnerComponent";
-import { type BrowserStateHistorySettings, type MouseEventLocal, type PostMediaAttachment } from "./App.exports";
-
-type PostOutletProps = {
-    latestPosts: string[],
-    latestActivity: string[],
-    postsRef: React.RefObject<Record<string, Post>>,
-    postersRef: React.RefObject<Record<string, Poster>>,
-    replyPostsTreeRef: React.RefObject<Record<string, string>>,
-    deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
-    discussPrefix: string,
-    SET_NEW_POSTS_ADDED_DELAY: number,
-    inputPostDisabled: boolean,
-    submitting: boolean,
-    copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
-    submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
-    submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
-    submittingPost: string,
-    submittingLike: string,
-    submittingTip: string,
-    browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
-    setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
-    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
-    handleOpenTipsModal: (e: MouseEventLocal, likePosts: string[]) => void,
-    handleOpenSendTipModal: (e: MouseEventLocal, location: string, tipToPost: Post) => void,
-    handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
-    handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
-    postTipsRef: React.RefObject<Record<string, PostTips>>,
-    postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
-    makePostsWith: string,
-    noMorePastBlocks: boolean,
-};
 
 function PostOutlet() {
     const { postId } = useParams();
@@ -43,32 +11,8 @@ function PostOutlet() {
 
     const {
         postsRef,
-        postersRef,
-        replyPostsTreeRef,
-        deOrphanedReplyPostsTreeRef,
-        discussPrefix,
-        submittingPost,
-        submittingLike,
-        submittingTip,
-        SET_NEW_POSTS_ADDED_DELAY,
-        inputPostDisabled,
-        submitting,
-        copyPostTxHandler,
-        submitPostHandler,
-        submitLikeHandler,
-        browserStateHistoryRef,
-        setBrowserStateHistorySettings,
-        handleOpenLikesModal,
-        handleOpenTipsModal,
-        handleOpenSendTipModal,
-        handleOpenAddMediaModal,
-        handleOpenRpcMakePostModal,
-        handleExpandImageModal,
-        postTipsRef,
-        postMediaAttachmentsRef,
-        makePostsWith,
         noMorePastBlocks,
-    } = useOutletContext() as PostOutletProps;
+    } = useAppContext();
 
     const handleGoBack = () => {
         navigate(-1);
@@ -89,31 +33,6 @@ function PostOutlet() {
         {post ? <PostComponent
             uniqueKey={postId!}
             postId={postId!}
-            postsRef={postsRef}
-            postersRef={postersRef}
-            replyPostsTreeRef={replyPostsTreeRef}
-            deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
-            discussPrefix={discussPrefix}
-            SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
-            inputPostDisabled={inputPostDisabled}
-            submitting={submitting}
-            copyPostTxHandler={copyPostTxHandler}
-            submitPostHandler={submitPostHandler}
-            submitLikeHandler={submitLikeHandler}
-            submittingPost={submittingPost}
-            submittingLike={submittingLike}
-            submittingTip={submittingTip}
-            browserStateHistoryRef={browserStateHistoryRef}
-            setBrowserStateHistorySettings={setBrowserStateHistorySettings}
-            handleOpenLikesModal={handleOpenLikesModal}
-            handleOpenTipsModal={handleOpenTipsModal}
-            handleOpenSendTipModal={handleOpenSendTipModal}
-            handleOpenAddMediaModal={handleOpenAddMediaModal}
-            handleOpenRpcMakePostModal={handleOpenRpcMakePostModal}
-            handleExpandImageModal={handleExpandImageModal}
-            postTipsRef={postTipsRef}
-            postMediaAttachmentsRef={postMediaAttachmentsRef}
-            makePostsWith={makePostsWith}
             isPostOutlet={true}
             spotlightReplyPostId={spotlightReplyPostId}
             spotlightDiscussionPostId={spotlightDiscussionPostId}

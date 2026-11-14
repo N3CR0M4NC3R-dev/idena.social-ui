@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 
 const DB_NAME = 'idena-social';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 export const POSTS_STORE = 'posts';
 export const POSTERS_STORE = 'posters';
 export const TIPS_STORE = 'tips';
@@ -16,7 +16,7 @@ let dbPromise: Promise<IDBPDatabase | undefined> | undefined;
 export const getDb = () => {
     if (!dbPromise) {
         dbPromise = openDB(DB_NAME, DB_VERSION, {
-            upgrade(db) {
+            upgrade(db, oldVersion, _newVersion, transaction) {
                 if (!db.objectStoreNames.contains(POSTS_STORE)) {
                     db.createObjectStore(POSTS_STORE, { keyPath: 'txHash' });
                 }
@@ -43,6 +43,13 @@ export const getDb = () => {
                 if (!db.objectStoreNames.contains(MESSAGE_READ_STATUS_STORE)) {
                     const messageReadStatusStore = db.createObjectStore(MESSAGE_READ_STATUS_STORE, { keyPath: ['messageId', 'owner'] });
                     messageReadStatusStore.createIndex('owner_idx', 'owner');
+                }
+                // v3: topic posts (channelId "r/<name>") used to be ignored and left out of the captured block ranges,
+                // which only list accepted transactions. Forget both so past blocks are scanned again and the topic
+                // posts found. Cached posts, tips and messages are kept, so only the listing is fetched again.
+                if (oldVersion >= 1 && oldVersion < 3) {
+                    transaction.objectStore(IGNORES_STORE).clear();
+                    transaction.objectStore(BLOCKS_CAPTURED_RANGE_STORE).clear();
                 }
             },
             blocking(_currentVersion, _blockedVersion, event) {

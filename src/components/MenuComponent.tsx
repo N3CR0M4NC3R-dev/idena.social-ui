@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { BellIcon, HomeIcon, MessagesIcon, ProfileIcon, SettingsIcon } from './icons';
+import { BellIcon, HomeIcon, MessagesIcon, ProfileIcon, SettingsIcon, TopicsIcon } from './icons';
 
 type MenuComponentProps = {
     postersAddress: string,
@@ -23,6 +23,7 @@ function MenuComponent(props: MenuComponentProps) {
 
     const menuItems = [
         { to: '/', label: 'Home', Icon: HomeIcon, active: pathname === '/' },
+        { to: '/topics', label: 'Topics', Icon: TopicsIcon, active: pathname === '/topics' || pathname.startsWith('/topics/') },
         { to: profilePath, label: 'Profile', Icon: ProfileIcon, active: !!postersAddress && pathname.toLowerCase().startsWith(profilePath.toLowerCase()) },
         { to: '/messages', label: 'Messages', Icon: MessagesIcon, active: pathname === '/messages' || pathname.startsWith('/conversation/'), badgeCount: unreadMessages },
         { to: '/postactivity', label: 'Post Activity', Icon: BellIcon, active: pathname === '/postactivity', badgeCount: unreadPostActivities },

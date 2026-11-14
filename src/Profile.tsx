@@ -1,54 +1,15 @@
-import { Navigate, Outlet, useLocation, useMatch, useNavigate, useOutletContext, useParams } from "react-router";
-import { type Post, type Poster, type PostTips, type Tip, getPosterPromise } from "./logic/asyncUtils";
+import { Navigate, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router";
+import { useAppContext } from "./AppContext";
+import { type Poster, getPosterPromise } from "./logic/asyncUtils";
 import { getDisplayAddress, getIdentityStatus, getProfilePic } from "./logic/utils";
 import { CANNOT_EDIT_PROFILE, getEditStanding } from "./logic/profileEdit";
-import { type BrowserStateHistorySettings, type Conversation, type PostMediaAttachment, type ProfileActivity } from "./App.exports";
+import { zeroAddress, type MouseEventLocal } from "./App.exports";
 import LdsSpinnerComponent from "./components/LdsSpinnerComponent";
 import ObjectUrlImageComponent from "./components/ObjectUrlImageComponent";
 import PageHeaderComponent from "./components/PageHeaderComponent";
 import { ExternalLinkIcon, MessagesIcon, SpinnerIcon } from "./components/icons";
 import { keccak256 } from "js-sha3";
 import { useState } from "react";
-
-type MouseEventLocal = React.MouseEvent<HTMLElement, MouseEvent>;
-
-type AddressProps = {
-    latestPosts: string[],
-    latestActivity: string[],
-    postsRef: React.RefObject<Record<string, Post>>,
-    postersRef: React.RefObject<Record<string, Poster>>,
-    replyPostsTreeRef: React.RefObject<Record<string, string>>,
-    deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
-    discussPrefix: string,
-    SET_NEW_POSTS_ADDED_DELAY: number,
-    inputPostDisabled: boolean,
-    submitting: boolean,
-    copyPostTxHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
-    submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
-    submitLikeHandler: (emoji: string, location: string, replyToPostId?: string | undefined, channelId?: string | undefined) => Promise<void>,
-    submittingPost: string,
-    submittingLike: string,
-    submittingTip: string,
-    browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
-    setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
-    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Post[]) => void,
-    handleOpenTipsModal: (e: MouseEventLocal, likePosts: Tip[]) => void,
-    handleOpenSendTipModal: (e: MouseEventLocal, location: string, tipToPost: Post) => void,
-    handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
-    handleOpenRpcMakePostModal: (e: MouseEventLocal, location: string, replyToPostId?: string, channelId?: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
-    postTipsRef: React.RefObject<Record<string, PostTips>>,
-    postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
-    makePostsWith: string,
-    rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>)>,
-    findPostsWithRef: React.RefObject<string>,
-    indexerApiUrlRef: React.RefObject<string>,
-    profileActivityRef: React.RefObject<Record<string, ProfileActivity>>,
-    postersAddress: string,
-    conversationsRef: React.RefObject<Record<string, Conversation>>,
-    zeroAddress: string,
-    handleOpenEditProfileModal: (e: MouseEventLocal) => void,
-};
 
 type ProfileIdentityComponentProps = {
     poster: Poster,
@@ -129,42 +90,15 @@ function Profile() {
     const [editProfileLoading, setEditProfileLoading] = useState(false);
 
     const {
-        latestPosts,
-        latestActivity,
-        postsRef,
         postersRef,
-        replyPostsTreeRef,
-        deOrphanedReplyPostsTreeRef,
-        discussPrefix,
-        submittingPost,
-        submittingLike,
-        submittingTip,
-        SET_NEW_POSTS_ADDED_DELAY,
         inputPostDisabled,
-        submitting,
-        copyPostTxHandler,
-        submitPostHandler,
-        submitLikeHandler,
-        browserStateHistoryRef,
-        setBrowserStateHistorySettings,
-        handleOpenLikesModal,
-        handleOpenTipsModal,
-        handleOpenSendTipModal,
-        handleOpenAddMediaModal,
-        handleOpenRpcMakePostModal,
-        handleExpandImageModal,
-        postTipsRef,
-        postMediaAttachmentsRef,
-        makePostsWith,
         rpcClientRef,
         findPostsWithRef,
         indexerApiUrlRef,
-        profileActivityRef,
         postersAddress,
         conversationsRef,
-        zeroAddress,
         handleOpenEditProfileModal,
-    } = useOutletContext() as AddressProps;
+    } = useAppContext();
 
     const profilePath = `/profile/${encodeURIComponent(address!.toLowerCase())}`;
     const canonicalPath = subTab ? `${profilePath}/${subTab.toLowerCase()}` : profilePath;
@@ -248,39 +182,7 @@ function Profile() {
                 <ProfileTabComponent label="Tips" isActive={location.pathname === `${profilePath}/tips`} onClick={(e) => handleClickAddress(e, `${profilePath}/tips`)} />
                 <ProfileTabComponent label="Media" isActive={location.pathname === `${profilePath}/media`} onClick={(e) => handleClickAddress(e, `${profilePath}/media`)} />
             </div>
-            <Outlet
-                context={{
-                    address,
-                    latestPosts,
-                    latestActivity,
-                    postsRef,
-                    postersRef,
-                    replyPostsTreeRef,
-                    deOrphanedReplyPostsTreeRef,
-                    discussPrefix,
-                    SET_NEW_POSTS_ADDED_DELAY,
-                    inputPostDisabled,
-                    submitting,
-                    copyPostTxHandler,
-                    submitPostHandler,
-                    submitLikeHandler,
-                    submittingPost,
-                    submittingLike,
-                    submittingTip,
-                    browserStateHistoryRef,
-                    setBrowserStateHistorySettings,
-                    handleOpenLikesModal,
-                    handleOpenTipsModal,
-                    handleOpenSendTipModal,
-                    handleOpenAddMediaModal,
-                    handleOpenRpcMakePostModal,
-                    handleExpandImageModal,
-                    postTipsRef,
-                    postMediaAttachmentsRef,
-                    makePostsWith,
-                    profileActivityRef,
-                }}
-            />
+            <Outlet />
         </>}
     </>);
 }

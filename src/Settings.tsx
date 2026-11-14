@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router";
+import { useNavigate } from "react-router";
+import { useAppContext } from "./AppContext";
+import { zeroAddress } from "./App.exports";
 import { defaultSettings } from "./App";
 import { clearMessagesCache } from "./logic/messagesStore";
 import { clearPostersCache } from "./logic/postersStore";
@@ -11,40 +13,6 @@ import { clearPostActivityCache } from "./logic/postActivityStore";
 import { clearMessageReadStatusCache } from "./logic/messageReadStatusStore";
 import { type Theme, applyTheme, defaultTheme, getTheme, saveTheme } from "./logic/theme";
 import PageHeaderComponent from "./components/PageHeaderComponent";
-
-type SettingsProps = {
-    nodeUrl: string,
-    setNodeUrl: React.Dispatch<React.SetStateAction<string>>,
-    nodeAvailable: boolean,
-    nodeKey: string,
-    setNodeKey: React.Dispatch<React.SetStateAction<string>>,
-    makePostsWith: string,
-    handleMakePostsWithToggle: (value: string) => void,
-    webAppUrl: string,
-    setWebAppUrl: React.Dispatch<React.SetStateAction<string>>,
-    viewOnlyNode: boolean,
-    postersAddressInvalid: boolean,
-    validatePostersAddress: (postersAddress: string) => void,
-    findPostsWith: string,
-    handleInputFindPostsWithToggle: (value: string) => void,
-    indexerApiUrl: string,
-    indexerApiUrlInvalid: boolean,
-    applyIndexerApiUrl: (indexerApiUrl: string) => void,
-    encryptedPrivateKey: string,
-    setEncryptedPrivateKey: React.Dispatch<React.SetStateAction<string>>,
-    password: string,
-    setPassword: React.Dispatch<React.SetStateAction<string>>,
-    credentialsInvalid: string,
-    validateCredentials: (encryptedPrivateKey?: string, password?: string) => void,
-    saveEncryptedKey: boolean,
-    setSaveEncryptedKey: React.Dispatch<React.SetStateAction<boolean>>,
-    savePassword: boolean,
-    setSavePassword: React.Dispatch<React.SetStateAction<boolean>>,
-    setMakePostsWith: React.Dispatch<React.SetStateAction<string>>,
-    setIndexerApiUrl: React.Dispatch<React.SetStateAction<string>>,
-    postersAddress: string,
-    zeroAddress: string,
-};
 
 const radioClassName = 'col-start-1 row-start-1 cursor-pointer appearance-none rounded-full border-2 border-line-strong bg-transparent checked:bg-btn focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent forced-colors:appearance-auto';
 
@@ -108,8 +76,7 @@ function Settings() {
         setMakePostsWith,
         setIndexerApiUrl,
         postersAddress,
-        zeroAddress,
-    } = useOutletContext() as SettingsProps;
+    } = useAppContext();
 
     const [theme, setTheme] = useState(getTheme);
 

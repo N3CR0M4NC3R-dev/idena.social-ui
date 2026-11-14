@@ -23,6 +23,11 @@ export type TransactionCached = {
 export type Conversation = { participants: string[], messages: string[] };
 export type PostFinderTransaction = { txHash: string, timestamp: number, blockHeight?: number };
 
+export const discussPrefix = 'discuss:';
+export const messagePrefix = 'message:';
+export const zeroAddress = '0x0000000000000000000000000000000000000000';
+export const SET_NEW_POSTS_ADDED_DELAY = 20;
+
 export const initDomSettings = { textOverflowHidden: true, repliesHidden: true, replyInputHidden: true, showMaxReplies: 5 };
 export const initPostOutletDomSettings = { textOverflowHidden: false, repliesHidden: false, replyInputHidden: true };
 export const initProfileRepliesDomSettings = { textOverflowHidden: true, repliesHidden: false, replyInputHidden: true, showMaxReplies: 1 };

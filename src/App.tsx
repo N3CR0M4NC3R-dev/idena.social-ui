@@ -2,13 +2,14 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { sha3_256 } from 'js-sha3';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi, hasRetryableMediaError } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getPostActivityKey, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import IdenaAdPng from './assets/idena_ad.png';
 import IdenaAdThumbPng from './assets/idena_ad_thumb.png';
 import IdenaLogo from './assets/idena_logo.png';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { defaultProfileActivity, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostActivityItem, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
+import { defaultProfileActivity, discussPrefix, messagePrefix, zeroAddress, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostActivityItem, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
+import { AppContext, type AppContextValue } from './AppContext';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
 import ModalAddMediaComponent from './components/ModalAddMediaComponent';
@@ -47,9 +48,6 @@ const sendTipMethod = 'sendTip';
 const sendMessageMethod = 'sendMessage';
 const allMethods = [makePostMethod, sendTipMethod, sendMessageMethod];
 const thisChannelId = '';
-const discussPrefix = 'discuss:';
-const messagePrefix = 'message:';
-const zeroAddress = '0x0000000000000000000000000000000000000000';
 const callbackUrl = `${window.location.origin}/confirm-tx.html`;
 const termsOfServiceUrl = `${window.location.origin}/terms-of-service.html`;
 const attributionsUrl = `${window.location.origin}/attributions.html`;
@@ -67,7 +65,6 @@ const SCANNING_INTERVAL_MESSAGES = 1000;
 const ADS_INTERVAL = 10000;
 const SCAN_PAST_POSTS_TTL = 1 * 60;
 const INDEXER_API_ITEMS_LIMIT = 20;
-const SET_NEW_POSTS_ADDED_DELAY = 20;
 const SUBMITTING_POST_INTERVAL = 2000;
 const MAX_POST_MEDIA_BYTES = 1024 * 1024;
 const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
@@ -226,7 +223,7 @@ function App() {
 
     // modals
     const [modalOpen, setModalOpen] = useState<string>('');
-    const modalLikePostsRef = useRef<Post[]>([]);
+    const modalLikePostsRef = useRef<(Post | Message)[]>([]);
     const modalTipsRef = useRef<Tip[]>([]);
     const modalSendTipRef = useRef<{ location: string, postId: string }>(undefined);
     const modalAddMediaRef = useRef<string>('');
@@ -1959,9 +1956,9 @@ function App() {
         await submitMessage(postersAddress, contractAddressCurrent, sendMessageMethod, message, rawMessageHash, makePostsWith, rpcClientRef.current!, callbackUrl, webAppUrl);
     };
 
-    const handleOpenLikesModal = (e: MouseEventLocal, likePosts: Post[]) => {
+    const handleOpenLikesModal = (e: MouseEventLocal, likes: (Post | Message)[]) => {
         e.stopPropagation();
-        modalLikePostsRef.current = [ ...likePosts ];
+        modalLikePostsRef.current = [ ...likes ];
         setModalOpen('likes');
     };
 
@@ -2087,6 +2084,35 @@ function App() {
         forceUpdate();
     };
 
+    const retryPostMediaHandler = async (postId: string) => {
+        const post = postsRef.current[postId];
+
+        if (!post || !rpcClientRef.current) {
+            return false;
+        }
+
+        await resolveNewMediaForPosts([getMedia(postId, post.media, rpcClientRef.current)], postsRef);
+        forceUpdate();
+
+        return !hasRetryableMediaError(postsRef.current[postId]);
+    };
+
+    const retryMessageMediaHandler = async (messageId: string) => {
+        const message = messagesRef.current[messageId];
+
+        if (!message || !rpcClientRef.current) {
+            return false;
+        }
+
+        const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
+        const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
+
+        await resolveNewMediaForMessages([getMedia(messageId, message.media, rpcClientRef.current, message.mediaPassword)], postersAddress, encryptedPrivateKeyActual, passwordyActual, messagesRef);
+        forceUpdate();
+
+        return !hasRetryableMediaError(messagesRef.current[messageId]);
+    };
+
     const addMediaHandler = async (attachmentId: string, file: File, ipfsUrl?: string) => {
         await setPostMediaAttachmentHandler(attachmentId, file, ipfsUrl);
         forceUpdate();
@@ -2103,6 +2129,96 @@ function App() {
     };
 
     const isConversationPage = pathname.startsWith('/conversation/');
+
+    const appContextValue: AppContextValue = {
+        // settings
+        nodeUrl,
+        setNodeUrl,
+        nodeAvailable,
+        nodeKey,
+        setNodeKey,
+        makePostsWith,
+        setMakePostsWith,
+        handleMakePostsWithToggle,
+        webAppUrl,
+        setWebAppUrl,
+        viewOnlyNode,
+        postersAddress,
+        postersAddressInvalid,
+        validatePostersAddress,
+        findPostsWith,
+        findPostsWithRef,
+        handleInputFindPostsWithToggle,
+        indexerApiUrl,
+        indexerApiUrlRef,
+        setIndexerApiUrl,
+        indexerApiUrlInvalid,
+        applyIndexerApiUrl,
+        encryptedPrivateKey,
+        setEncryptedPrivateKey,
+        password,
+        setPassword,
+        credentialsInvalid,
+        validateCredentials,
+        saveEncryptedKey,
+        setSaveEncryptedKey,
+        savePassword,
+        setSavePassword,
+        messageSettingsInvalid,
+        rpcClientRef,
+        noMorePastBlocks,
+
+        // posts
+        latestPosts,
+        latestActivity,
+        postLatestActivityRef,
+        postsRef,
+        postersRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
+        tipsRef,
+        postTipsRef,
+        postMediaAttachmentsRef,
+        profileActivityRef,
+        postActivityRef,
+        unreadPostActivityThisVisitRef,
+        browserStateHistoryRef,
+        setBrowserStateHistorySettings,
+
+        // messages
+        latestConversationActivity,
+        conversationsRef,
+        messagesRef,
+        messageReadStatusRef,
+        unreadMessagesThisVisitRef,
+
+        // submitting
+        inputPostDisabled,
+        submitting,
+        submittingPost,
+        submittingLike,
+        submittingTip,
+        submittingMessage,
+        copyPostTxHandler,
+        submitPostHandler,
+        submitLikeHandler,
+        copyMessageTxHandler,
+        submitMessageHandler,
+        submitMessageLikeHandler,
+        retryPostMediaHandler,
+        retryMessageMediaHandler,
+
+        // modals
+        handleOpenLikesModal,
+        handleOpenTipsModal,
+        handleOpenSendTipModal,
+        handleOpenAddMediaModal,
+        handleOpenRpcMakePostModal,
+        handleOpenRpcSendMessageModal,
+        handleExpandImageModal,
+        handleSubmitPubkeyModal,
+        handleOpenEditProfileModal,
+    };
 
     return (
         <div className={`flex ${isConversationPage ? 'min-h-dvh' : 'min-h-screen'} w-full justify-center`}>
@@ -2167,89 +2283,9 @@ function App() {
                         variant="compact"
                     />
                 </div>
-                <Outlet
-                    context={{
-                        nodeUrl,
-                        setNodeUrl,
-                        nodeAvailable,
-                        nodeKey,
-                        setNodeKey,
-                        makePostsWith,
-                        handleMakePostsWithToggle,
-                        webAppUrl,
-                        setWebAppUrl,
-                        viewOnlyNode,
-                        postersAddressInvalid,
-                        validatePostersAddress,
-                        findPostsWith,
-                        handleInputFindPostsWithToggle,
-                        indexerApiUrl,
-                        indexerApiUrlInvalid,
-                        applyIndexerApiUrl,
-                        latestPosts,
-                        latestActivity,
-                        postsRef,
-                        postersRef,
-                        replyPostsTreeRef,
-                        deOrphanedReplyPostsTreeRef,
-                        discussPrefix,
-                        messagePrefix,
-                        SET_NEW_POSTS_ADDED_DELAY,
-                        inputPostDisabled,
-                        submitting,
-                        copyPostTxHandler,
-                        submitPostHandler,
-                        submitLikeHandler,
-                        copyMessageTxHandler,
-                        submitMessageHandler,
-                        submitMessageLikeHandler,
-                        submittingPost,
-                        submittingLike,
-                        submittingTip,
-                        submittingMessage,
-                        browserStateHistoryRef,
-                        setBrowserStateHistorySettings,
-                        handleOpenLikesModal,
-                        handleOpenTipsModal,
-                        handleOpenSendTipModal,
-                        handleOpenAddMediaModal,
-                        handleOpenRpcMakePostModal,
-                        handleOpenRpcSendMessageModal,
-                        handleExpandImageModal,
-                        handleSubmitPubkeyModal,
-                        handleOpenEditProfileModal,
-                        tipsRef,
-                        postTipsRef,
-                        postMediaAttachmentsRef,
-                        rpcClientRef,
-                        encryptedPrivateKey,
-                        setEncryptedPrivateKey,
-                        password,
-                        setPassword,
-                        credentialsInvalid,
-                        validateCredentials,
-                        saveEncryptedKey,
-                        setSaveEncryptedKey,
-                        savePassword,
-                        setSavePassword,
-                        zeroAddress,
-                        latestConversationActivity,
-                        postersAddress,
-                        conversationsRef,
-                        messagesRef,
-                        messageSettingsInvalid,
-                        findPostsWithRef,
-                        indexerApiUrlRef,
-                        setMakePostsWith,
-                        setIndexerApiUrl,
-                        profileActivityRef,
-                        postActivityRef,
-                        unreadPostActivityThisVisitRef,
-                        messageReadStatusRef,
-                        unreadMessagesThisVisitRef,
-                        noMorePastBlocks,
-                    }}
-                />
+                <AppContext value={appContextValue}>
+                    <Outlet />
+                </AppContext>
                 {!['/settings'].includes(pathname) && <div>
                     <ScanBlocksComponent
                         currentBlockCaptured={currentBlockCaptured}

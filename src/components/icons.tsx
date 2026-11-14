@@ -59,6 +59,14 @@ export function SettingsIcon({ className, filled }: IconProps) {
     );
 }
 
+export function TopicsIcon({ className, filled }: IconProps) {
+    return (
+        <svg {...svgProps} className={className} strokeWidth={filled ? 2.75 : svgProps.strokeWidth}>
+            <path d="M9.5 3.75 7.5 20.25M16.5 3.75l-2 16.5M4.25 8.75h16M3.75 15.25h16" />
+        </svg>
+    );
+}
+
 export function ReplyIcon({ className }: IconProps) {
     return (
         <svg {...svgProps} className={className}>
@@ -154,6 +162,15 @@ export function ArrowUpIcon({ className }: IconProps) {
     return (
         <svg {...svgProps} className={className}>
             <path d="M12 19.5v-15M5.75 10.75 12 4.5l6.25 6.25" />
+        </svg>
+    );
+}
+
+export function RetryIcon({ className }: IconProps) {
+    return (
+        <svg {...svgProps} className={className}>
+            <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" />
+            <path d="M19.75 4.25v4.5h-4.5" />
         </svg>
     );
 }

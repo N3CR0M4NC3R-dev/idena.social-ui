@@ -17,6 +17,7 @@ import ProfileLikes from './ProfileLikes.tsx';
 import ProfileTips from './ProfileTips.tsx';
 import ProfileMedia from './ProfileMedia.tsx';
 import PostActivity from './PostActivity.tsx';
+import Topics from './Topics.tsx';
 import { initTheme } from './logic/theme.ts';
 
 initTheme();
@@ -28,6 +29,8 @@ createRoot(document.getElementById('root')!).render(
             <Routes>
                 <Route path="/" element={<App />}>
                     <Route index element={<LatestPosts />} />
+                    <Route path="/topics" element={<Topics />} />
+                    <Route path="/topics/:topic" element={<LatestPosts />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/messages" element={<Messages />} />
                     <Route path="/postactivity" element={<PostActivity />} />

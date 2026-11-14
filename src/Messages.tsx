@@ -1,7 +1,8 @@
 import { useEffect, useReducer, useState } from "react";
-import { useLocation, useOutletContext } from "react-router";
-import { getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, type Message, type Poster, getPosterPromise } from "./logic/asyncUtils";
-import { type BrowserStateHistorySettings, type Conversation, type MouseEventLocal, type PostMediaAttachment } from "./App.exports";
+import { useLocation } from "react-router";
+import { useAppContext } from "./AppContext";
+import { getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, getPosterPromise } from "./logic/asyncUtils";
+import { zeroAddress, type MouseEventLocal } from "./App.exports";
 import ConversationComponent from "./components/ConversationComponent";
 import ObjectUrlImageComponent from "./components/ObjectUrlImageComponent";
 import PageHeaderComponent from "./components/PageHeaderComponent";
@@ -9,82 +10,27 @@ import ComposerToolbarComponent from "./components/ComposerToolbarComponent";
 import { CloseIcon, UserPlusIcon } from "./components/icons";
 import { useInfiniteScroll } from "./logic/useInfiniteScroll";
 
-type MessagesProps = {
-    copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
-    submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>
-    submitMessageLikeHandler: (emoji: string, location: string, recipients: string[], replyToMessageId: string) => Promise<void>,
-    nodeAvailable: boolean,
-    makePostsWith: string,
-    credentialsInvalid: string,
-    viewOnlyNode: boolean,
-    zeroAddress: string,
-    postersRef: React.RefObject<Record<string, Poster>>,
-    rpcClientRef: React.RefObject<((method: string, params: any[], skipStateUpdate?: boolean) => Promise<any>)>,
-    latestConversationActivity: string[],
-    postersAddress: string,
-    conversationsRef: React.RefObject<Record<string, Conversation>>,
-    messagesRef: React.RefObject<Record<string, Message>>,
-    browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
-    setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
-    submittingMessage: string,
-    submittingLike: string,
-    inputPostDisabled: boolean,
-    submitting: boolean,
-    postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
-    handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
-    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Message[]) => void,
-    handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
-    handleOpenRpcSendMessageModal: (location: string, recipients: string[], replyToMessageId?: string | undefined) => void,
-    messageSettingsInvalid: boolean,
-    validateCredentials: () => void,
-    findPostsWithRef: React.RefObject<string>,
-    indexerApiUrlRef: React.RefObject<string>,
-    replyPostsTreeRef: React.RefObject<Record<string, string>>,
-    deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
-    SET_NEW_POSTS_ADDED_DELAY: number,
-    messagePrefix: string,
-    messageReadStatusRef: React.RefObject<Map<string, boolean>>,
-    unreadMessagesThisVisitRef: React.RefObject<Map<string, string>>,
-};
-
 function Messages() {
 
     const {
         copyMessageTxHandler,
         submitMessageHandler,
-        submitMessageLikeHandler,
         makePostsWith,
-        zeroAddress,
         postersRef,
         rpcClientRef,
         latestConversationActivity,
-        postersAddress,
-        conversationsRef,
-        messagesRef,
-        browserStateHistoryRef,
-        setBrowserStateHistorySettings,
         submittingMessage,
-        submittingLike,
         inputPostDisabled,
         submitting,
         postMediaAttachmentsRef,
         handleOpenAddMediaModal,
-        handleExpandImageModal,
-        handleOpenLikesModal,
         handleSubmitPubkeyModal,
         handleOpenRpcSendMessageModal,
         messageSettingsInvalid,
         validateCredentials,
         findPostsWithRef,
         indexerApiUrlRef,
-        replyPostsTreeRef,
-        deOrphanedReplyPostsTreeRef,
-        SET_NEW_POSTS_ADDED_DELAY,
-        messagePrefix,
-        messageReadStatusRef,
-        unreadMessagesThisVisitRef,
-    } = useOutletContext() as MessagesProps;
+    } = useAppContext();
 
     const [addNewRecipient, setAddNewRecipient] = useState<string>(zeroAddress);
     const [loadingNewRecipient, setLoadingNewRecipient] = useState<boolean>(false);
@@ -135,7 +81,7 @@ function Messages() {
             if (!recipient.pubkey) {
                 const pubkey = findPostsWithRef.current === 'indexer-api'
                     ? await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, recipient.address)
-                    : await getPubkeyWithRpc(rpcClientRef.current, recipient.address);
+                    : await getPubkeyWithRpc(rpcClientRef.current!, recipient.address);
 
                 recipient = { ...recipient, pubkey };
                 postersRef.current = { ...postersRef.current, [candidate]: recipient };
@@ -245,33 +191,6 @@ function Messages() {
                 return <ConversationComponent
                     key={conversationKey}
                     conversationKey={conversationKey}
-                    postersAddress={postersAddress}
-                    replyPostsTreeRef={replyPostsTreeRef}
-                    deOrphanedReplyPostsTreeRef={deOrphanedReplyPostsTreeRef}
-                    postersRef={postersRef}
-                    conversationsRef={conversationsRef}
-                    messagesRef={messagesRef}
-                    postMediaAttachmentsRef={postMediaAttachmentsRef}
-                    browserStateHistoryRef={browserStateHistoryRef}
-                    setBrowserStateHistorySettings={setBrowserStateHistorySettings}
-                    inputPostDisabled={inputPostDisabled}
-                    submitting={submitting}
-                    messageSettingsInvalid={messageSettingsInvalid}
-                    copyMessageTxHandler={copyMessageTxHandler}
-                    submitMessageHandler={submitMessageHandler}
-                    submitMessageLikeHandler={submitMessageLikeHandler}
-                    makePostsWith={makePostsWith}
-                    handleOpenRpcSendMessageModal={handleOpenRpcSendMessageModal}
-                    SET_NEW_POSTS_ADDED_DELAY={SET_NEW_POSTS_ADDED_DELAY}
-                    handleOpenLikesModal={handleOpenLikesModal}
-                    handleSubmitPubkeyModal={handleSubmitPubkeyModal}
-                    handleOpenAddMediaModal={handleOpenAddMediaModal}
-                    handleExpandImageModal={handleExpandImageModal}
-                    submittingMessage={submittingMessage}
-                    submittingLike={submittingLike}
-                    messagePrefix={messagePrefix}
-                    messageReadStatusRef={messageReadStatusRef}
-                    unreadMessagesThisVisitRef={unreadMessagesThisVisitRef}
                 />;
             })}
         </div>

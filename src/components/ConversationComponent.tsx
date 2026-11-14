@@ -1,8 +1,10 @@
 import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessageLines, getProfilePic, likeEmoji } from "../logic/utils";
-import { initDomSettings, type BrowserStateHistorySettings, type Conversation, type MouseEventLocal, type PostDomSettings, type PostMediaAttachment } from "../App.exports";
-import { getChildPostIds, type Message, type Poster } from "../logic/asyncUtils";
+import { initDomSettings, messagePrefix, SET_NEW_POSTS_ADDED_DELAY, type MouseEventLocal, type PostDomSettings } from "../App.exports";
+import { useAppContext } from "../AppContext";
+import { getChildPostIds, hasRetryableMediaError } from "../logic/asyncUtils";
 import { useLocation, useNavigate } from "react-router";
 import { useReducer } from "react";
+import MediaRetryButtonComponent from "./MediaRetryButtonComponent";
 import OneOnOneConversationHeaderComponent from "./OneOnOneConversationHeaderComponent";
 import GroupConversationHeaderComponent from "./GroupConversationHeaderComponent";
 import ObjectUrlImageComponent from "./ObjectUrlImageComponent";
@@ -12,33 +14,6 @@ import { cacheMessageReadStatus } from "../logic/messageReadStatusStore";
 
 type ConversationComponentProps = {
     conversationKey: string,
-    postersAddress: string,
-    replyPostsTreeRef: React.RefObject<Record<string, string>>,
-    deOrphanedReplyPostsTreeRef: React.RefObject<Record<string, string>>,
-    postersRef: React.RefObject<Record<string, Poster>>,
-    conversationsRef: React.RefObject<Record<string, Conversation>>,
-    messagesRef: React.RefObject<Record<string, Message>>,
-    postMediaAttachmentsRef: React.RefObject<Record<string, PostMediaAttachment | undefined>>,
-    browserStateHistoryRef: React.RefObject<Record<string, BrowserStateHistorySettings>>,
-    setBrowserStateHistorySettings: (pageDomSetting: Partial<BrowserStateHistorySettings>, rerender?: boolean) => void,
-    inputPostDisabled: boolean,
-    submitting: boolean,
-    messageSettingsInvalid: boolean,
-    copyMessageTxHandler: (location: string, recipients: string[], replyToMessageId?: string | undefined) => Promise<void>,
-    submitMessageHandler: (location: string, recipients: string[], replyToMessageId?: string) => Promise<void>,
-    submitMessageLikeHandler: (emoji: string, location: string, recipients: string[], replyToMessageId: string) => Promise<void>,
-    makePostsWith: string,
-    handleOpenRpcSendMessageModal: (location: string, recipients: string[], replyToMessageId?: string | undefined) => void,
-    SET_NEW_POSTS_ADDED_DELAY: number,
-    handleOpenLikesModal: (e: MouseEventLocal, likePosts: Message[]) => void,
-    handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
-    handleOpenAddMediaModal: (e: MouseEventLocal, location: string, source: string) => void,
-    handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
-    submittingMessage: string,
-    submittingLike: string,
-    messagePrefix: string,
-    messageReadStatusRef: React.RefObject<Map<string, boolean>>,
-    unreadMessagesThisVisitRef: React.RefObject<Map<string, string>>,
     isConversationOutlet?: boolean,
 };
 
@@ -49,6 +24,10 @@ function ConversationComponent(props: ConversationComponentProps) {
 
     const {
         conversationKey,
+        isConversationOutlet,
+    } = props;
+
+    const {
         postersAddress,
         replyPostsTreeRef,
         deOrphanedReplyPostsTreeRef,
@@ -66,18 +45,16 @@ function ConversationComponent(props: ConversationComponentProps) {
         submitMessageLikeHandler,
         makePostsWith,
         handleOpenRpcSendMessageModal,
-        SET_NEW_POSTS_ADDED_DELAY,
         handleOpenLikesModal,
         handleSubmitPubkeyModal,
         handleOpenAddMediaModal,
         handleExpandImageModal,
+        retryMessageMediaHandler,
         submittingMessage,
         submittingLike,
-        messagePrefix,
         messageReadStatusRef,
         unreadMessagesThisVisitRef,
-        isConversationOutlet,
-    } = props as ConversationComponentProps;
+    } = useAppContext();
 
     const [, forceUpdate] = useReducer(x => x + 1, 0);
 
@@ -241,6 +218,8 @@ function ConversationComponent(props: ConversationComponentProps) {
                         cacheMessageReadStatus(message.messageId, true, postersAddress);
                     }
 
+                    const messageImage = message.image && <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto cursor-pointer rounded-2xl border border-line" file={message.image} onClick={(e) => handleExpandImageModal(e, message.image!, message.cid)} />;
+
                     return (
                         <li key={message.messageId} className={`flex items-end gap-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                             {!isOwnMessage && <ObjectUrlImageComponent className="mb-8 size-8 flex-none rounded-full bg-surface object-cover" file={posterPic} />}
@@ -258,7 +237,10 @@ function ConversationComponent(props: ConversationComponentProps) {
                                     }
                                 </div>}
                                 <p className={`max-w-full rounded-3xl px-4 py-2.5 text-[15px]/5 [word-break:break-word] empty:hidden ${isOwnMessage ? 'rounded-br-md bg-bubble-own text-btn-ink' : 'rounded-bl-md bg-bubble text-ink'}`}>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
-                                {message.image && <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto cursor-pointer rounded-2xl border border-line" file={message.image} onClick={(e) => handleExpandImageModal(e, message.image!, message.cid)} />}
+                                {messageImage && (hasRetryableMediaError(message) ? <div className={`flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                                    {messageImage}
+                                    <MediaRetryButtonComponent onRetry={() => retryMessageMediaHandler(message.messageId)} />
+                                </div> : messageImage)}
                                 <div className={`flex items-center gap-1 text-[13px] text-ink-muted ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                                     <a className="whitespace-nowrap hover:underline" href={`https://scan.idena.io/transaction/${message.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a>
                                     <button type="button" aria-label="Reply" title="Reply" className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-comment/20 hover:text-comment" onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)}>

@@ -7,7 +7,7 @@ import ObjectUrlImageComponent from './ObjectUrlImageComponent';
 
 type ModalLikesTipsComponentProps = {
     heading: string,
-    modalItemsRef: React.RefObject<Post[] | Tip[] | Message[]>,
+    modalItemsRef: React.RefObject<(Post | Tip | Message)[]>,
     postersRef: React.RefObject<Record<string, Poster>>,
     closeModal: () => void,
 };

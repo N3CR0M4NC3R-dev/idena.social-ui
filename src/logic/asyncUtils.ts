@@ -11,6 +11,7 @@ import { cacheTip } from "./tipsStore";
 import { cachePoster, isPosterMissingOrStale } from "./postersStore";
 import { cachePost } from "./postsStore";
 import { cacheMessage } from "./messagesStore";
+import { getTopicFromChannelId } from "./topics";
 
 export const breakingChanges = {
     v3: { timestamp: 1767578641 },
@@ -425,8 +426,9 @@ export const getNewPost = async (
 
     const postChannelRegex = new RegExp(String.raw`${discussPrefix}[\d]+$`, 'i');
     const isDiscussionComment = postChannelRegex.test(channelId);
+    const isTopicPost = !!getTopicFromChannelId(channelId);
 
-    if (channelId !== thisChannelId && !isDiscussionComment) {
+    if (channelId !== thisChannelId && !isDiscussionComment && !isTopicPost) {
         return { continued: true };
     }
 
@@ -482,6 +484,10 @@ export const getNewPost = async (
         } else if (preV12) {
             replyToPostId = breakingChanges.v12.postIdPrefix + replyToPostId;
         }
+    }
+
+    if (isTopicPost && replyToPostId) {
+        return { continued: true };
     }
 
     if (replyToPostId) {
@@ -675,13 +681,18 @@ const isValidImageUrlCheck = (url: string, wait = 10000): Promise<boolean> => {
     });
 };
 
+const ERROR_LOADING_MEDIA_FILE_NAME = 'error-loading-media.png';
+
 export const getErrorLoadingMediaFile = async () => {
     const response = await fetch(ErrorLoadingMedia);
     const blob = await response.blob();
-    const errorLoadingMediaFile = new File([blob], 'error-loading-media.png', { type: 'image/png' });
+    const errorLoadingMediaFile = new File([blob], ERROR_LOADING_MEDIA_FILE_NAME, { type: 'image/png' });
 
     return errorLoadingMediaFile;
 };
+
+export const hasRetryableMediaError = (item?: Pick<Post | Message, 'media' | 'image'>) =>
+    !!item?.media?.startsWith('ipfs://') && item.image?.name === ERROR_LOADING_MEDIA_FILE_NAME;
 
 export const processTip = async (
     transaction: EventTransaction,
