@@ -408,7 +408,7 @@ export function getPostActivities(post: Post, postersAddress: string, postsRef: 
         newPostActivities = [ ...newPostActivities, { timestamp: post.timestamp, postId: post.postId, type: 'reply', read: false } ];
     } else if (replyToPost?.poster === ownAddress && post.postLevel === 'Comment') {
         newPostActivities = [ ...newPostActivities, { timestamp: post.timestamp, postId: post.postId, type: 'commentReply', read: false } ];
-    } else if (post.postLevel === 'Comment') {
+    } else if (post.postLevel === 'Comment' && !post.isLike) {
         const postId = post.channelPostId;
         const channelPost = postsRef.current[postId];
 
