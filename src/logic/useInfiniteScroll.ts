@@ -37,10 +37,12 @@ export function useInfiniteScroll<T>(items: T[], resetKey: string, pageSize = DE
     const sentinelRef = useRef<HTMLDivElement>(null);
 
     if (resetKey !== prevResetKey) {
-        // a different list (e.g. sort order changed, or navigated to the page afresh): start over
+        // A different list (e.g. sort order changed, or navigated to another page that renders the
+        // same component, like / and /topics/:topic): start over, unless it's an entry returned to
+        // with back/forward, whose paging is remembered (the component wasn't remounted to read it).
         setPrevResetKey(resetKey);
         setPrevItems(items);
-        setVisibleCount(pageSize);
+        setVisibleCount(getInitialVisibleCount(items, resetKey, pageSize));
     } else if (!sameItems(items, prevItems)) {
         // Items can arrive above the rendered ones (new posts polled in, or posts moved up by new
         // activity). Grow the window so nothing that was already rendered drops off the bottom.
