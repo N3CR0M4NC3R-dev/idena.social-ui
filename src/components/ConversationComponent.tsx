@@ -1,4 +1,4 @@
-import { getDisplayAddressShort, getDisplayDateTime, getIdentityStatus, getMessageLines, getProfilePic, likeEmoji } from "../logic/utils";
+import { getDisplayAddressShort, getDisplayDateTime, getDisplayTimeAgo, getIdentityStatus, getMessageLines, getProfilePic, likeEmoji } from "../logic/utils";
 import { initDomSettings, messagePrefix, SET_NEW_POSTS_ADDED_DELAY, type MouseEventLocal, type PostDomSettings } from "../App.exports";
 import { useAppContext } from "../AppContext";
 import { getChildPostIds, hasRetryableMediaError } from "../logic/asyncUtils";
@@ -242,7 +242,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                                     <MediaRetryButtonComponent onRetry={() => retryMessageMediaHandler(message.messageId)} />
                                 </div> : messageImage)}
                                 <div className={`flex items-center gap-1 text-[13px] text-ink-muted ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
-                                    <a className="whitespace-nowrap hover:underline" href={`https://scan.idena.io/transaction/${message.txHash}`} target="_blank" rel="noopener noreferrer">{`${displayDate}, ${displayTime}`}</a>
+                                    <a className="whitespace-nowrap hover:underline" href={`https://scan.idena.io/transaction/${message.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(message.timestamp)}</a>
                                     <button type="button" aria-label="Reply" title="Reply" className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-comment/20 hover:text-comment" onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)}>
                                         <ReplyIcon className="size-4" />
                                     </button>
