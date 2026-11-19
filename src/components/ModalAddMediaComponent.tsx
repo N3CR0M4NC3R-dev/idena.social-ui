@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { MouseEventLocal } from '../App.exports';
-import { getMedia, getNonceAndEpoch, supportedImageTypes, type RpcClient } from '../logic/asyncUtils';
+import { getMedia, getMediaFile, getNonceAndEpoch, mediaInputAccept, type RpcClient } from '../logic/asyncUtils';
+import { ERROR_LOADING_MEDIA_FILE_NAME } from '../logic/media';
 
 type ModalAddMediaComponentProps = {
     modalAddMediaRef: React.RefObject<string>,
@@ -32,14 +33,14 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
             return;
         }
 
-        const { image } = await getMedia('postId', ipfsUrl, rpcClient);
+        const mediaFile = getMediaFile(await getMedia('postId', ipfsUrl, '', rpcClient));
 
-        if (!image || image.name === 'error-loading-media.png') {
-            alert('Image cannot be found at IPFS url.');
+        if (!mediaFile || mediaFile.name === ERROR_LOADING_MEDIA_FILE_NAME) {
+            alert('Media cannot be found at IPFS url.');
             return;
         }
 
-        await addMediaHandler(attachmentId, image, ipfsUrl);
+        await addMediaHandler(attachmentId, mediaFile, ipfsUrl);
         closeModal();
     };
 
@@ -76,17 +77,17 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
     return (<>
         <div className="w-screen max-w-full sm:w-[600px]">
             <div className="sticky top-0 z-[5] flex h-[53px] items-center bg-canvas/65 pl-14 pr-4 backdrop-blur-md">
-                <h2 className="text-xl/6 font-extrabold">Add Image</h2>
+                <h2 className="text-xl/6 font-extrabold">Add Media</h2>
             </div>
             <div className="px-4 pb-4 text-[15px]/5">
                 <div className="flex items-center justify-between gap-3">
-                    <p className="min-w-0">Select image from your device</p>
+                    <p className="min-w-0">Select an image, video or sound from your device</p>
                     <div className="flex-none">
                         <label htmlFor={`post-input-media-${modalAddMediaRef.current}`} className="btn-outline h-9 px-4 text-[15px]" onClick={(e) => e.stopPropagation()}>Select</label>
                         <input
                             id={`post-input-media-${modalAddMediaRef.current}`}
                             type="file"
-                            accept={supportedImageTypes.join(',')}
+                            accept={mediaInputAccept}
                             className="hidden"
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => localAddMediaHandler(e, modalAddMediaRef.current)}
@@ -98,7 +99,7 @@ function ModalAddMediaComponent(props: ModalAddMediaComponentProps) {
                     <span>or</span>
                     <span className="h-px flex-1 bg-line" />
                 </div>
-                <p>Select existing image from IPFS url</p>
+                <p>Select existing media from IPFS url</p>
                 <div className="mt-2 flex items-center gap-3">
                     <input
                         placeholder="ipfs://cid"

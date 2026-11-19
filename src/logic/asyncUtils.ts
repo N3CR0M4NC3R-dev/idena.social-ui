@@ -12,6 +12,7 @@ import { cachePoster, isPosterMissingOrStale } from "./postersStore";
 import { cachePost } from "./postsStore";
 import { cacheMessage } from "./messagesStore";
 import { getTopicFromChannelId } from "./topics";
+import { ERROR_LOADING_MEDIA_FILE_NAME, getAvMediaType, getMediaKind, sniffMediaFormat, withoutMediaDetails } from "./media";
 
 export const breakingChanges = {
     v3: { timestamp: 1767578641 },
@@ -23,7 +24,8 @@ export const breakingChanges = {
 };
 
 export const supportedImageTypes = ['image/apng', 'image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/svg+xml', 'image/webp'];
-export const supportedVideoTypes = ['audio/mpeg', 'audio/mp4', 'audio/ogg', 'video/mp4', 'video/webm', 'video/ogg'];
+const supportedVideoAndSoundTypes = ['video/mp4', 'video/webm', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/ogg', 'audio/webm'];
+export const mediaInputAccept = [...supportedImageTypes, ...supportedVideoAndSoundTypes, '.mp4', '.webm', '.mp3', '.m4a', '.ogg', '.oga', '.opus'].join(',');
 
 export const identityStateConversion: Record<number, string> = {
     0: 'Undefined',
@@ -47,6 +49,7 @@ export type Post = {
     message: string,
     messageResolved: boolean,
     media: string,
+    mediaType?: string,
     mediaResolved: boolean,
     txHash: string,
     replyToPostId: string,
@@ -54,6 +57,7 @@ export type Post = {
     isLike: boolean,
     image?: File,
     video?: File,
+    audio?: File,
     cid?: string,
     orphaned: boolean,
 };
@@ -68,10 +72,12 @@ export type Message = {
     message: string,
     messageResolved: boolean,
     media: string,
+    mediaType?: string,
     mediaResolved: boolean,
     replyToMessageId: string,
     image?: File,
     video?: File,
+    audio?: File,
     cid?: string,
     tags: string[],
     textPassword: string,
@@ -145,6 +151,63 @@ export const getMaxFee = async (rpcClient: RpcClient, data: GetMaxFeeData) => {
     }
 };
 
+// The indexer (api.idena.io) counts requests per IP in fixed 30 s windows and answers 429 once over its limit, or 503 when its
+// own request queue is full; neither comes with a Retry-After. So all indexer requests share this queue: at most
+// INDEXER_MAX_IN_FLIGHT at a time, and a 429/503 pauses all of them, not just the one retrying, for a growing delay (the last
+// spans a whole window). A request still refused after that fails with IndexerRateLimitedError.
+// 6 matches the browser's per-host connection limit (the indexer only speaks HTTP/1.1): more would only wait in the browser's
+// own queue, where the pause can no longer hold them back.
+const INDEXER_MAX_IN_FLIGHT = 6;
+const INDEXER_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
+
+export class IndexerRateLimitedError extends Error {}
+
+let indexerInFlight = 0;
+const indexerWaiting: (() => void)[] = [];
+let indexerPausedUntil = 0;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchIndexerApi = async (url: string) => {
+    if (indexerInFlight < INDEXER_MAX_IN_FLIGHT) {
+        indexerInFlight++;
+    } else {
+        // A finishing request hands its slot straight to the next waiting one, so the count stays as is.
+        await new Promise<void>((resolve) => indexerWaiting.push(resolve));
+    }
+
+    try {
+        for (let attempt = 0; ; attempt++) {
+            while (indexerPausedUntil > Date.now()) {
+                await sleep(indexerPausedUntil - Date.now());
+            }
+
+            const response = await fetch(url);
+
+            if (response.status === 429 || response.status === 503) {
+                if (attempt === INDEXER_RETRY_DELAYS_MS.length) {
+                    throw new IndexerRateLimitedError(`Response status: ${response.status}`);
+                }
+                indexerPausedUntil = Math.max(indexerPausedUntil, Date.now() + INDEXER_RETRY_DELAYS_MS[attempt]);
+                continue;
+            }
+
+            if (!response.ok) {
+                throw new Error(`Response status: ${response.status}`);
+            }
+
+            return await response.json();
+        }
+    } finally {
+        const next = indexerWaiting.shift();
+        if (next) {
+            next();
+        } else {
+            indexerInFlight--;
+        }
+    }
+};
+
 export const getPastTxsWithIdenaIndexerApi = async (indexerApiUrl: string, contractAddress: string, limit: number, continuationToken?: string) => {
     try {
         const params = new URLSearchParams({
@@ -154,15 +217,7 @@ export const getPastTxsWithIdenaIndexerApi = async (indexerApiUrl: string, contr
 
         const path = `api/Contract/${contractAddress}/BalanceUpdates`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}?${params}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -173,15 +228,7 @@ export const getLastBlockWithIdenaIndexerApi = async (indexerApiUrl: string) => 
     try {
         const path = `/api/Block/Last`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -192,15 +239,7 @@ export const getBlockAtWithIdenaIndexerApi = async (indexerApiUrl: string, block
     try {
         const path = `api/Block/${blockHeight}`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -222,13 +261,7 @@ export const getblockTxsWithIdenaIndexerApi = async (indexerApiUrl: string, bloc
 
             const path = `api/Block/${blockHeight}/Txs`;
 
-            const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
-
-            if (!response.ok) {
-                throw new Error(`Response status: ${response.status}`);
-            }
-
-            const responseBody = await response.json();
+            const responseBody = await fetchIndexerApi(`${indexerApiUrl}/${path}?${params}`);
 
             transactions = responseBody.result ? [ ...transactions, ...responseBody.result ] : transactions;
 
@@ -251,15 +284,7 @@ export const getTxEventsWithIdenaIndexerApi = async (indexerApiUrl: string, txHa
 
         const path = `api/Transaction/${txHash}/Events`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}?${params}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -275,15 +300,7 @@ export const getAddressTxsWithIdenaIndexerApi = async (indexerApiUrl: string, ad
 
         const path = `api/Address/${address}/Txs`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}?${params}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}?${params}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -294,15 +311,7 @@ export const getRawTxWithIdenaIndexerApi = async (indexerApiUrl: string, txHash:
     try {
         const path = `api/Transaction/${txHash}/Raw`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -313,15 +322,7 @@ export const getTxWithIdenaIndexerApi = async (indexerApiUrl: string, txHash: st
     try {
         const path = `api/Transaction/${txHash}`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -332,15 +333,7 @@ export const getAddressWithIndexerApi = async (indexerApiUrl: string, posterAddr
     try {
         const path = `api/Address/${posterAddress}`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -351,15 +344,7 @@ export const getIdentityWithIndexerApi = async (indexerApiUrl: string, posterAdd
     try {
         const path = `api/Identity/${posterAddress}`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -370,15 +355,7 @@ export const getIdentityAgeWithIndexerApi = async (indexerApiUrl: string, poster
     try {
         const path = `api/Identity/${posterAddress}/Age`;
 
-        const response = await fetch(`${indexerApiUrl}/${path}`);
-
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`);
-        }
-
-        const responseBody = await response.json();
-
-        return responseBody;
+        return await fetchIndexerApi(`${indexerApiUrl}/${path}`);
     } catch (error: unknown) {
         console.error(error);
         return { error };
@@ -537,6 +514,7 @@ export const getNewPost = async (
         message,
         messageResolved: false,
         media,
+        mediaType,
         mediaResolved: false,
         orphaned: false,
     } as Post;
@@ -569,23 +547,21 @@ export const getMessage = async (id: string, message: string, rpcClient: RpcClie
     return { id, message };
 };
 
-export type MediaPromise = Promise<{ id: string, image: File | undefined, video: File | undefined, mediaType: string, cid: string }>;
-export const getMedia = async (id: string, media: string, rpcClient: RpcClient, mediaPassword?: string) => {
-    let image: File | undefined;
-    let video: File | undefined;
-    let mediaType = '';
+type MediaFiles = { image: File | undefined, video: File | undefined, audio: File | undefined };
+
+export type MediaPromise = Promise<MediaFiles & { id: string, cid: string }>;
+export const getMedia = async (id: string, media: string, mediaType: string | undefined, rpcClient: RpcClient, mediaPassword?: string): MediaPromise => {
     let cid = '';
+    let bytes: Uint8Array;
 
     if (media.startsWith('ipfs://')) {
         cid = media.split('ipfs://')[1];
         const { result: getCidResult } = await rpcClient('ipfs_get', [cid], true);
 
         if (!getCidResult) {
-            image = await getErrorLoadingMediaFile();
-            return { id, image, video, mediaType, cid };
+            return { id, image: await getErrorLoadingMediaFile(), video: undefined, audio: undefined, cid };
         }
 
-        let bytes;
         if (mediaPassword) {
             // @ts-ignore: Uint8Array.fromBase64 not recognized yet
             const keyData = Uint8Array.fromBase64(mediaPassword);
@@ -593,60 +569,54 @@ export const getMedia = async (id: string, media: string, rpcClient: RpcClient, 
         } else {
             bytes = hexToUint8Array(getCidResult);
         }
-        ({ image, video, mediaType } = await getMediaFromHex(bytes));
     } else {
         // @ts-ignore: Uint8Array.fromBase64 not recognized yet
-        const bytes = Uint8Array.fromBase64(media);
-        ({ image, video, mediaType } = await getMediaFromHex(bytes));
+        bytes = Uint8Array.fromBase64(media);
     }
 
-    return { id, image, video, mediaType, cid };
+    return { id, ...await getMediaFromBytes(bytes, mediaType ?? ''), cid };
 };
 
-const getMediaFromHex = async (bytes: Uint8Array) => {
-    let image: File | undefined;
-    let video: File | undefined;
-    let mediaType = '';
-
+const getMediaFromBytes = async (bytes: Uint8Array, mediaType: string): Promise<MediaFiles> => {
+    const media: MediaFiles = { image: undefined, video: undefined, audio: undefined };
     const bytesCopy = new Uint8Array(bytes);
-    mediaType = await getMediaTypeFromBuffer(bytes) ?? '';
 
-    const blob = new Blob([bytesCopy], { type: mediaType || 'application/octet-stream' });
-    const file = new File([blob], '', { type: blob.type });
-    const objectUrl = URL.createObjectURL(file);
+    const imageType = await getImageTypeFromBuffer(bytes);
 
-    if (supportedImageTypes.includes(mediaType)) {
-        const validImage = await isValidImageUrlCheck(objectUrl);
-        if (validImage) {
-            image = file;
-        } else {
-            image = await getErrorLoadingMediaFile();
-            mediaType = 'image/png';
-        }
-    } else if (supportedVideoTypes.includes(mediaType)) {
-        video = file;
-    } else {
-        image = await getErrorLoadingMediaFile();
-        mediaType = 'image/png';
+    if (imageType && supportedImageTypes.includes(imageType)) {
+        const file = new File([bytesCopy], '', { type: imageType });
+
+        media.image = await isValidImageFileCheck(file) ? file : await getErrorLoadingMediaFile();
+        return media;
     }
 
-    URL.revokeObjectURL(objectUrl);
+    const avType = !imageType && getAvMediaType(sniffMediaFormat(bytes), getMediaKind(mediaType) === 'audio');
 
-    return { image, video, mediaType };
+    if (avType) {
+        media[getMediaKind(avType) === 'video' ? 'video' : 'audio'] = new File([bytesCopy], '', { type: avType });
+        return media;
+    }
+
+    media.image = await getErrorLoadingMediaFile();
+    return media;
 };
 
-const getMediaTypeFromBuffer = async (bytes: Uint8Array) => {
+const getImageTypeFromBuffer = async (bytes: Uint8Array) => {
     const imageTypeResult = await imageType(bytes);
 
     if (imageTypeResult) {
         return imageTypeResult.mime;
-    } else {
-        const svgString = new TextDecoder().decode(bytes);
-        const isSvgResult = isSvg(svgString);
+    }
 
-        if (isSvgResult) {
-            return 'image/svg+xml';
-        }
+    if (getAvMediaType(sniffMediaFormat(bytes), false)) {
+        return;
+    }
+
+    const svgString = new TextDecoder().decode(bytes);
+    const isSvgResult = isSvg(svgString);
+
+    if (isSvgResult) {
+        return 'image/svg+xml';
     }
 
     return;
@@ -681,7 +651,82 @@ const isValidImageUrlCheck = (url: string, wait = 10000): Promise<boolean> => {
     });
 };
 
-const ERROR_LOADING_MEDIA_FILE_NAME = 'error-loading-media.png';
+const isValidImageFileCheck = async (file: File) => {
+    const objectUrl = URL.createObjectURL(file);
+    const validImage = await isValidImageUrlCheck(objectUrl);
+    URL.revokeObjectURL(objectUrl);
+
+    return validImage;
+};
+
+const hasVideoTrackCheck = (file: File, wait = 5000): Promise<boolean | undefined> => {
+    return new Promise((resolve) => {
+        const video = document.createElement('video');
+        const objectUrl = URL.createObjectURL(file);
+
+        const process = (hasVideoTrack: boolean | undefined) => {
+            clearTimeout(timer);
+
+            video.onloadedmetadata = null;
+            video.onerror = null;
+            video.removeAttribute('src');
+            video.load();
+            URL.revokeObjectURL(objectUrl);
+
+            resolve(hasVideoTrack);
+        };
+
+        const timer = setTimeout(() => process(undefined), wait);
+
+        video.onloadedmetadata = () => process(video.videoWidth > 0);
+
+        video.onerror = () => process(undefined);
+
+        video.muted = true;
+        video.preload = 'metadata';
+        video.src = objectUrl;
+    });
+};
+
+export const prepareMediaAttachment = async (file: File, keepBytes: boolean): Promise<{ file: File } | { error: string }> => {
+    const pickedBytes = new Uint8Array(await file.arrayBuffer());
+
+    const imageType = await getImageTypeFromBuffer(pickedBytes);
+    const format = sniffMediaFormat(pickedBytes);
+
+    if (imageType && !supportedImageTypes.includes(imageType)) {
+        return { error: 'Image format not supported. Use JPEG, PNG, GIF, WebP, AVIF or SVG.' };
+    }
+
+    if (!imageType && !getAvMediaType(format, false)) {
+        return { error: 'Media format not supported. Videos can be MP4 or WebM, sounds MP3, M4A, Ogg or WebM.' };
+    }
+
+    const bytes = keepBytes ? pickedBytes : withoutMediaDetails(pickedBytes);
+
+    if (!bytes) {
+        return { error: 'This file cannot be read, so its details (place, camera, date) cannot be removed.' };
+    }
+
+    if (imageType) {
+        const image = new File([bytes], file.name, { type: imageType });
+
+        if (!await isValidImageFileCheck(image)) {
+            return { error: 'This image cannot be read.' };
+        }
+
+        return { file: image };
+    }
+
+    let isAudio = true;
+
+    if (format === 'mp4' || format === 'webm') {
+        const hasVideoTrack = await hasVideoTrackCheck(file);
+        isAudio = hasVideoTrack === undefined ? file.type.startsWith('audio/') : !hasVideoTrack;
+    }
+
+    return { file: new File([bytes], file.name, { type: getAvMediaType(format, isAudio)! }) };
+};
 
 export const getErrorLoadingMediaFile = async () => {
     const response = await fetch(ErrorLoadingMedia);
@@ -690,6 +735,8 @@ export const getErrorLoadingMediaFile = async () => {
 
     return errorLoadingMediaFile;
 };
+
+export const getMediaFile = (item?: Partial<MediaFiles>) => item?.image ?? item?.video ?? item?.audio;
 
 export const hasRetryableMediaError = (item?: Pick<Post | Message, 'media' | 'image'>) =>
     !!item?.media?.startsWith('ipfs://') && item.image?.name === ERROR_LOADING_MEDIA_FILE_NAME;
@@ -772,7 +819,9 @@ export const processTip = async (
     return { newTip };
 };
 
-const postersPromised: Record<string, boolean> = {};
+export const getPlaceholderPoster = (address: string): Poster => ({ address, stake: '0', age: 0, pubkey: '', state: 'Undefined', fetchedAt: 0 });
+
+const postersInFlight: Record<string, Promise<Poster | undefined>> = {};
 export const getPosterPromise = (
     address: string,
     postersRef: React.RefObject<Record<string, Poster>>,
@@ -780,18 +829,22 @@ export const getPosterPromise = (
     rpcClient?: RpcClient,
     indexerApiUrlRef?: React.RefObject<string>,
 ) => {
+    const inFlight = postersInFlight[address];
+    if (inFlight) return inFlight;
+
     const poster = postersRef.current[address];
     // Both fetchers read the profile with the RPC client, which App creates after its first render: fetch on a later one.
-    if (rpcClient && isPosterMissingOrStale(poster) && !postersPromised[address]) {
-        postersPromised[address] = true;
-        const posterPromise = (useIndexer ? getPosterWithIndexerApi(indexerApiUrlRef!.current, address, rpcClient!) : getPosterWithRpc(rpcClient!, address)) as Promise<Poster>;
-        return posterPromise
+    if (rpcClient && isPosterMissingOrStale(poster)) {
+        const posterPromise = ((useIndexer ? getPosterWithIndexerApi(indexerApiUrlRef!.current, address, rpcClient!) : getPosterWithRpc(rpcClient!, address)) as Promise<Poster | undefined>)
             .then((newPoster) => {
+                if (!newPoster) return postersRef.current[address];
                 postersRef.current = { ...postersRef.current, [address]: newPoster };
                 cachePoster(newPoster);
                 return newPoster;
             })
-            .finally(() => postersPromised[address] = false);
+            .finally(() => { delete postersInFlight[address]; });
+        postersInFlight[address] = posterPromise;
+        return posterPromise;
     }
     return poster;
 };
@@ -820,6 +873,12 @@ export const getPosterWithIndexerApi = async (indexerApiUrl: string, posterAddre
     const getIdentityAgePromise = getIdentityAgeWithIndexerApi(indexerApiUrl, posterAddress); // result: 0
 
     const resolvedPromises = await Promise.all([getAddressPromise, getIdentityPromise, getIdentityAgePromise]);
+
+    // Errors below fall back to "Not validated" / age 0, which would get cached: when rate limited, skip the poster so it is
+    // fetched again on its next sighting.
+    if (resolvedPromises.some(({ error }) => error instanceof IndexerRateLimitedError)) {
+        return;
+    }
 
     if (resolvedPromises[0].error) {
         return;
@@ -1101,6 +1160,7 @@ export const processMessage = async (
         message: sanitizedInputText,
         messageResolved: false,
         media,
+        mediaType,
         mediaResolved: false,
         sender,
         participants,

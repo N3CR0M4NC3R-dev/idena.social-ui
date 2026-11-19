@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { sha3_256 } from 'js-sha3';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, supportedImageTypes, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi, hasRetryableMediaError } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, prepareMediaAttachment, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi, hasRetryableMediaError, IndexerRateLimitedError } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getPostActivityKey, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import IdenaAdPng from './assets/idena_ad.png';
 import IdenaAdThumbPng from './assets/idena_ad_thumb.png';
@@ -23,6 +23,7 @@ import ModalEditProfileComponent from './components/ModalEditProfileComponent';
 import { sendProfileCall, type PreparedProfileCall } from './logic/profileEdit';
 import ScrollToTopButtonComponent from './components/ScrollToTopButtonComponent';
 import { CloseIcon } from './components/icons';
+import { getMediaNoun } from './logic/media';
 import { loadPostsCache } from './logic/postsStore';
 import { loadTipsCache } from './logic/tipsStore';
 import { loadMessagesCache } from './logic/messagesStore';
@@ -66,8 +67,14 @@ const ADS_INTERVAL = 10000;
 const SCAN_PAST_POSTS_TTL = 1 * 60;
 const INDEXER_API_ITEMS_LIMIT = 20;
 const SUBMITTING_POST_INTERVAL = 2000;
-const MAX_POST_MEDIA_BYTES = 1024 * 1024;
+const MAX_POST_MEDIA_BYTES = 900_000;
 const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
+const MAX_PICKED_MEDIA_BYTES = 10_000_000;
+
+const toIndexerApiError = (error: unknown) => error instanceof IndexerRateLimitedError ? 'indexer api rate limited' : 'indexer api unavailable';
+
+const getMediaTooLargeMessage = (file: File) =>
+    `900 KB is the maximum size. This ${getMediaNoun(file.type)} is ${Math.ceil(file.size / 1000)} KB.`;
 
 export const defaultSettings = {
     nodeUrl: defaultNodeUrl,
@@ -711,6 +718,9 @@ function App() {
         };
 
         return async function postFinder() {
+            // The backward indexer scan advances its page cursor before fetching the page's details: kept to rewind it if they fail.
+            const pageCursor = isRecurseBackwardWithIndexerApi ? { contract: pastContractAddressRef.current, continuationToken: continuationTokenRef.current } : undefined;
+
             try {
                 
                 let transactions: PostFinderTransaction[] = [];
@@ -766,7 +776,7 @@ function App() {
                     const { result: getBlockByHeightResult, error: getBlockByHeightError } = await getBlockAtWithIdenaIndexerApi(indexerApiUrl, pendingBlock!);
 
                     if (getBlockByHeightError && getBlockByHeightError?.message !== 'no data found') {
-                        throw 'indexer api unavailable';
+                        throw toIndexerApiError(getBlockByHeightError);
                     }
 
                     if (getBlockByHeightError?.message === 'no data found') {
@@ -781,7 +791,7 @@ function App() {
                     const { result: getblockTxsResult, error: getblockTxsError } = await getblockTxsWithIdenaIndexerApi(indexerApiUrl, pendingBlock!);
                     
                     if (getblockTxsError) {
-                        throw 'indexer api unavailable';
+                        throw toIndexerApiError(getblockTxsError);
                     }
 
                     transactions = getblockTxsResult
@@ -824,7 +834,7 @@ function App() {
                         const { result, continuationToken, error } = await getPastTxsWithIdenaIndexerApi(indexerApiUrl, pastContractAddressRef!.current, INDEXER_API_ITEMS_LIMIT, continuationTokenRef!.current);
                         
                         if (error) {
-                            throw 'indexer api unavailable';
+                            throw toIndexerApiError(error);
                         }
 
                         const filteredBalanceUpdates = result ? filterIndexerApiBalanceUpdates(result, allMethods) : [];
@@ -929,7 +939,7 @@ function App() {
                         transactionsWithDetailsPromises.push(promisedItem);
                     } else {
                         const promisedItem = getTxEventsWithIdenaIndexerApi(indexerApiUrl, transaction.txHash, 10).then(receipt => {
-                            const conditional = (receipt.error && (() => { throw 'indexer api unavailable'; })()) || receipt.result;
+                            const conditional = (receipt.error && (() => { throw toIndexerApiError(receipt.error); })()) || receipt.result;
                             if (!conditional) {
                                 return;
                             }
@@ -1067,7 +1077,7 @@ function App() {
                     transactionsAccepted = [ ...transactionsAccepted, transaction ];
 
                     const messagePromise = newPost!.message && !newPost!.messageResolved && getMessage(newPost!.postId, newPost!.message, rpcClientRef.current!);
-                    const mediaPromise = newPost!.media && !newPost!.mediaResolved && getMedia(newPost!.postId, newPost!.media, rpcClientRef.current!);
+                    const mediaPromise = newPost!.media && !newPost!.mediaResolved && getMedia(newPost!.postId, newPost!.media, newPost!.mediaType, rpcClientRef.current!);
 
                     const posterPromise = getPosterPromise(
                         newPost!.poster,
@@ -1265,7 +1275,7 @@ function App() {
                     if (!getTxError && getTxResult) {
                         lastBlockHeight = getTxResult.blockHeight;
                     } else {
-                        throw 'indexer api unavailable';
+                        throw toIndexerApiError(getTxError);
                     }
 
                     partialPastBlockCapturedRef.current = { lastBlockHeight, lastValidTxHash: lastValidTransaction.txHash };
@@ -1307,6 +1317,11 @@ function App() {
                 }
             } catch(error) {
                 console.error(error);
+                if (pageCursor && (error === 'indexer api rate limited' || error === 'indexer api unavailable')) {
+                    // Refetch the same page next time instead of skipping it (already captured items are recognised).
+                    pastContractAddressRef.current = pageCursor.contract;
+                    continuationTokenRef.current = pageCursor.continuationToken;
+                }
                 if (error === 'no block') {
                     if (isRecurseForward) {
                         (recurse as RecurseForward)();
@@ -1326,6 +1341,14 @@ function App() {
                 } else if (error === 'rpc unavailable') {
                     setScanningPastBlocks(false);
                     setNodeAvailable(false);
+                } else if (error === 'indexer api rate limited') {
+                    // Still refused after fetchIndexerApi's retries: carry on, the next step waits out the indexer pause. The
+                    // backward scan has used up its time by then, so its TTL check ends it the normal way.
+                    if (isRecurseForward) {
+                        (recurse as RecurseForward)();
+                    } else {
+                        (recurse as RecurseBackward)(Math.floor(Date.now() / 1000));
+                    }
                 } else if (error === 'indexer api unavailable') {
                     setScanningPastBlocks(false);
                     setIdenaIndexerApiUrlInvalid(true);
@@ -1432,7 +1455,7 @@ function App() {
                     }
 
                     const messagePromise = newMessage!.message && !newMessage!.messageResolved && getMessage(newMessage!.messageId, newMessage!.message, rpcClientRef.current!, newMessage!.textPassword);
-                    const mediaPromise = newMessage!.media && !newMessage!.mediaResolved && getMedia(newMessage!.messageId, newMessage!.media, rpcClientRef.current!, newMessage!.mediaPassword);
+                    const mediaPromise = newMessage!.media && !newMessage!.mediaResolved && getMedia(newMessage!.messageId, newMessage!.media, newMessage!.mediaType, rpcClientRef.current!, newMessage!.mediaPassword);
 
                     const allParticipants = [ newMessage!.sender, ...newMessage!.participants ];
 
@@ -1585,19 +1608,28 @@ function App() {
         setInputPostDisabled((makePostsWith === 'rpc' && viewOnlyNode) || postersAddressInvalid);
     }, [makePostsWith, viewOnlyNode, postersAddressInvalid]);
 
-    const setPostMediaAttachmentHandler = async (attachmentId: string, file: File, ipfsUrl?: string) => {
-        if (!supportedImageTypes.includes(file.type)) {
-            alert('Media format not supported.');
+    const setPostMediaAttachmentHandler = async (attachmentId: string, pickedFile: File, ipfsUrl?: string) => {
+        if (!ipfsUrl && pickedFile.size > MAX_PICKED_MEDIA_BYTES) {
+            alert(getMediaTooLargeMessage(pickedFile));
             return;
         }
 
+        const prepared = await prepareMediaAttachment(pickedFile, !!ipfsUrl);
+
+        if ('error' in prepared) {
+            alert(prepared.error);
+            return;
+        }
+
+        const { file } = prepared;
+
         if (makePostsWith === 'rpc' && file.size > MAX_POST_MEDIA_BYTES) {
-            alert('1MB is the maximum size. This image is too large.');
+            alert(getMediaTooLargeMessage(file));
             return;
         }
 
         if (makePostsWith === 'idena-app' && !ipfsUrl && file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
-            alert('5KB is the maximum size when using the Idena App. Use RPC for images of up to 1MB.');
+            alert('5KB is the maximum size when using the Idena App. Use RPC for media of up to 900 KB.');
             return;
         }
 
@@ -1692,7 +1724,7 @@ function App() {
         if (makePostsWith === 'rpc' && postMediaAttachment && !postMediaAttachment.ipfsUrl) {
             if (storeMediaIpfs) {
                 if (postMediaAttachment.file.size > MAX_POST_MEDIA_BYTES) {
-                    alert('1MB is the maximum size. This image is too large.');
+                    alert(getMediaTooLargeMessage(postMediaAttachment.file));
                     return;
                 }
 
@@ -1708,7 +1740,7 @@ function App() {
                 mediaType = [postMediaAttachment.file.type];
             } else {
                 if (postMediaAttachment.file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
-                    alert('5KB is the maximum size when storing on the blockchain. Store image on IPFS instead.');
+                    alert('5KB is the maximum size when storing on the blockchain. Store media on IPFS instead.');
                     return;
                 }
             }
@@ -1865,7 +1897,7 @@ function App() {
         if (makePostsWith === 'rpc' && postMediaAttachment && !postMediaAttachment.ipfsUrl) {
             if (storeMediaIpfs) {
                 if (postMediaAttachment.file.size > MAX_POST_MEDIA_BYTES) {
-                    alert('1MB is the maximum size. This image is too large.');
+                    alert(getMediaTooLargeMessage(postMediaAttachment.file));
                     return;
                 }
 
@@ -1888,7 +1920,7 @@ function App() {
                 mediaType = [postMediaAttachment.file.type];
             } else {
                 if (postMediaAttachment.file.size > MAX_POST_MEDIA_BYTES_WEBAPP) {
-                    alert('5KB is the maximum size when storing on the blockchain. Store image on IPFS instead.');
+                    alert('5KB is the maximum size when storing on the blockchain. Store media on IPFS instead.');
                     return;
                 }
             }
@@ -2091,7 +2123,7 @@ function App() {
             return false;
         }
 
-        await resolveNewMediaForPosts([getMedia(postId, post.media, rpcClientRef.current)], postsRef);
+        await resolveNewMediaForPosts([getMedia(postId, post.media, post.mediaType, rpcClientRef.current)], postsRef);
         forceUpdate();
 
         return !hasRetryableMediaError(postsRef.current[postId]);
@@ -2107,7 +2139,7 @@ function App() {
         const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
         const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
 
-        await resolveNewMediaForMessages([getMedia(messageId, message.media, rpcClientRef.current, message.mediaPassword)], postersAddress, encryptedPrivateKeyActual, passwordyActual, messagesRef);
+        await resolveNewMediaForMessages([getMedia(messageId, message.media, message.mediaType, rpcClientRef.current, message.mediaPassword)], postersAddress, encryptedPrivateKeyActual, passwordyActual, messagesRef);
         forceUpdate();
 
         return !hasRetryableMediaError(messagesRef.current[messageId]);

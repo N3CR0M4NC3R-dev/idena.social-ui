@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { extractSenderInfoFromRawTx } from "../logic/utils";
-import { type Poster } from "../logic/asyncUtils";
+import { getPlaceholderPoster, type Poster } from "../logic/asyncUtils";
 
 type ModalSubmitPubkeyComponentProps = {
     modalSubmitPubkeyRef: React.RefObject<{ address: string; }>,
@@ -32,8 +32,9 @@ function ModalSubmitPubkeyComponent(props: ModalSubmitPubkeyComponentProps) {
             return;
         }
 
-        const sender = postersRef.current[modalSubmitPubkeyRef.current.address];
-        postersRef.current = { ...postersRef.current, [modalSubmitPubkeyRef.current.address]: { ...sender, pubkey: senderInfo.pubkey } };
+        const { address } = modalSubmitPubkeyRef.current;
+        const sender = postersRef.current[address] ?? getPlaceholderPoster(address);
+        postersRef.current = { ...postersRef.current, [address]: { ...sender, pubkey: senderInfo.pubkey } };
 
         setRawTransactionError('');
         closeModal();

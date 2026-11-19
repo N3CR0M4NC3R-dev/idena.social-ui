@@ -1,5 +1,6 @@
 import { useEffect, useReducer, type FocusEventHandler } from 'react';
-import { getChildPostIds, breakingChanges, hasRetryableMediaError, type Post } from '../logic/asyncUtils';
+import { getChildPostIds, breakingChanges, getMediaFile, hasRetryableMediaError, type Post } from '../logic/asyncUtils';
+import MediaComponent from './MediaComponent';
 import MediaRetryButtonComponent from './MediaRetryButtonComponent';
 import { getDisplayAddress, getDisplayAddressShort, getDisplayDateTime, getDisplayFullDate, getDisplayTimeAgo, getDisplayTipAmount, getIdentityStatus, getMessageLines, getProfilePic, getShortDisplayTipAmount, likeEmoji } from '../logic/utils';
 import { discussPrefix, initDomSettings, initPostOutletDomSettings, initProfileRepliesDomSettings, SET_NEW_POSTS_ADDED_DELAY, type MouseEventLocal, type PostDomSettings } from '../App.exports';
@@ -331,8 +332,15 @@ function PostComponent(props: PostComponentProps) {
         }
     };
 
-    const getMediaWrapperClassName = (mediaPost: Post) => hasRetryableMediaError(mediaPost) ? 'flex flex-wrap items-center gap-x-3 gap-y-2' : '';
-    const renderMediaRetry = (mediaPost: Post) => hasRetryableMediaError(mediaPost) && <MediaRetryButtonComponent onRetry={() => retryPostMediaHandler(mediaPost.postId)} />;
+    const renderMedia = (mediaPost: Post, wrapperClassName: string, mediaClassName: string) => {
+        const mediaFile = getMediaFile(mediaPost);
+        const retryable = hasRetryableMediaError(mediaPost);
+
+        return mediaFile && <div className={`${wrapperClassName} ${retryable ? 'flex flex-wrap items-center gap-x-3 gap-y-2' : ''}`}>
+            <MediaComponent className={mediaClassName} file={mediaFile} onExpandImage={(e) => handleExpandImageModal(e, mediaFile, mediaPost.cid)} />
+            {retryable && <MediaRetryButtonComponent onRetry={() => retryPostMediaHandler(mediaPost.postId)} />}
+        </div>;
+    };
 
     const topic = getTopicFromChannelId(post.channelId);
     const showTopic = !!topic && location.pathname !== `/topics/${topic}`;
@@ -358,10 +366,7 @@ function PostComponent(props: PostComponentProps) {
                         </>}
                     </div>
                     <p className={`min-w-0 basis-full text-ink [word-break:break-word] ${isPostOutlet ? 'mt-3 text-[17px]/6' : 'text-[15px]/5'}`}>{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-link hover:underline" onClick={(e) => toggleViewMoreHandler(post, e)}>Show more</a></span>}</p>
-                    {post.image ? <div className={`mt-3 min-w-0 basis-full ${getMediaWrapperClassName(post)}`}>
-                        <ObjectUrlImageComponent className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-2xl border border-line hover:cursor-pointer" file={post.image} onClick={(e) => handleExpandImageModal(e, post.image!, post.cid)} />
-                        {renderMediaRetry(post)}
-                    </div> : null}
+                    {renderMedia(post, 'mt-3 min-w-0 basis-full', 'max-h-120 max-w-full sm:max-w-100 size-auto rounded-2xl border border-line')}
                     {isPostOutlet && <div className="basis-full py-4 text-[15px] text-ink-muted">
                         <a className="hover:underline" href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{`${displayTime} · ${getDisplayFullDate(post.timestamp)}`}</a>
                     </div>}
@@ -397,7 +402,7 @@ function PostComponent(props: PostComponentProps) {
                             onClick={(e) => e.stopPropagation()}
                         />
                         {postMediaAttachment ? <div className="mt-3">
-                            <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
+                            <MediaComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
                         </div> : null}
                         <div className="pt-2">
                             <ComposerToolbarComponent
@@ -467,10 +472,7 @@ function PostComponent(props: PostComponentProps) {
                                             <a className="whitespace-nowrap text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(replyPost.timestamp)}</a>
                                         </div>
                                         <p className="text-[15px]/5 text-ink [word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-link hover:underline" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>Show more</a></span>}</p>
-                                        {replyPost.image && <div className={`mt-3 ${getMediaWrapperClassName(replyPost)}`}>
-                                            <ObjectUrlImageComponent className="max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line hover:cursor-pointer" file={replyPost.image} onClick={(e) => handleExpandImageModal(e, replyPost.image!, replyPost.cid)} />
-                                            {renderMediaRetry(replyPost)}
-                                        </div>}
+                                        {renderMedia(replyPost, 'mt-3', 'max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line')}
                                         <div className="mt-1 -ml-2 flex max-w-[425px] text-[13px] text-ink-muted">
                                             <div className={`flex flex-1 items-center ${discussionPostComments.length || showDiscussion ? 'text-comment' : ''}`}>
                                                 <button type="button" aria-label="Comment" title="Comment" className={`${actionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={() => toggleReplyDiscussionHandler(replyPost)}>
@@ -533,10 +535,7 @@ function PostComponent(props: PostComponentProps) {
                                                                     <div className="max-h-[9999px] text-[14px]/5 text-ink">
                                                                         <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
                                                                     </div>
-                                                                    {discussionPost.image && <div className={`mt-2 ${getMediaWrapperClassName(discussionPost)}`}>
-                                                                        <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line hover:cursor-pointer" file={discussionPost.image} onClick={(e) => handleExpandImageModal(e, discussionPost.image!, discussionPost.cid)} />
-                                                                        {renderMediaRetry(discussionPost)}
-                                                                    </div>}
+                                                                    {renderMedia(discussionPost, 'mt-2', 'max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line')}
                                                                     <div className="-ml-1.5 flex gap-4 text-[13px] text-ink-muted">
                                                                         <button type="button" aria-label="Reply" title="Reply" className={`${commentActionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)}>
                                                                             <ReplyIcon className="size-4" />
@@ -576,7 +575,7 @@ function PostComponent(props: PostComponentProps) {
                                                         disabled={inputPostDisabled || submitting}
                                                     />
                                                     {postMediaAttachment && <div className="my-2">
-                                                        <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
+                                                        <MediaComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
                                                     </div>}
                                                     <div className="pt-1">
                                                         <ComposerToolbarComponent

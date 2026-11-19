@@ -4,10 +4,12 @@ import PostComponent from './components/PostComponent';
 import { type MouseEventLocal } from './App.exports';
 import { useReducer } from 'react';
 import SortPostsByComponent from './components/SortPostsByComponent';
+import MediaComponent from './components/MediaComponent';
 import ObjectUrlImageComponent from './components/ObjectUrlImageComponent';
 import PageHeaderComponent from './components/PageHeaderComponent';
 import ComposerToolbarComponent from './components/ComposerToolbarComponent';
 import { CloseIcon } from './components/icons';
+import { getMediaKind } from './logic/media';
 import { getProfilePic } from './logic/utils';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
 import { getDisplayTopic, getTopicChannelId, getTopicFromChannelId, isValidTopicName } from './logic/topics';
@@ -108,10 +110,10 @@ function LatestPosts() {
                     disabled={inputPostDisabled || submitting}
                 />
                 {mainPostMediaAttachment ? <div className="relative my-2 w-fit max-w-full">
-                    <ObjectUrlImageComponent className="max-h-120 max-w-full size-auto rounded-2xl border border-line" file={mainPostMediaAttachment.file} />
-                    <button type="button" aria-label="Remove image" title="Remove image" className="absolute top-1 left-1 inline-flex size-8 items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm cursor-pointer hover:bg-black/60" onClick={(e) => removeMediaHandler(e, composerLocation)}>
+                    <MediaComponent className="max-h-120 max-w-full size-auto rounded-2xl border border-line" file={mainPostMediaAttachment.file} />
+                    {getMediaKind(mainPostMediaAttachment.file.type) !== 'audio' && <button type="button" aria-label="Remove media" title="Remove media" className="absolute top-1 left-1 inline-flex size-8 items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm cursor-pointer hover:bg-black/60" onClick={(e) => removeMediaHandler(e, composerLocation)}>
                         <CloseIcon className="size-[18px]" />
-                    </button>
+                    </button>}
                 </div> : null}
                 <div className="border-t border-line pt-2 mt-1">
                     <ComposerToolbarComponent

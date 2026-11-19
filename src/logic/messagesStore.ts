@@ -23,7 +23,12 @@ export const loadMessagesCache = async (owner: string, encryptedPrivateKey: stri
         for (let index = 0; index < records.length; index++) {
             const record = records[index];
             const stringifiedMessage = await decryptTextWithPrivateKey(record.encryptedMessage, encryptedPrivateKey, password);
-            storedMessages[record.txHash] = JSON.parse(stringifiedMessage);
+            const message = JSON.parse(stringifiedMessage);
+            // A media file does not survive JSON (it comes back as {}), so the media is fetched again.
+            delete message.image;
+            delete message.video;
+            delete message.audio;
+            storedMessages[record.txHash] = { ...message, mediaResolved: !message.media };
         }
 
     } catch (error) {

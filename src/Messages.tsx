@@ -4,10 +4,11 @@ import { useAppContext } from "./AppContext";
 import { getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, getPosterPromise } from "./logic/asyncUtils";
 import { zeroAddress, type MouseEventLocal } from "./App.exports";
 import ConversationComponent from "./components/ConversationComponent";
-import ObjectUrlImageComponent from "./components/ObjectUrlImageComponent";
+import MediaComponent from "./components/MediaComponent";
 import PageHeaderComponent from "./components/PageHeaderComponent";
 import ComposerToolbarComponent from "./components/ComposerToolbarComponent";
 import { CloseIcon, UserPlusIcon } from "./components/icons";
+import { getMediaKind } from "./logic/media";
 import { useInfiniteScroll } from "./logic/useInfiniteScroll";
 
 function Messages() {
@@ -170,11 +171,11 @@ function Messages() {
                 placeholder="Start a new message"
                 disabled={inputPostDisabled || submitting || messageSettingsInvalid}
             />
-            {mainPostMediaAttachment && <div className="relative w-fit">
-                <ObjectUrlImageComponent className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-2xl border border-line" file={mainPostMediaAttachment.file} />
-                <button type="button" aria-label="Remove image" title="Remove image" className="absolute top-1 left-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm hover:bg-black/60" onClick={(e) => removeMediaHandler(e, 'main')}>
+            {mainPostMediaAttachment && <div className="relative w-fit max-w-full">
+                <MediaComponent className="max-h-120 max-w-full sm:max-w-100 size-auto rounded-2xl border border-line" file={mainPostMediaAttachment.file} />
+                {getMediaKind(mainPostMediaAttachment.file.type) !== 'audio' && <button type="button" aria-label="Remove media" title="Remove media" className="absolute top-1 left-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm hover:bg-black/60" onClick={(e) => removeMediaHandler(e, 'main')}>
                     <CloseIcon className="size-[18px]" />
-                </button>
+                </button>}
             </div>}
             <ComposerToolbarComponent
                 hasAttachment={!!mainPostMediaAttachment}

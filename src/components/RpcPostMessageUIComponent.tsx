@@ -48,7 +48,7 @@ function RpcPostMessageUIComponent(props: RpcPostMessageUIComponentProps) {
                 </div>
             </div>
             <div className="flex items-center gap-3 py-3">
-                <label htmlFor="mediaIpfs" className="min-w-0 flex-1 cursor-pointer">Store image on IPFS</label>
+                <label htmlFor="mediaIpfs" className="min-w-0 flex-1 cursor-pointer">Store media on IPFS</label>
                 <div className="group grid size-5 flex-none grid-cols-1">
                     <input
                         id="mediaIpfs"

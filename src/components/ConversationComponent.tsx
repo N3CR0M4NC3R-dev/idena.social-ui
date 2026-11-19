@@ -1,9 +1,11 @@
 import { getDisplayAddressShort, getDisplayDateTime, getDisplayTimeAgo, getIdentityStatus, getMessageLines, getProfilePic, likeEmoji } from "../logic/utils";
 import { initDomSettings, messagePrefix, SET_NEW_POSTS_ADDED_DELAY, type MouseEventLocal, type PostDomSettings } from "../App.exports";
 import { useAppContext } from "../AppContext";
-import { getChildPostIds, hasRetryableMediaError } from "../logic/asyncUtils";
+import { getChildPostIds, getMediaFile, getPlaceholderPoster, hasRetryableMediaError } from "../logic/asyncUtils";
+import { getMediaKind } from "../logic/media";
 import { useLocation, useNavigate } from "react-router";
 import { useReducer } from "react";
+import MediaComponent from "./MediaComponent";
 import MediaRetryButtonComponent from "./MediaRetryButtonComponent";
 import OneOnOneConversationHeaderComponent from "./OneOnOneConversationHeaderComponent";
 import GroupConversationHeaderComponent from "./GroupConversationHeaderComponent";
@@ -116,7 +118,7 @@ function ConversationComponent(props: ConversationComponentProps) {
             return;
         }
 
-        if (recipients.some(recipient => !postersRef.current[recipient].pubkey)) {
+        if (recipients.some(recipient => !postersRef.current[recipient]?.pubkey)) {
             alert('Recipient pubkey missing');
             return;
         }
@@ -169,7 +171,7 @@ function ConversationComponent(props: ConversationComponentProps) {
     if (!participantsExcludingSelf.length) {
         participantsExcludingSelf.push(postersAddress.toLowerCase());
     }
-    const conversationPartners = participantsExcludingSelf.map(participant => postersRef.current[participant]);
+    const conversationPartners = participantsExcludingSelf.map(participant => postersRef.current[participant] ?? getPlaceholderPoster(participant));
 
     const postDomSettingsItem = getPostDomSettings(conversationKey);
     const discussReplyToPostId = postDomSettingsItem.discussReplyToPostId;
@@ -218,7 +220,8 @@ function ConversationComponent(props: ConversationComponentProps) {
                         cacheMessageReadStatus(message.messageId, true, postersAddress);
                     }
 
-                    const messageImage = message.image && <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto cursor-pointer rounded-2xl border border-line" file={message.image} onClick={(e) => handleExpandImageModal(e, message.image!, message.cid)} />;
+                    const messageMediaFile = getMediaFile(message);
+                    const messageMedia = messageMediaFile && <MediaComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line" file={messageMediaFile} onExpandImage={(e) => handleExpandImageModal(e, messageMediaFile, message.cid)} />;
 
                     return (
                         <li key={message.messageId} className={`flex items-end gap-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
@@ -237,10 +240,10 @@ function ConversationComponent(props: ConversationComponentProps) {
                                     }
                                 </div>}
                                 <p className={`max-w-full rounded-3xl px-4 py-2.5 text-[15px]/5 [word-break:break-word] empty:hidden ${isOwnMessage ? 'rounded-br-md bg-bubble-own text-btn-ink' : 'rounded-bl-md bg-bubble text-ink'}`}>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
-                                {messageImage && (hasRetryableMediaError(message) ? <div className={`flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
-                                    {messageImage}
+                                {messageMedia && (hasRetryableMediaError(message) ? <div className={`flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                                    {messageMedia}
                                     <MediaRetryButtonComponent onRetry={() => retryMessageMediaHandler(message.messageId)} />
-                                </div> : messageImage)}
+                                </div> : messageMedia)}
                                 <div className={`flex items-center gap-1 text-[13px] text-ink-muted ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                                     <a className="whitespace-nowrap hover:underline" href={`https://scan.idena.io/transaction/${message.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(message.timestamp)}</a>
                                     <button type="button" aria-label="Reply" title="Reply" className="inline-flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-comment/20 hover:text-comment" onClick={() => setDiscussReplyToPostIdHandler(conversationKey, message.messageId)}>
@@ -272,11 +275,11 @@ function ConversationComponent(props: ConversationComponentProps) {
                     placeholder="Start a new message"
                     disabled={inputPostDisabled || submitting || messageSettingsInvalid}
                 />
-                {postMediaAttachment && <div className="relative w-fit">
-                    <ObjectUrlImageComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
-                    <button type="button" aria-label="Remove image" title="Remove image" className="absolute top-1 left-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm hover:bg-black/60" onClick={(e) => removeMediaHandler(e, conversationKey)}>
+                {postMediaAttachment && <div className="relative w-fit max-w-full">
+                    <MediaComponent className="max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line" file={postMediaAttachment.file} />
+                    {getMediaKind(postMediaAttachment.file.type) !== 'audio' && <button type="button" aria-label="Remove media" title="Remove media" className="absolute top-1 left-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/75 text-white backdrop-blur-sm hover:bg-black/60" onClick={(e) => removeMediaHandler(e, conversationKey)}>
                         <CloseIcon className="size-[18px]" />
-                    </button>
+                    </button>}
                 </div>}
                 <ComposerToolbarComponent
                     compact
