@@ -1,6 +1,19 @@
 import { getDb, IGNORES_STORE } from './db';
 
-export type IgnoreItem = { txHash: string, method: string, reason: string };
+// owner: for a message that couldn't be read, the address whose key tried: another address may read it.
+export type IgnoreItem = { txHash: string, method: string, reason: string, owner?: string };
+
+// The ignore reason for messages from before v12, which no one can read.
+export const MESSAGE_BEFORE_V12 = 'before-v12';
+
+// Whether the scanners skip a transaction. Posts and tips are skipped for everyone, and messages from before v12;
+// other messages only for the address that couldn't read them, since another address's key may. Message ignores
+// saved without an owner predate owners: they're checked once more.
+export const isIgnored = (ignore: IgnoreItem | undefined, address: string, messageMethod: string) => {
+    if (!ignore) return false;
+    if (ignore.method !== messageMethod || ignore.reason === MESSAGE_BEFORE_V12) return true;
+    return ignore.owner === address.toLowerCase();
+};
 
 export const loadIgnoresCache = async () => {
     const storedIgnores = {} as Record<string, IgnoreItem>;

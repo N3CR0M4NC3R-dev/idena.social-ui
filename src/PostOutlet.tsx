@@ -3,6 +3,7 @@ import { useAppContext } from "./AppContext";
 import PostComponent from "./components/PostComponent";
 import PageHeaderComponent from "./components/PageHeaderComponent";
 import LdsSpinnerComponent from "./components/LdsSpinnerComponent";
+import { createPostDisplayResolverFromRefs } from "./logic/postDisplay";
 
 function PostOutlet() {
     const { postId } = useParams();
@@ -11,6 +12,8 @@ function PostOutlet() {
 
     const {
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         noMorePastBlocks,
     } = useAppContext();
 
@@ -22,6 +25,7 @@ function PostOutlet() {
     const spotlightDiscussionPostId = location.state?.spotlightDiscussionPostId;
 
     const post = postsRef.current[postId!];
+    const removed = !!post && createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef)(postId!) === 'removed';
 
     const postUnavailable = noMorePastBlocks ? <p className="px-8 py-6 text-center text-[15px] text-ink-muted">This post couldn't be found.</p> : <>
             <LdsSpinnerComponent />
@@ -30,7 +34,7 @@ function PostOutlet() {
 
     return (<>
         <PageHeaderComponent title="Post" onBack={handleGoBack} />
-        {post ? <PostComponent
+        {removed ? <p className="px-8 py-6 text-center text-[15px] text-ink-muted">This post isn't available.</p> : post ? <PostComponent
             uniqueKey={postId!}
             postId={postId!}
             isPostOutlet={true}

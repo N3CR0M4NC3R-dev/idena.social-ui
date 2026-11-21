@@ -4,6 +4,7 @@ import { defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
+import { createPostDisplayResolverFromRefs, isSpotlightShown } from './logic/postDisplay';
 
 function ProfileMedia() {
 
@@ -11,13 +12,17 @@ function ProfileMedia() {
 
     const {
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         profileActivityRef,
     } = useAppContext();
+
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
 
     const { key: locationKey } = useLocation();
 
     const { visibleItems: visibleMediaPostIds, hasMore, sentinelRef } = useInfiniteScroll(
-        (profileActivityRef.current[address] ?? defaultProfileActivity).media,
+        (profileActivityRef.current[address] ?? defaultProfileActivity).media.filter((mediaPostId) => resolveDisplay(mediaPostId) === 'visible' && isSpotlightShown(resolveDisplay, postsRef.current[mediaPostId], postsRef)),
         locationKey,
     );
 

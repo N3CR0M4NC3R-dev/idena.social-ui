@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 
 const DB_NAME = 'idena-social';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 export const POSTS_STORE = 'posts';
 export const POSTERS_STORE = 'posters';
 export const TIPS_STORE = 'tips';
@@ -10,6 +10,8 @@ export const IGNORES_STORE = 'ignores';
 export const BLOCKS_CAPTURED_RANGE_STORE = 'blocks_captured_range';
 export const POST_ACTIVITY_STORE = 'post_activity';
 export const MESSAGE_READ_STATUS_STORE = 'message_read_status';
+export const MODERATION_EVENTS_STORE = 'moderation_events';
+export const MODERATION_META_STORE = 'moderation_meta';
 
 let dbPromise: Promise<IDBPDatabase | undefined> | undefined;
 
@@ -43,6 +45,13 @@ export const getDb = () => {
                 if (!db.objectStoreNames.contains(MESSAGE_READ_STATUS_STORE)) {
                     const messageReadStatusStore = db.createObjectStore(MESSAGE_READ_STATUS_STORE, { keyPath: ['messageId', 'owner'] });
                     messageReadStatusStore.createIndex('owner_idx', 'owner');
+                }
+                // v4: the moderation contract's decoded events, and where the replay of them got to.
+                if (!db.objectStoreNames.contains(MODERATION_EVENTS_STORE)) {
+                    db.createObjectStore(MODERATION_EVENTS_STORE, { keyPath: 'key' });
+                }
+                if (!db.objectStoreNames.contains(MODERATION_META_STORE)) {
+                    db.createObjectStore(MODERATION_META_STORE, { keyPath: 'key' });
                 }
                 // v3: topic posts (channelId "r/<name>") used to be ignored and left out of the captured block ranges,
                 // which only list accepted transactions. Forget both so past blocks are scanned again and the topic

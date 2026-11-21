@@ -4,6 +4,7 @@ import { defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
+import { createPostDisplayResolverFromRefs, isSpotlightShown } from './logic/postDisplay';
 
 function ProfileComments() {
 
@@ -11,13 +12,17 @@ function ProfileComments() {
 
     const {
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         profileActivityRef,
     } = useAppContext();
+
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
 
     const { key: locationKey } = useLocation();
 
     const { visibleItems: visibleDiscussionPostIds, hasMore, sentinelRef } = useInfiniteScroll(
-        (profileActivityRef.current[address] ?? defaultProfileActivity).comments,
+        (profileActivityRef.current[address] ?? defaultProfileActivity).comments.filter((discussionPostId) => isSpotlightShown(resolveDisplay, postsRef.current[discussionPostId], postsRef)),
         locationKey,
     );
 

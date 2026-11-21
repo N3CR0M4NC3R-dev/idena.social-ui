@@ -1,4 +1,4 @@
-import { useEffect, useReducer, type FocusEventHandler } from 'react';
+import { Fragment, useEffect, useReducer, type FocusEventHandler, type ReactNode } from 'react';
 import { getChildPostIds, breakingChanges, getMediaFile, hasRetryableMediaError, type Post } from '../logic/asyncUtils';
 import MediaComponent from './MediaComponent';
 import MediaRetryButtonComponent from './MediaRetryButtonComponent';
@@ -11,6 +11,10 @@ import { getDisplayTopic, getTopicFromChannelId } from '../logic/topics';
 import ObjectUrlImageComponent from './ObjectUrlImageComponent';
 import ComposerToolbarComponent from './ComposerToolbarComponent';
 import { CloseIcon, HeartIcon, ReplyIcon, TipIcon, TopicsIcon } from './icons';
+import { getPlaceholderText, getPostHiddenStatus, getTransactionBan } from '../logic/moderation';
+import { createPostDisplayResolverFromRefs } from '../logic/postDisplay';
+import OwnBanNoticeComponent from './OwnBanNoticeComponent';
+import PostMenuComponent from './PostMenuComponent';
 
 const avatarClassName = 'flex-none cursor-pointer rounded-full bg-surface object-cover hover:opacity-85';
 const actionButtonClassName = 'inline-flex size-[34px] flex-none cursor-pointer items-center justify-center rounded-full';
@@ -63,6 +67,12 @@ function PostComponent(props: PostComponentProps) {
         postMediaAttachmentsRef,
         makePostsWith,
         postersRef,
+        postersAddress,
+        moderatorRole,
+        revealedPostIdsRef,
+        revealPostHandler,
+        concealPostHandler,
+        handleOpenModerationSheet,
     } = useAppContext();
 
     const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -74,6 +84,8 @@ function PostComponent(props: PostComponentProps) {
             if (spotlightReplyPostId && spotlightDiscussionPostId) {
                 const container = document.getElementById(`spotlight-discussion-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`) as HTMLElement;
                 const target = document.getElementById(`spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`) as HTMLElement;
+
+                if (!container || !target) return;
 
                 const desiredTargetOffsetTop = 80;
 
@@ -118,6 +130,39 @@ function PostComponent(props: PostComponentProps) {
     };
 
     const post = postsRef.current[postId];
+    // Moderation: removed posts aren't rendered; hidden ones with visible replies or comments render as placeholders.
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
+    const isPlaceholder = resolveDisplay(postId) === 'placeholder';
+    // A verified moderator can reveal a placeholder on their own screen.
+    const isRevealed = isPlaceholder && revealedPostIdsRef.current.has(postId);
+    const showAsPlaceholder = isPlaceholder && !isRevealed;
+    const placeholderText = (hiddenPost: Post) => getPlaceholderText(getPostHiddenStatus(hiddenPost));
+
+    // A moderator's Show link on a placeholder.
+    const renderShowLink = (hiddenPost: Post) => moderatorRole && <>
+        {' · '}
+        <button type="button" className="cursor-pointer text-link hover:underline" onClick={(e) => {
+            e.stopPropagation();
+            revealPostHandler(hiddenPost.postId);
+        }}>Show</button>
+    </>;
+
+    // What a revealed hidden post shows in place of its actions: it's hidden from others, and what can be done.
+    const renderRevealedBar = (hiddenPost: Post, toggle?: ReactNode) => {
+        const status = getPostHiddenStatus(hiddenPost);
+        const reason = status?.kind === 'hidden' && status.reason;
+        return (
+            <div className="mt-2 mb-1 flex basis-full flex-wrap items-center gap-x-3 gap-y-1 text-[13px]" onClick={(e) => e.stopPropagation()}>
+                <span className="font-bold text-ink-muted">{reason ? `Hidden from others · ${reason}` : 'Hidden from others'}</span>
+                {toggle}
+                <button type="button" className="cursor-pointer text-link hover:underline" onClick={() => concealPostHandler(hiddenPost.postId)}>Hide again</button>
+                {getTransactionBan(hiddenPost.txHash)?.source === 'contract' && <button type="button" className="cursor-pointer text-link hover:underline" onClick={(e) => handleOpenModerationSheet(e, { kind: 'restore', hash: hiddenPost.txHash, author: hiddenPost.poster })}>Restore…</button>}
+                <button type="button" className="cursor-pointer text-link hover:underline" onClick={(e) => handleOpenModerationSheet(e, { kind: 'moderate', address: hiddenPost.poster })}>{`Moderate ${getDisplayAddressShort(hiddenPost.poster, postersRef.current[hiddenPost.poster])}`}</button>
+            </div>
+        );
+    };
+    // Text stored on IPFS reads "ipfs://…" until it's fetched, e.g. just after a ban ends: show nothing until then.
+    const shownMessage = (messagePost: Post) => !messagePost.messageResolved && messagePost.message?.startsWith('ipfs://') ? '' : messagePost.message;
     const postTips = postTipsRef.current[postId] ?? { totalAmount: 0, tips: [] };
     const posterStake = post.posterDetails_atTimeOfPost.stake;
     const posterState = post.posterDetails_atTimeOfPost.state;
@@ -126,7 +171,7 @@ function PostComponent(props: PostComponentProps) {
 
     const { displayDate, displayTime } = getDisplayDateTime(post.timestamp);
     
-    const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(post.message, true);
+    const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(shownMessage(post), true);
 
     const postDomSettingsItem = getPostDomSettings(postId);
 
@@ -145,12 +190,15 @@ function PostComponent(props: PostComponentProps) {
 
     const replyPosts = repliesToThisPost.map(replyPostId => postsRef.current[replyPostId]);
     const replyLikes = replyPosts.filter(replyPost => replyPost.isLike);
-    const replyComments = replyPosts.filter(replyPost => !replyPost.isLike);
+    const replyComments = replyPosts.filter(replyPost => !replyPost.isLike && resolveDisplay(replyPost.postId) !== 'removed');
 
     if (spotlightReplyPostId) {
         const fromIndex = replyComments.findIndex(value => value.postId === spotlightReplyPostId);
-        const element = replyComments.splice(fromIndex, 1)[0];
-        replyComments.unshift(element);
+        // -1 when the spotlighted reply isn't listed (e.g. removed by moderation): leave the order alone.
+        if (fromIndex > 0) {
+            const element = replyComments.splice(fromIndex, 1)[0];
+            replyComments.unshift(element);
+        }
     }
 
     const { visibleItems: visibleReplyCommentIds, hasMore: hasMoreReplies, sentinelRef: repliesSentinelRef } = useInfiniteScroll(
@@ -166,7 +214,7 @@ function PostComponent(props: PostComponentProps) {
         const discussionPostIds = [ ...getChildPostIds(discussParentId, deOrphanedReplyPostsTreeRef.current).reverse(), ...getChildPostIds(discussParentId, replyPostsTreeRef.current) ].reverse(); // reverse for flex-col-reverse
         const discussionPosts = discussionPostIds.map(discussionPostId => postsRef.current[discussionPostId]);
         const discussionPostLikes = discussionPosts.filter(discussionPost => discussionPost.isLike);
-        const discussionPostComments = discussionPosts.filter(discussionPost => !discussionPost.isLike);
+        const discussionPostComments = discussionPosts.filter(discussionPost => !discussionPost.isLike && resolveDisplay(discussionPost.postId) !== 'removed');
         totalNumberOfReplies += discussionPostComments.length;
         return { ...acc, [discussParentId]: { discussionPostLikes, discussionPostComments } };
     }, {}) as Record<string, { discussionPostLikes: Post[], discussionPostComments: Post[] }>;
@@ -334,7 +382,8 @@ function PostComponent(props: PostComponentProps) {
 
     const renderMedia = (mediaPost: Post, wrapperClassName: string, mediaClassName: string) => {
         const mediaFile = getMediaFile(mediaPost);
-        const retryable = hasRetryableMediaError(mediaPost);
+        // Not for a revealed hidden post: a retry caches the post, and hidden content is never cached.
+        const retryable = hasRetryableMediaError(mediaPost) && !getPostHiddenStatus(mediaPost);
 
         return mediaFile && <div className={`${wrapperClassName} ${retryable ? 'flex flex-wrap items-center gap-x-3 gap-y-2' : ''}`}>
             <MediaComponent className={mediaClassName} file={mediaFile} onExpandImage={(e) => handleExpandImageModal(e, mediaFile, mediaPost.cid)} />
@@ -343,7 +392,13 @@ function PostComponent(props: PostComponentProps) {
     };
 
     const topic = getTopicFromChannelId(post.channelId);
-    const showTopic = !!topic && location.pathname !== `/topics/${topic}`;
+    const showTopic = !!topic && location.pathname !== `/topics/${topic}` && !showAsPlaceholder;
+    const rootRepliesToggle = replyComments.length ? <button type="button" className="cursor-pointer text-link hover:underline" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{showReplies ? 'Hide replies' : `Show replies (${totalNumberOfReplies})`}</button> : null;
+
+    // Lists filter removed posts out before rendering; this only guards against one slipping through.
+    if (resolveDisplay(postId) === 'removed') {
+        return null;
+    }
 
     return (<>
         <div className="border-b border-line">
@@ -351,26 +406,31 @@ function PostComponent(props: PostComponentProps) {
                 <div className="flex w-10 flex-none justify-end"><TopicsIcon className="size-4" /></div>
                 <Link to={`/topics/${topic}`} className="min-w-0 truncate hover:underline">{getDisplayTopic(topic)}</Link>
             </div>}
-            <div className={`flex px-4 ${showTopic ? 'pt-1' : 'pt-3'} ${isPostOutlet ? 'flex-wrap items-center gap-x-3' : 'gap-3'} ${!isPostOutlet ? 'hover:cursor-pointer' : ''}`} onMouseDown={handlePostMouseDown} onClick={handlePostClick}>
+            <div className={`flex px-4 ${showTopic ? 'pt-1' : 'pt-3'} ${isPostOutlet ? 'flex-wrap items-center gap-x-3' : 'gap-3'} ${!isPostOutlet ? 'hover:cursor-pointer' : ''} ${isRevealed ? 'bg-ink/[0.04]' : ''}`} onMouseDown={handlePostMouseDown} onClick={handlePostClick}>
                 <div className={isPostOutlet ? 'contents' : 'flex flex-none flex-col items-center'}>
-                    <ObjectUrlImageComponent className={`size-10 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${post.poster}`)} />
+                    {showAsPlaceholder ? <div className="size-10 flex-none rounded-full bg-surface" /> : <ObjectUrlImageComponent className={`size-10 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${post.poster}`)} />}
                     {!isPostOutlet && showReplies && replyComments.length > 0 && <div className="mt-1 w-0.5 flex-1 bg-line"></div>}
                 </div>
-                <div className={isPostOutlet ? 'contents' : 'min-w-0 flex-1 pb-1'}>
+                {showAsPlaceholder ? <div className={isPostOutlet ? 'min-w-0 flex-1 pb-3' : 'min-w-0 flex-1 pb-2'}>
+                    <p className="pt-2.5 text-[15px]/5 text-ink-muted">{placeholderText(post)}{renderShowLink(post)}</p>
+                    {replyComments.length ? <button type="button" className="mt-1 cursor-pointer text-[13px] text-link hover:underline" onClick={(e) => toggleShowRepliesHandler(e, post, replyComments.map(replyPost => replyPost.postId))}>{showReplies ? 'Hide replies' : `Show replies (${totalNumberOfReplies})`}</button> : null}
+                </div> : <div className={isPostOutlet ? 'contents' : 'min-w-0 flex-1 pb-1'}>
                     <div className={`mb-1 min-w-0 text-[15px]/5 ${isPostOutlet ? 'flex-1' : 'flex flex-wrap items-center gap-x-1 sm:flex-nowrap'}`}>
                         <span className={`cursor-pointer font-bold text-ink hover:underline ${isPostOutlet ? 'block w-fit max-w-full truncate' : 'whitespace-nowrap'}`} onClick={(e) => handleClickAddress(e, `/profile/${post.poster}`)}>{getDisplayAddress(post.poster, postersRef.current[post.poster])}</span>
                         <span className={`truncate text-ink-muted ${isPostOutlet ? 'block' : 'min-w-0 max-sm:order-last max-sm:basis-full max-sm:text-[13px]/4'}`}>{`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}</span>
                         {!isPostOutlet && <>
                             <span className="text-ink-muted" aria-hidden="true">·</span>
                             <a className="whitespace-nowrap text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`} onClick={(e) => e.stopPropagation()}>{getDisplayTimeAgo(post.timestamp)}</a>
+                            <PostMenuComponent post={post} rootPostId={postId} />
                         </>}
                     </div>
-                    <p className={`min-w-0 basis-full text-ink [word-break:break-word] ${isPostOutlet ? 'mt-3 text-[17px]/6' : 'text-[15px]/5'}`}>{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-link hover:underline" onClick={(e) => toggleViewMoreHandler(post, e)}>Show more</a></span>}</p>
+                    {isPostOutlet && <PostMenuComponent post={post} rootPostId={postId} />}
+                    <p className={`min-w-0 basis-full text-ink [word-break:break-word] ${isPostOutlet ? 'mt-3 text-[17px]/6' : 'text-[15px]/5'}`}>{messageLinesDisplay.map((line, i, arr) => <Fragment key={i}>{line}{arr.length - 1 !== i && <br />}</Fragment>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-link hover:underline" onClick={(e) => toggleViewMoreHandler(post, e)}>Show more</a></span>}</p>
                     {renderMedia(post, 'mt-3 min-w-0 basis-full', 'max-h-120 max-w-full sm:max-w-100 size-auto rounded-2xl border border-line')}
                     {isPostOutlet && <div className="basis-full py-4 text-[15px] text-ink-muted">
                         <a className="hover:underline" href={`https://scan.idena.io/transaction/${post.txHash}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{`${displayTime} · ${getDisplayFullDate(post.timestamp)}`}</a>
                     </div>}
-                    <div className={`flex basis-full text-[13px] text-ink-muted ${isPostOutlet ? 'justify-between border-t border-line px-1 py-1' : 'mt-1 -ml-2 max-w-[425px]'}`}>
+                    {isRevealed ? renderRevealedBar(post, rootRepliesToggle) :                     <div className={`flex basis-full text-[13px] text-ink-muted ${isPostOutlet ? 'justify-between border-t border-line px-1 py-1' : 'mt-1 -ml-2 max-w-[425px]'}`}>
                         <div className={`flex items-center ${isPostOutlet ? '' : 'flex-1'} ${replyComments.length ? 'text-comment' : ''}`}>
                             <button type="button" aria-label="Reply" title="Reply" className={`${actionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={(e) => toggleShowReplyInputHandler(e, post)}>
                                 <ReplyIcon className={isPostOutlet ? 'size-[22.5px]' : 'size-[18.75px]'} />
@@ -389,8 +449,9 @@ function PostComponent(props: PostComponentProps) {
                             </button>
                             {postTips.totalAmount ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} iDNA</button> : null}
                         </div>
-                    </div>
-                    {!isBreakingChangeDisabled && showReplyInput && <div className={`basis-full cursor-auto ${isPostOutlet ? 'border-t border-line pt-1 pb-3' : 'pb-2'}`} onClick={(e) => e.stopPropagation()}>
+                    </div>}
+                    {!isBreakingChangeDisabled && showReplyInput && !isRevealed && <div className={`basis-full cursor-auto ${isPostOutlet ? 'border-t border-line pt-1 pb-3' : 'pb-2'}`} onClick={(e) => e.stopPropagation()}>
+                        <OwnBanNoticeComponent postersAddress={postersAddress} className="mt-2" />
                         <textarea
                             id={`post-input-${uniqueKey}-${post.postId}`}
                             rows={1}
@@ -418,7 +479,7 @@ function PostComponent(props: PostComponentProps) {
                             />
                         </div>
                     </div>}
-                </div>
+                </div>}
             </div>
             {showReplies && <div>
                 <ul>
@@ -431,7 +492,7 @@ function PostComponent(props: PostComponentProps) {
                         const posterAge = replyPost.posterDetails_atTimeOfPost.age;
                         const posterPic = getProfilePic(postersRef.current[replyPost.poster], posterState);
                         const { displayDate, displayTime } = getDisplayDateTime(replyPost.timestamp);
-                        const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(replyPost.message, true, 3);
+                        const { messageLines, textOverflows, truncatedMessageLines } = getMessageLines(shownMessage(replyPost), true, 3);
                         const postDomSettingsItem = getPostDomSettings(replyPost.postId);
 
                         const showTruncatedMessageLines = textOverflows === true && postDomSettingsItem.textOverflowHidden === true;
@@ -451,7 +512,11 @@ function PostComponent(props: PostComponentProps) {
                         const discussReplyToPostId = postDomSettingsItem.discussReplyToPostId;
                         const discussReplyToPost = discussReplyToPostId && postsRef.current[discussReplyToPostId!];
 
-                        const isSpotlightReply = !!spotlightReplyPostId && index === 0;
+                        const isSpotlightReply = !!spotlightReplyPostId && replyPost.postId === spotlightReplyPostId;
+                        const replyIsPlaceholder = resolveDisplay(replyPost.postId) === 'placeholder';
+                        const replyIsRevealed = replyIsPlaceholder && revealedPostIdsRef.current.has(replyPost.postId);
+                        const replyShowAsPlaceholder = replyIsPlaceholder && !replyIsRevealed;
+                        const commentsToggle = <button type="button" className="cursor-pointer text-link hover:underline" onClick={() => toggleShowDiscussionHandler(replyPost)}>{showDiscussion ? 'Hide comments' : `Show comments (${discussionPostComments.length})`}</button>;
 
                         const addAttrs = {
                             ...( isSpotlightReply && spotlightDiscussionPostId && { id: `spotlight-comment-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`}),
@@ -459,40 +524,46 @@ function PostComponent(props: PostComponentProps) {
 
                         return (
                             <li key={replyPost.postId} className={isPostOutlet ? 'border-t border-line' : ''}>
-                                <div className={`flex gap-3 px-4 pb-1 ${isPostOutlet ? 'pt-3' : 'pt-1'} ${isSpotlightReply && !spotlightDiscussionPostId ? 'bg-ink/10' : ''}`}>
+                                <div className={`flex gap-3 px-4 pb-1 ${isPostOutlet ? 'pt-3' : 'pt-1'} ${isSpotlightReply && !spotlightDiscussionPostId ? 'bg-ink/10' : ''} ${replyIsRevealed ? 'bg-ink/[0.04]' : ''}`}>
                                     <div className="flex flex-none flex-col items-center">
-                                        <ObjectUrlImageComponent className={`size-10 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)} />
+                                        {replyShowAsPlaceholder ? <div className="size-10 flex-none rounded-full bg-surface" /> : <ObjectUrlImageComponent className={`size-10 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)} />}
                                         {!isPostOutlet && index < replyComments.length - 1 && <div className="mt-1 w-0.5 flex-1 bg-line"></div>}
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-x-1 text-[15px]/5 sm:flex-nowrap">
-                                            <span className="cursor-pointer whitespace-nowrap font-bold text-ink hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)}>{posterDisplayAddress}</span>
-                                            <span className="min-w-0 truncate text-ink-muted max-sm:order-last max-sm:basis-full max-sm:text-[13px]/4" title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}>{`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}</span>
-                                            <span className="text-ink-muted" aria-hidden="true">·</span>
-                                            <a className="whitespace-nowrap text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(replyPost.timestamp)}</a>
-                                        </div>
-                                        <p className="text-[15px]/5 text-ink [word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-link hover:underline" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>Show more</a></span>}</p>
-                                        {renderMedia(replyPost, 'mt-3', 'max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line')}
-                                        <div className="mt-1 -ml-2 flex max-w-[425px] text-[13px] text-ink-muted">
-                                            <div className={`flex flex-1 items-center ${discussionPostComments.length || showDiscussion ? 'text-comment' : ''}`}>
-                                                <button type="button" aria-label="Comment" title="Comment" className={`${actionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={() => toggleReplyDiscussionHandler(replyPost)}>
-                                                    <ReplyIcon className="size-[18.75px]" />
-                                                </button>
-                                                {discussionPostComments.length || showDiscussion ? <button type="button" className={actionCountClassName} onClick={() => toggleShowDiscussionHandler(replyPost)}>{discussionPostComments.length}<span className="sr-only"> comments</span></button> : null}
+                                        {replyShowAsPlaceholder ? <>
+                                            <p className="pt-2.5 text-[15px]/5 text-ink-muted">{placeholderText(replyPost)}{renderShowLink(replyPost)}</p>
+                                            <button type="button" className="mt-1 mb-1 cursor-pointer text-[13px] text-link hover:underline" onClick={() => toggleShowDiscussionHandler(replyPost)}>{showDiscussion ? 'Hide comments' : `Show comments (${discussionPostComments.length})`}</button>
+                                        </> : <>
+                                            <div className="flex flex-wrap items-center gap-x-1 text-[15px]/5 sm:flex-nowrap">
+                                                <span className="cursor-pointer whitespace-nowrap font-bold text-ink hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${replyPost.poster}`)}>{posterDisplayAddress}</span>
+                                                <span className="min-w-0 truncate text-ink-muted max-sm:order-last max-sm:basis-full max-sm:text-[13px]/4" title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}>{`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}</span>
+                                                <span className="text-ink-muted" aria-hidden="true">·</span>
+                                                <a className="whitespace-nowrap text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${replyPost.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(replyPost.timestamp)}</a>
+                                                <PostMenuComponent post={replyPost} rootPostId={postId} />
                                             </div>
-                                            <div className={`flex flex-1 items-center ${likesForReplyPost.length ? 'text-like' : ''}`}>
-                                                <button type="button" aria-label="Like" title="Like" className={`${actionButtonClassName} hover:bg-like/20 hover:text-like ${submittingLike === `${uniqueKey}-${replyPost.postId}` ? 'bg-like/10 text-like' : ''}`} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${replyPost.postId}`, replyPost.postId, discussParentId)}>
-                                                    <HeartIcon className="size-[18.75px]" />
-                                                </button>
-                                                {likesForReplyPost.length ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenLikesModal(e, likesForReplyPost)}>{likesForReplyPost.length}<span className="sr-only"> likes</span></button> : null}
-                                            </div>
-                                            <div className={`flex flex-1 items-center ${postTips.totalAmount ? 'text-tip' : ''}`}>
-                                                <button type="button" aria-label="Tip" title="Tip" className={`${actionButtonClassName} hover:bg-tip/20 hover:text-tip ${submittingTip === `${uniqueKey}-${replyPost.postId}` ? 'bg-tip/10 text-tip' : ''}`} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${replyPost.postId}`, replyPost)}>
-                                                    <TipIcon className="size-[18.75px]" />
-                                                </button>
-                                                {postTips.totalAmount ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} iDNA</button> : null}
-                                            </div>
-                                        </div>
+                                            <p className="text-[15px]/5 text-ink [word-break:break-word]">{messageLinesDisplay.map((line, i, arr) => <Fragment key={i}>{line}{arr.length - 1 !== i && <br />}</Fragment>)}{showTruncatedMessageLines && <span> <a className="cursor-pointer whitespace-nowrap text-link hover:underline" onClick={(e) => toggleViewMoreHandler(replyPost, e)}>Show more</a></span>}</p>
+                                            {renderMedia(replyPost, 'mt-3', 'max-h-100 max-w-full sm:max-w-92 size-auto rounded-2xl border border-line')}
+                                            {replyIsRevealed ? renderRevealedBar(replyPost, commentsToggle) :                                             <div className="mt-1 -ml-2 flex max-w-[425px] text-[13px] text-ink-muted">
+                                                <div className={`flex flex-1 items-center ${discussionPostComments.length || showDiscussion ? 'text-comment' : ''}`}>
+                                                    <button type="button" aria-label="Comment" title="Comment" className={`${actionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={() => toggleReplyDiscussionHandler(replyPost)}>
+                                                        <ReplyIcon className="size-[18.75px]" />
+                                                    </button>
+                                                    {discussionPostComments.length || showDiscussion ? <button type="button" className={actionCountClassName} onClick={() => toggleShowDiscussionHandler(replyPost)}>{discussionPostComments.length}<span className="sr-only"> comments</span></button> : null}
+                                                </div>
+                                                <div className={`flex flex-1 items-center ${likesForReplyPost.length ? 'text-like' : ''}`}>
+                                                    <button type="button" aria-label="Like" title="Like" className={`${actionButtonClassName} hover:bg-like/20 hover:text-like ${submittingLike === `${uniqueKey}-${replyPost.postId}` ? 'bg-like/10 text-like' : ''}`} onClick={(e) => localSubmitLikeHandler(e, `${uniqueKey}-${replyPost.postId}`, replyPost.postId, discussParentId)}>
+                                                        <HeartIcon className="size-[18.75px]" />
+                                                    </button>
+                                                    {likesForReplyPost.length ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenLikesModal(e, likesForReplyPost)}>{likesForReplyPost.length}<span className="sr-only"> likes</span></button> : null}
+                                                </div>
+                                                <div className={`flex flex-1 items-center ${postTips.totalAmount ? 'text-tip' : ''}`}>
+                                                    <button type="button" aria-label="Tip" title="Tip" className={`${actionButtonClassName} hover:bg-tip/20 hover:text-tip ${submittingTip === `${uniqueKey}-${replyPost.postId}` ? 'bg-tip/10 text-tip' : ''}`} onClick={(e) => handleOpenSendTipModal(e, `${uniqueKey}-${replyPost.postId}`, replyPost)}>
+                                                        <TipIcon className="size-[18.75px]" />
+                                                    </button>
+                                                    {postTips.totalAmount ? <button type="button" className={actionCountClassName} onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getDisplayTipAmount(postTips.totalAmount)} iDNA</button> : null}
+                                                </div>
+                                            </div>}
+                                        </>}
                                         {showDiscussion && <div className="mt-1 mb-2 overflow-hidden border border-line">
                                             <ul {...addAttrs} id={`spotlight-discussion-${uniqueKey}-${spotlightReplyPostId}-${spotlightDiscussionPostId}`} className="relative flex flex-col flex-col-reverse max-h-100 overflow-y-auto scrollbar-thin">
                                                 {discussionPostComments.length === 0 && <li className="py-3"><p className="text-center text-[13px] text-ink-muted">No comments yet</p></li>}
@@ -504,10 +575,14 @@ function PostComponent(props: PostComponentProps) {
                                                     const posterAge = discussionPost.posterDetails_atTimeOfPost.age;
                                                     const posterPic = getProfilePic(postersRef.current[discussionPost.poster], posterState);
                                                     const { displayDate, displayTime } = getDisplayDateTime(discussionPost.timestamp);
-                                                    const { messageLines } = getMessageLines(discussionPost.message);
+                                                    const { messageLines } = getMessageLines(shownMessage(discussionPost));
                                                     const replyToPost = postsRef.current[discussionPost.replyToPostId];
                                                     const replyToPostPosterState = replyToPost?.posterDetails_atTimeOfPost.state;
                                                     const replyToPostPosterPic = getProfilePic(postersRef.current[replyToPost?.poster], replyToPostPosterState);
+                                                    const replyToPostHidden = !!replyToPost && resolveDisplay(replyToPost.postId) !== 'visible';
+                                                    const commentIsPlaceholder = resolveDisplay(discussionPost.postId) === 'placeholder';
+                                                    const commentIsRevealed = commentIsPlaceholder && revealedPostIdsRef.current.has(discussionPost.postId);
+                                                    const commentShowAsPlaceholder = commentIsPlaceholder && !commentIsRevealed;
                                                     const likesForDiscussionPost = discussionPostLikes.filter(like => like.replyToPostId === discussionPost.postId);
 
                                                     const isSpotlightDiscussionPost = discussionPost.postId === spotlightDiscussionPostId;
@@ -517,13 +592,16 @@ function PostComponent(props: PostComponentProps) {
                                                     };
 
                                                     return (
-                                                        <li {...addAttrs} className={`px-3 py-2 ${isSpotlightDiscussionPost ? 'bg-ink/10' : ''}`}>
+                                                        <li {...addAttrs} className={`px-3 py-2 ${isSpotlightDiscussionPost ? 'bg-ink/10' : ''} ${commentIsRevealed ? 'bg-ink/[0.04]' : ''}`}>
                                                             {replyToPost && <div className="flex items-center gap-1 text-[13px]/5 text-ink-muted">
                                                                 <div className="ml-4 h-2.5 w-4 flex-none self-end rounded-tl border-t border-l border-line-strong"></div>
-                                                                <ObjectUrlImageComponent className="size-4 flex-none rounded-full bg-surface object-cover" file={replyToPostPosterPic} />
-                                                                <p className="min-w-0 truncate">{getMessageLines(replyToPost.message).messageLines[0]}</p>
+                                                                {replyToPostHidden ? <div className="size-4 flex-none rounded-full bg-surface" /> : <ObjectUrlImageComponent className="size-4 flex-none rounded-full bg-surface object-cover" file={replyToPostPosterPic} />}
+                                                                <p className="min-w-0 truncate">{replyToPostHidden ? placeholderText(replyToPost) : getMessageLines(shownMessage(replyToPost)).messageLines[0]}</p>
                                                             </div>}
-                                                            <div className="flex gap-2">
+                                                            {commentShowAsPlaceholder ? <div className="flex items-center gap-2">
+                                                                <div className="size-8 flex-none rounded-full bg-surface" />
+                                                                <p className="min-w-0 flex-1 text-[14px]/5 text-ink-muted">{placeholderText(discussionPost)}{renderShowLink(discussionPost)}</p>
+                                                            </div> : <div className="flex gap-2">
                                                                 <ObjectUrlImageComponent className={`size-8 ${avatarClassName}`} file={posterPic} onClick={(e) => handleClickAddress(e, `/profile/${discussionPost.poster}`)} />
                                                                 <div className="min-w-0 flex-1">
                                                                     <div className="flex items-center gap-1 text-[14px]/5">
@@ -531,12 +609,13 @@ function PostComponent(props: PostComponentProps) {
                                                                         <span className="min-w-0 truncate text-[13px] text-ink-muted" title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}>{`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}</span>
                                                                         <span className="text-[13px] text-ink-muted" aria-hidden="true">·</span>
                                                                         <a className="whitespace-nowrap text-[13px] text-ink-muted hover:underline" href={`https://scan.idena.io/transaction/${discussionPost.txHash}`} target="_blank" rel="noopener noreferrer" title={`${displayDate}, ${displayTime}`}>{getDisplayTimeAgo(discussionPost.timestamp)}</a>
+                                                                        <PostMenuComponent post={discussionPost} rootPostId={postId} small />
                                                                     </div>
                                                                     <div className="max-h-[9999px] text-[14px]/5 text-ink">
-                                                                        <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                                                        <p className="[word-break:break-word]">{messageLines.map((line, i, arr) => <Fragment key={i}>{line}{arr.length - 1 !== i && <br />}</Fragment>)}</p>
                                                                     </div>
                                                                     {renderMedia(discussionPost, 'mt-2', 'max-h-80 max-w-full sm:max-w-74 size-auto rounded-2xl border border-line')}
-                                                                    <div className="-ml-1.5 flex gap-4 text-[13px] text-ink-muted">
+                                                                    {commentIsRevealed ? renderRevealedBar(discussionPost) :                                                                     <div className="-ml-1.5 flex gap-4 text-[13px] text-ink-muted">
                                                                         <button type="button" aria-label="Reply" title="Reply" className={`${commentActionButtonClassName} hover:bg-comment/20 hover:text-comment`} onClick={() => setDiscussReplyToPostIdHandler(replyPost, discussionPost.postId)}>
                                                                             <ReplyIcon className="size-4" />
                                                                         </button>
@@ -552,21 +631,24 @@ function PostComponent(props: PostComponentProps) {
                                                                             </button>
                                                                             {postTips.totalAmount ? <button type="button" className="-ml-0.5 cursor-pointer hover:underline" onClick={(e) => handleOpenTipsModal(e, postTips.tips)}>{getShortDisplayTipAmount(postTips.totalAmount)}<span className="sr-only"> iDNA</span></button> : null}
                                                                         </div>
-                                                                    </div>
+                                                                    </div>}
                                                                 </div>
-                                                            </div>
+                                                            </div>}
                                                         </li>
                                                     );
                                                 })}
                                             </ul>
                                             {!isBreakingChangeDisabled && <>
                                                 {discussReplyToPost && <div className="flex items-center gap-2 border-t border-line px-3 py-1.5 text-[13px] text-ink-muted">
-                                                    <p className="min-w-0 flex-1 truncate">Replying to <span className="text-link">{getDisplayAddressShort(discussReplyToPost!.poster, postersRef.current[discussReplyToPost!.poster])}</span>: {getMessageLines(discussReplyToPost!.message).messageLines[0]}</p>
+                                                    {resolveDisplay(discussReplyToPost!.postId) === 'visible'
+                                                        ? <p className="min-w-0 flex-1 truncate">Replying to <span className="text-link">{getDisplayAddressShort(discussReplyToPost!.poster, postersRef.current[discussReplyToPost!.poster])}</span>: {getMessageLines(shownMessage(discussReplyToPost!)).messageLines[0]}</p>
+                                                        : <p className="min-w-0 flex-1 truncate">Replying to: {placeholderText(discussReplyToPost!)}</p>}
                                                     <button type="button" aria-label="Cancel reply" title="Cancel reply" className="inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full text-ink hover:bg-ink/10" onClick={() => setDiscussReplyToPostIdHandler(replyPost)}>
                                                         <CloseIcon className="size-3.5" />
                                                     </button>
                                                 </div>}
                                                 <div className="border-t border-line px-3 py-2">
+                                                    <OwnBanNoticeComponent postersAddress={postersAddress} className="mb-2" />
                                                     <textarea
                                                         id={`post-input-${uniqueKey}-${replyPost.postId}`}
                                                         rows={2}

@@ -4,7 +4,7 @@ import { useAppContext } from "../AppContext";
 import { getChildPostIds, getMediaFile, getPlaceholderPoster, hasRetryableMediaError } from "../logic/asyncUtils";
 import { getMediaKind } from "../logic/media";
 import { useLocation, useNavigate } from "react-router";
-import { useReducer } from "react";
+import { Fragment, useReducer } from "react";
 import MediaComponent from "./MediaComponent";
 import MediaRetryButtonComponent from "./MediaRetryButtonComponent";
 import OneOnOneConversationHeaderComponent from "./OneOnOneConversationHeaderComponent";
@@ -13,6 +13,8 @@ import ObjectUrlImageComponent from "./ObjectUrlImageComponent";
 import ComposerToolbarComponent from "./ComposerToolbarComponent";
 import { CloseIcon, HeartIcon, ReplyIcon } from "./icons";
 import { cacheMessageReadStatus } from "../logic/messageReadStatusStore";
+import BannedLabelComponent from './BannedLabelComponent';
+import { getAddressBan, isAddressBanned, moderationConfig } from '../logic/moderation';
 
 type ConversationComponentProps = {
     conversationKey: string,
@@ -56,6 +58,8 @@ function ConversationComponent(props: ConversationComponentProps) {
         submittingLike,
         messageReadStatusRef,
         unreadMessagesThisVisitRef,
+        moderatorRole,
+        handleOpenModerationSheet,
     } = useAppContext();
 
     const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -173,6 +177,14 @@ function ConversationComponent(props: ConversationComponentProps) {
     }
     const conversationPartners = participantsExcludingSelf.map(participant => postersRef.current[participant] ?? getPlaceholderPoster(participant));
 
+    const partner = conversationPartners.length === 1 && participantsExcludingSelf[0].toLowerCase() !== postersAddress.toLowerCase() ? participantsExcludingSelf[0].toLowerCase() : undefined;
+    const partnerActions = isConversationOutlet && partner && moderationConfig
+        ? [
+            ...(!isAddressBanned(partner) && getAddressBan(postersAddress)?.source !== 'contract' ? [{ label: 'Report', request: { kind: 'reportAccount' as const, address: partner } }] : []),
+            ...(moderatorRole ? [{ label: 'Moderate', request: { kind: 'moderate' as const, address: partner } }] : []),
+        ]
+        : [];
+
     const postDomSettingsItem = getPostDomSettings(conversationKey);
     const discussReplyToPostId = postDomSettingsItem.discussReplyToPostId;
     const discussReplyToPost = discussReplyToPostId ? messagesRef.current[discussReplyToPostId!] : undefined;
@@ -190,6 +202,9 @@ function ConversationComponent(props: ConversationComponentProps) {
                 <button type="button" className="cursor-pointer text-[13px] text-link hover:underline" onClick={(e) => toggleShowConversationHandler(e, conversationKey)}>Messages ({messages.length})</button>
                 {showNewMessages && <span className="flex h-[18px] items-center rounded-full bg-btn-hover px-1.5 text-[11px]/none font-bold text-btn-ink">
                     <span className="[text-box:trim-both_cap_alphabetic]">{newMessagesCount} new</span>
+                </span>}
+                {partnerActions.length > 0 && <span className="ml-auto flex gap-3">
+                    {partnerActions.map((action) => <button key={action.label} type="button" className="cursor-pointer text-[13px] text-ink-muted hover:text-ink hover:underline" onClick={(e) => handleOpenModerationSheet(e, action.request)}>{action.label}</button>)}
                 </span>}
             </div>
         </div>
@@ -229,6 +244,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                             <div className={`flex min-w-0 max-w-[80%] flex-col gap-1 ${isOwnMessage ? 'items-end' : 'items-start'}`}>
                                 {conversationPartners.length > 1 && <div className="flex max-w-full items-center gap-1 text-[13px]">
                                     <span className={`cursor-pointer whitespace-nowrap font-bold hover:underline ${isOwnMessage ? 'text-ink-muted' : ''}`} onClick={(e) => handleClickAddress(e, `/profile/${message.sender}`)}>{posterDisplayAddress}</span>
+                                    <BannedLabelComponent address={message.sender} />
                                     <span className="min-w-0 truncate text-ink-muted" title={`Age ${posterAge} · ${getIdentityStatus(posterState)} · Stake ${posterStake}`}>{`(${posterAge}, ${getIdentityStatus(posterState)}, ${posterStake})`}</span>
                                 </div>}
                                 {replyToMessage && <div className="flex max-w-full items-center gap-1.5 rounded-2xl border border-line px-3 py-1.5 text-[13px] text-ink-muted">
@@ -239,7 +255,7 @@ function ConversationComponent(props: ConversationComponentProps) {
                                         <p className="min-w-0 truncate">{getMessageLines(replyToMessage.message).messageLines[0]}</p>
                                     }
                                 </div>}
-                                <p className={`max-w-full rounded-3xl px-4 py-2.5 text-[15px]/5 [word-break:break-word] empty:hidden ${isOwnMessage ? 'rounded-br-md bg-bubble-own text-btn-ink' : 'rounded-bl-md bg-bubble text-ink'}`}>{messageLines.map((line, i, arr) => <>{line}{arr.length - 1 !== i && <br />}</>)}</p>
+                                <p className={`max-w-full rounded-3xl px-4 py-2.5 text-[15px]/5 [word-break:break-word] empty:hidden ${isOwnMessage ? 'rounded-br-md bg-bubble-own text-btn-ink' : 'rounded-bl-md bg-bubble text-ink'}`}>{messageLines.map((line, i, arr) => <Fragment key={i}>{line}{arr.length - 1 !== i && <br />}</Fragment>)}</p>
                                 {messageMedia && (hasRetryableMediaError(message) ? <div className={`flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
                                     {messageMedia}
                                     <MediaRetryButtonComponent onRetry={() => retryMessageMediaHandler(message.messageId)} />

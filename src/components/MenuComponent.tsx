@@ -1,10 +1,12 @@
 import { Link, useLocation } from "react-router";
-import { BellIcon, HomeIcon, MessagesIcon, ProfileIcon, SettingsIcon, TopicsIcon } from './icons';
+import { BellIcon, HomeIcon, MessagesIcon, ProfileIcon, SettingsIcon, ShieldIcon, TopicsIcon } from './icons';
 
 type MenuComponentProps = {
     postersAddress: string,
     unreadPostActivities: number,
     unreadMessages: number,
+    showModeration: boolean,
+    newReportGroups: number,
     variant: 'sidebar' | 'bottom',
 };
 
@@ -14,6 +16,8 @@ function MenuComponent(props: MenuComponentProps) {
         postersAddress,
         unreadPostActivities,
         unreadMessages,
+        showModeration,
+        newReportGroups,
         variant,
     } = props;
 
@@ -27,6 +31,7 @@ function MenuComponent(props: MenuComponentProps) {
         { to: profilePath, label: 'Profile', Icon: ProfileIcon, active: !!postersAddress && pathname.toLowerCase().startsWith(profilePath.toLowerCase()) },
         { to: '/messages', label: 'Messages', Icon: MessagesIcon, active: pathname === '/messages' || pathname.startsWith('/conversation/'), badgeCount: unreadMessages },
         { to: '/postactivity', label: 'Post Activity', Icon: BellIcon, active: pathname === '/postactivity', badgeCount: unreadPostActivities },
+        ...(showModeration ? [{ to: '/moderation', label: 'Moderation', Icon: ShieldIcon, active: pathname === '/moderation' || pathname.startsWith('/moderation/'), badgeCount: newReportGroups }] : []),
         { to: '/settings', label: 'Settings', Icon: SettingsIcon, active: pathname === '/settings' },
     ];
 

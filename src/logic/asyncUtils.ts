@@ -12,6 +12,8 @@ import { cachePoster, isPosterMissingOrStale } from "./postersStore";
 import { cachePost } from "./postsStore";
 import { cacheMessage } from "./messagesStore";
 import { getTopicFromChannelId } from "./topics";
+import { isAddressBanned } from "./moderation";
+import { recordBuiltTransaction } from "./moderatorWitnesses";
 import { ERROR_LOADING_MEDIA_FILE_NAME, getAvMediaType, getMediaKind, sniffMediaFormat, withoutMediaDetails } from "./media";
 
 export const breakingChanges = {
@@ -928,7 +930,8 @@ export const getProfileWithRpc = async (rpcClient: RpcClient, address: string) =
         readProfileMapWithRpc(rpcClient, 'b:', address),
         readProfileMapWithRpc(rpcClient, 'p:', address),
     ]);
-    const picture = await getProfilePictureWithRpc(rpcClient, pictureUrl, address);
+    // A banned account's picture isn't downloaded: null, as for no picture. After the ban, the poster TTL fetches it.
+    const picture = isAddressBanned(address) ? null : await getProfilePictureWithRpc(rpcClient, pictureUrl, address);
 
     return { name: PROFILE_NAME_REGEX.test(name) ? name : '', bio: cleanBio(bio), picture };
 };
@@ -1437,6 +1440,8 @@ export const makeCallTransaction = async (
         const { nonce, epoch } = await getNonceAndEpoch(rpcClient, from);
 
         const txHex = getCallTransaction(to, txAmount, nonce, epoch, maxFeeDna, payload);
+        // Signed and mined, it proves this browser's user owns the address (moderator verification).
+        recordBuiltTransaction(from, txHex);
 
         const dnaLink = `${webAppUrl}/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${method}`;
         window.open(dnaLink, '_blank');

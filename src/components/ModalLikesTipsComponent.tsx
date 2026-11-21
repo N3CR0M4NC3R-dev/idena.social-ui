@@ -4,6 +4,7 @@ import type { Message, Post, Poster, Tip } from '../logic/asyncUtils';
 import { cleanDisplayText, getDisplayAddressShort, getDisplayDateTime, getDisplayTimeAgo, getDisplayTipAmount, getIdentityStatus, getProfilePic } from '../logic/utils';
 import { useNavigate } from 'react-router';
 import ObjectUrlImageComponent from './ObjectUrlImageComponent';
+import BannedLabelComponent from './BannedLabelComponent';
 
 type ModalLikesTipsComponentProps = {
     heading: string,
@@ -53,7 +54,10 @@ function ModalLikesTipsComponent(props: ModalLikesTipsComponentProps) {
                         <li key={item.txHash} className="flex items-center gap-3 px-4 py-3 hover:bg-ink/[0.03]">
                             <ObjectUrlImageComponent file={posterPic} className="size-10 flex-none rounded-full bg-surface object-cover" />
                             <div className="min-w-0 flex-1">
-                                <p className="w-fit max-w-full truncate text-[15px]/5 font-bold text-ink hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${address}`)}>{posterDisplayAddress}</p>
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                    <p className="w-fit min-w-0 truncate text-[15px]/5 font-bold text-ink hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${address}`)}>{posterDisplayAddress}</p>
+                                    <BannedLabelComponent address={address} />
+                                </div>
                                 <p className="break-words text-[13px]/4 text-ink-muted">{`Age\u00a0${posterAge} · ${getIdentityStatus(posterState)} · Stake\u00a0${posterStake}`}</p>
                             </div>
                             <div className="min-w-0 max-w-[45%] flex-none text-right">

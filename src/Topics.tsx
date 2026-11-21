@@ -6,6 +6,7 @@ import { TopicsIcon } from './components/icons';
 import { getDisplayTimeAgo } from './logic/utils';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
 import { getDisplayTopic, getTopicSummaries, isValidTopicName, normalizeTypedTopic } from './logic/topics';
+import { createPostDisplayResolverFromRefs } from './logic/postDisplay';
 
 const topicIconClassName = 'flex size-10 flex-none items-center justify-center rounded-full bg-surface';
 
@@ -17,6 +18,8 @@ function Topics() {
     const {
         latestActivity,
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         postLatestActivityRef,
     } = useAppContext();
 
@@ -24,7 +27,9 @@ function Topics() {
 
     const typedTopic = normalizeTypedTopic(query);
 
-    const allTopics = getTopicSummaries(latestActivity, postsRef, postLatestActivityRef);
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
+    const shownActivity = latestActivity.filter((postId) => resolveDisplay(postId) !== 'removed');
+    const allTopics = getTopicSummaries(shownActivity, postsRef, postLatestActivityRef);
     const topics = typedTopic ? allTopics.filter((topic) => topic.name.includes(typedTopic)) : allTopics;
 
     // a valid name nobody has posted in yet (as far as scanned): offer to open it, so its first post can be made

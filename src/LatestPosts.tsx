@@ -13,6 +13,8 @@ import { getMediaKind } from './logic/media';
 import { getProfilePic } from './logic/utils';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
 import { getDisplayTopic, getTopicChannelId, getTopicFromChannelId, isValidTopicName } from './logic/topics';
+import { createPostDisplayResolverFromRefs } from './logic/postDisplay';
+import OwnBanNoticeComponent from './components/OwnBanNoticeComponent';
 
 // The home feed, or with a topic in the URL (/topics/:topic) the feed of that topic's posts.
 function LatestPosts() {
@@ -29,6 +31,8 @@ function LatestPosts() {
         latestPosts,
         latestActivity,
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         postersRef,
         inputPostDisabled,
         submitting,
@@ -52,8 +56,9 @@ function LatestPosts() {
 
     const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
 
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
     const isInTopic = (postId: string) => getTopicFromChannelId(postsRef.current[postId]?.channelId ?? '') === topic;
-    const feedPostIds = sortPostsBy === 'latest-posts' ? latestPosts : latestActivity;
+    const feedPostIds = (sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).filter((postId) => resolveDisplay(postId) !== 'removed');
     const shownPostIds = topic ? (topicValid ? feedPostIds.filter(isInTopic) : []) : feedPostIds;
 
     const { visibleItems: visiblePostIds, hasMore, sentinelRef } = useInfiniteScroll(
@@ -101,6 +106,7 @@ function LatestPosts() {
             <ObjectUrlImageComponent className="size-10 rounded-full object-cover bg-surface flex-none" file={getProfilePic(postersRef.current[postersAddress.toLowerCase()])} />
             <div className="min-w-0 flex-1">
                 {inputPostDisabled && <p className="pt-1 pb-2 text-danger text-[13px]">Posting is disabled because there is a problem with your settings. Please adjust your settings and return to this page.</p>}
+                <OwnBanNoticeComponent postersAddress={postersAddress} className="mt-1 mb-1" />
                 <textarea
                     key={composerLocation}
                     id={`post-input-${composerLocation}`}

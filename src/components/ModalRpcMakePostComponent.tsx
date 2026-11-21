@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import RpcPostMessageUIComponent from './RpcPostMessageUIComponent';
+import OwnBanNoticeComponent from './OwnBanNoticeComponent';
 
 type ModalRpcMakePostComponentProps = {
     modalRpcMakePostRef: React.RefObject<{ location: string; replyToPostId?: string; channelId?: string; }>,
     submitPostHandler: (location: string, replyToPostId?: string | undefined, channelId?: string | undefined, storeTextIpfs?: boolean | undefined, storeMediaIpfs?: boolean | undefined) => Promise<void>,
+    postersAddress: string,
     closeModal: () => void,
 };
 
@@ -12,6 +14,7 @@ function ModalRpcMakePostComponent(props: ModalRpcMakePostComponentProps) {
     const {
         modalRpcMakePostRef,
         submitPostHandler,
+        postersAddress,
         closeModal,
     } = props;
 
@@ -30,6 +33,7 @@ function ModalRpcMakePostComponent(props: ModalRpcMakePostComponentProps) {
                 <h2 className="text-xl/6 font-extrabold">Make Post</h2>
             </div>
             <div className="px-4 pb-4">
+                <OwnBanNoticeComponent postersAddress={postersAddress} className="mb-3" />
                 <RpcPostMessageUIComponent
                     storeTextIpfs={storeTextIpfs}
                     setStoreTextIpfs={setStoreTextIpfs}

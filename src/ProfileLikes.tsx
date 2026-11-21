@@ -4,6 +4,7 @@ import { defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
+import { createPostDisplayResolverFromRefs, isSpotlightShown } from './logic/postDisplay';
 
 function ProfileLikes() {
 
@@ -11,13 +12,17 @@ function ProfileLikes() {
 
     const {
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         profileActivityRef,
     } = useAppContext();
+
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
 
     const { key: locationKey } = useLocation();
 
     const { visibleItems: visibleLikePostIds, hasMore, sentinelRef } = useInfiniteScroll(
-        (profileActivityRef.current[address] ?? defaultProfileActivity).likes,
+        (profileActivityRef.current[address] ?? defaultProfileActivity).likes.filter((likePostId) => isSpotlightShown(resolveDisplay, postsRef.current[postsRef.current[likePostId]?.replyToPostId], postsRef)),
         locationKey,
     );
 

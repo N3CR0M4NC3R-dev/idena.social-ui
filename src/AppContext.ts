@@ -1,6 +1,7 @@
 import { createContext, useContext, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { Message, Post, Poster, PostTips, RpcClient, Tip } from './logic/asyncUtils';
-import type { BrowserStateHistorySettings, Conversation, MouseEventLocal, PostActivityItem, PostMediaAttachment, ProfileActivity } from './App.exports';
+import type { BrowserStateHistorySettings, Conversation, ModerationRequest, MouseEventLocal, PostActivityItem, PostMediaAttachment, ProfileActivity } from './App.exports';
+import type { ModeratorRole } from './logic/moderation';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -95,6 +96,18 @@ export type AppContextValue = {
     handleExpandImageModal: (e: MouseEventLocal, image: File, cid?: string) => void,
     handleSubmitPubkeyModal: (e: MouseEventLocal, address: string) => void,
     handleOpenEditProfileModal: (e: MouseEventLocal) => void,
+
+    // moderation
+    moderatorRole: ModeratorRole | undefined,
+    moderatorVerified: boolean,
+    handleOpenModerationSheet: (e: MouseEventLocal | undefined, request: ModerationRequest) => void,
+    handleOpenVerifyModal: () => void,
+    revealedPostIdsRef: RefObject<Set<string>>,
+    revealPostHandler: (postId: string) => Promise<void>,
+    concealPostHandler: (postId: string) => void,
+    getProfileActivityPostIds: (address: string) => string[],
+    // The Reports tab was seen: redraw the menu badge.
+    reportsSeenHandler: () => void,
 };
 
 export const AppContext = createContext<AppContextValue | null>(null);

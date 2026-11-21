@@ -4,6 +4,7 @@ import { defaultProfileActivity } from './App.exports';
 import PostComponent from './components/PostComponent';
 import { getSpotlightPostDetails } from './logic/utils';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
+import { createPostDisplayResolverFromRefs, isSpotlightShown } from './logic/postDisplay';
 
 function ProfileTips() {
 
@@ -11,13 +12,17 @@ function ProfileTips() {
 
     const {
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         profileActivityRef,
     } = useAppContext();
+
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
 
     const { key: locationKey } = useLocation();
 
     const { visibleItems: visibleTipPostIdTxHashes, hasMore, sentinelRef } = useInfiniteScroll(
-        (profileActivityRef.current[address] ?? defaultProfileActivity).tips,
+        (profileActivityRef.current[address] ?? defaultProfileActivity).tips.filter((tipPostIdTxHash) => isSpotlightShown(resolveDisplay, postsRef.current[tipPostIdTxHash.split('|')[0]], postsRef)),
         locationKey,
     );
 

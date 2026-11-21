@@ -2,11 +2,13 @@ import Decimal from "decimal.js";
 import { CallContractAttachment, contractArgumentFormat, hexToUint8Array, privateKeyToPublicKey, publicKeyToAddress, toHexString, Transaction, transactionType } from "idena-sdk-js-lite";
 import type { PostActivityItem, PostFinderTransaction, PostMediaAttachment } from "../App.exports";
 import { type Post, type Poster } from "./asyncUtils";
+import { isAddressBanned } from "./moderation";
 
 export const likeEmoji = '❤️';
 export const dnaBase = 1e18;
 
 export function getProfileName(poster?: Poster) {
+    if (poster?.address && isAddressBanned(poster.address)) return undefined;
     return poster?.name || undefined;
 }
 
@@ -471,6 +473,6 @@ export function getNextContract(currentContract: string, allContracts: string[])
 export function getProfilePic(profile: Poster, stateOverride?: string) {
     if (!profile) return;
     const state = stateOverride ?? profile.state;
-    if (profile.picture && state === 'Human') return profile.picture;
+    if (profile.picture && state === 'Human' && !isAddressBanned(profile.address)) return profile.picture;
     return state === 'Human' ? profile.robohash5 : profile.robohash1;
 }

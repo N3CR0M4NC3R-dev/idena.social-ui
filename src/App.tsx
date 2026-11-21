@@ -2,13 +2,13 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import Modal from 'react-modal';
 import { IdenaApprovedAds, type ApprovedAd } from 'idena-approved-ads';
 import { sha3_256 } from 'js-sha3';
-import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, prepareMediaAttachment, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi, hasRetryableMediaError, IndexerRateLimitedError } from './logic/asyncUtils';
+import { type Post, type Poster, type Tip, breakingChanges, getNewPost, saveReplyPostId, deOrphanReplyPosts, submitPost, processTip, submitSendTip, prepareMediaAttachment, storeFileToIpfs, getPastTxsWithIdenaIndexerApi, getRpcClient, type RpcClient, copyPostTx, getNewPostLatestActivity, getblockTxsWithIdenaIndexerApi, getBlockAtWithIdenaIndexerApi, getLastBlockWithIdenaIndexerApi, submitMessage, processMessage, resolveNewTextForPosts, resolveNewMediaForPosts, copyMessageTx, type Message, getPubkeyWithIdenaIndexerApi, getPubkeyWithRpc, encryptRecipientsMessage, type PostTips, getTxEventsWithIdenaIndexerApi, getMedia, getMessage, getPosterPromise, resolveNewTextForMessages, resolveNewMediaForMessages, getTxWithIdenaIndexerApi, hasRetryableMediaError, IndexerRateLimitedError, getErrorLoadingMediaFile, type MessagePromise, type MediaPromise } from './logic/asyncUtils';
 import { decryptAESGCM, encryptAESGCM, extractPubkeyAddressFromPrivateKey, filterIndexerApiBalanceUpdates, filterTransactionsByCutoffTimestamp, getDisplayAddress, getNextContract, getPostActivities, getPostActivityKey, getTextAndMediaForPost, getTimestampFromIndexerApi, isObjectEmpty, str2bytes } from './logic/utils';
 import IdenaAdPng from './assets/idena_ad.png';
 import IdenaAdThumbPng from './assets/idena_ad_thumb.png';
 import IdenaLogo from './assets/idena_logo.png';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
-import { defaultProfileActivity, discussPrefix, messagePrefix, zeroAddress, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostActivityItem, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
+import { defaultProfileActivity, discussPrefix, messagePrefix, zeroAddress, type ModerationRequest, type BrowserStateHistorySettings, type Conversation, type EventTransaction, type MouseEventLocal, type PostFinderTransaction, type PostActivityItem, type PostMediaAttachment, type ProfileActivity, type TransactionCached } from './App.exports';
 import { AppContext, type AppContextValue } from './AppContext';
 import ModalLikesTipsComponent from './components/ModalLikesTipsComponent';
 import ModalSendTipComponent from './components/ModalSendTipComponent';
@@ -28,10 +28,17 @@ import { loadPostsCache } from './logic/postsStore';
 import { loadTipsCache } from './logic/tipsStore';
 import { loadMessagesCache } from './logic/messagesStore';
 import { loadPostersCache } from './logic/postersStore';
-import { cacheIgnore, loadIgnoresCache, type IgnoreItem } from './logic/ignoreStore';
+import { cacheIgnore, isIgnored, loadIgnoresCache, MESSAGE_BEFORE_V12, type IgnoreItem } from './logic/ignoreStore';
 import { cachePostActivity, loadPostActivityCache } from './logic/postActivityStore';
 import { cacheMessageReadStatus, loadMessageReadStatusCache } from './logic/messageReadStatusStore';
 import { addBlocksCapturedRange, clearBlocksCapturedRange, getBlocksCapturedRange, getBlocksCapturedRangeOverlapping } from './logic/blocksCapturedStore';
+import { getModeratorRole, getPostHiddenStatus, getVouchesGiven, moderationConfig, type ModeratorRole } from './logic/moderation';
+import { sendModerationCall, type PreparedModerationCall } from './logic/moderationActions';
+import ModalModerationComponent from './components/ModalModerationComponent';
+import ModalVerifyModeratorComponent from './components/ModalVerifyModeratorComponent';
+import { checkWitnesses, forgetOtherVerification, readWitnessVerification } from './logic/moderatorVerification';
+import { loadModeration, pruneConfirmedTransactions, refreshModerationEpoch, syncModeration, syncModerationReports } from './logic/moderationSync';
+import { countNewReportGroups } from './logic/moderationReports';
 
 const defaultNodeUrl = 'https://restricted.idena.io';
 const defaultNodeApiKey = 'idena-restricted-node-key';
@@ -67,6 +74,7 @@ const ADS_INTERVAL = 10000;
 const SCAN_PAST_POSTS_TTL = 1 * 60;
 const INDEXER_API_ITEMS_LIMIT = 20;
 const SUBMITTING_POST_INTERVAL = 2000;
+const MODERATION_STARTUP_WAIT_MS = 5000;
 const MAX_POST_MEDIA_BYTES = 900_000;
 const MAX_POST_MEDIA_BYTES_WEBAPP = 1024 * 5;
 const MAX_PICKED_MEDIA_BYTES = 10_000_000;
@@ -154,6 +162,8 @@ function App() {
     const indexerApiUrlRef = useRef(indexerApiUrl);
     const [encryptedPrivateKey, setEncryptedPrivateKey] = useState<string>(initSettings.encryptedPrivateKey);
     const [password, setPassword] = useState<string>(initSettings.password);
+    const encryptedPrivateKeyRef = useRef(initSettings.encryptedPrivateKey);
+    const passwordRef = useRef(initSettings.password);
     const [saveEncryptedKey, setSaveEncryptedKey] = useState<boolean>(initSettings.saveEncryptedKey);
     const [savePassword, setSavePassword] = useState<boolean>(initSettings.savePassword);
 
@@ -238,6 +248,15 @@ function App() {
     const modalRpcSendMessageRef = useRef<{ location: string, recipients: string[], replyToMessageId?: string }>({ location: '', recipients: [] });
     const modalExpandImageRef = useRef<{ image?: File, cid?: string }>({});
     const modalSubmitPubkeyRef = useRef<{ address: string }>({ address: '' });
+    const modalModerationRef = useRef<ModerationRequest>({ kind: 'moderate', address: '' });
+    const modalLockedRef = useRef(false);
+    const closeModal = () => {
+        if (!modalLockedRef.current) setModalOpen('');
+    };
+    const [nodeKeyAddress, setNodeKeyAddress] = useState('');
+    const revealedPostIdsRef = useRef<Set<string>>(new Set());
+    const witnessVerifiedRef = useRef(false);
+    const moderatorRoleRef = useRef<ModeratorRole | undefined>(undefined);
 
     // miscellaneous
     const [, forceUpdate] = useReducer(x => x + 1, 0);
@@ -316,6 +335,14 @@ function App() {
 
                 encryptedPrivateKeyFromNodeRef.current = exportKeyResult;
                 passwordFromNodeRef.current = uuid;
+
+                // The node's key decrypts to its address: proof that this browser's user owns it.
+                try {
+                    const privateKey = await decryptAESGCM(exportKeyResult, new Uint8Array(sha3_256.array(uuid)));
+                    setNodeKeyAddress(extractPubkeyAddressFromPrivateKey(privateKey).address);
+                } catch (error) {
+                    console.error(error);
+                }
             }
 
             const adsClient = new IdenaApprovedAds({ idenaNodeUrl, idenaNodeApiKey });
@@ -340,11 +367,31 @@ function App() {
                 loadTipsCache(),
                 loadPostersCache(),
                 loadIgnoresCache(),
-            ]).then(([cachedPosts, cachedTips, cachedPosters, cachedIgnores]) => {
+                loadModeration(),
+            ]).then(async ([cachedPosts, cachedTips, cachedPosters, cachedIgnores]) => {
                 cachedPostsRef.current = { ...cachedPostsRef.current, ...cachedPosts };
                 cachedTipsRef.current = { ...cachedTipsRef.current, ...cachedTips };
                 postersRef.current = { ...postersRef.current, ...cachedPosters };
                 cachedIgnoresRef.current = { ...cachedIgnoresRef.current, ...cachedIgnores };
+
+                // Catch up on moderation before the scanners start, so they don't fetch the content of hidden posts.
+                // Don't hold the feed back for long: polling picks up whatever this misses.
+                if (moderationConfig) {
+                    const startupSync = Promise.all([
+                        syncModeration(indexerApiUrlRef.current),
+                        refreshModerationEpoch(rpcClientRef.current!),
+                    ]).then(([{ changed }, epochChanged]) => {
+                        if (changed || epochChanged) {
+                            forceUpdate();
+                            resolveUnhiddenPosts();
+                        }
+                    }).catch((error) => {
+                        // Never keep the feed from loading: polling retries.
+                        console.error(error);
+                    });
+                    await Promise.race([startupSync, new Promise((resolve) => setTimeout(resolve, MODERATION_STARTUP_WAIT_MS))]);
+                }
+
                 setCacheLoaded(true);
             });
         }
@@ -417,9 +464,20 @@ function App() {
         prevPathnameRef.current = pathname;
     }, [pathname]);
 
+    // Revealed hidden posts don't stay open: navigating away hides them again.
+    useEffect(() => {
+        revealedPostIdsRef.current = new Set();
+    }, [pathname]);
+
+    // A proof made for another address doesn't carry over.
+    useEffect(() => {
+        forgetOtherVerification(postersAddress);
+        witnessVerifiedRef.current = false;
+    }, [postersAddress]);
+
     useEffect(() => {
         const canUseIdenaApp = makePostsWith === 'idena-app' && !credentialsInvalid;
-        const canUseRpc = makePostsWith === 'rpc' && !viewOnlyNode;
+        const canUseRpc = makePostsWith === 'rpc' && !viewOnlyNode && !!nodeKeyAddress;
 
         if (nodeAvailable && (canUseIdenaApp || canUseRpc)) {
             const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
@@ -429,7 +487,7 @@ function App() {
                 setMessagesCacheLoaded(true);
             });
         }
-    }, [postersAddress, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode]);
+    }, [postersAddress, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode, nodeKeyAddress]);
 
     useEffect(() => {
         if (makePostsWith === 'idena-app') {
@@ -511,6 +569,11 @@ function App() {
     }, [postersAddress]);
 
     useEffect(() => {
+        encryptedPrivateKeyRef.current = encryptedPrivateKey;
+        passwordRef.current = password;
+    }, [encryptedPrivateKey, password]);
+
+    useEffect(() => {
         postersAddressInvalidRef.current = postersAddressInvalid;
     }, [postersAddressInvalid]);
 
@@ -572,6 +635,89 @@ function App() {
             recurseBackwardIntervalId && clearInterval(recurseBackwardIntervalId);
         }
     }, [scanningPastBlocks, initialBlock, initialBlockTimestamp, nodeAvailable, cacheLoaded]);
+
+    // Posts hidden when they were scanned never had their text or media fetched. Once unbanned or expired, fetch them,
+    // a batch at a time. Runs on its own, so polling carries on meanwhile; a run already going picks up later changes.
+    const resolvingUnhiddenPostsRef = useRef(false);
+    const resolveUnhiddenPostsAgainRef = useRef(false);
+
+    const resolveUnhiddenPosts = async () => {
+        if (resolvingUnhiddenPostsRef.current) {
+            resolveUnhiddenPostsAgainRef.current = true;
+            return;
+        }
+        resolvingUnhiddenPostsRef.current = true;
+
+        try {
+            do {
+                resolveUnhiddenPostsAgainRef.current = false;
+                const unresolvedPosts = Object.values(postsRef.current).filter((post) =>
+                    post?.postId && !getPostHiddenStatus(post) && ((post.message && !post.messageResolved) || (post.media && !post.mediaResolved)));
+
+                for (let start = 0; start < unresolvedPosts.length; start += INDEXER_API_ITEMS_LIMIT) {
+                    const batch = unresolvedPosts.slice(start, start + INDEXER_API_ITEMS_LIMIT);
+                    const settledTexts = await Promise.allSettled(batch.filter((post) => post.message && !post.messageResolved).map((post) => getMessage(post.postId, post.message, rpcClientRef.current!)));
+                    const settledMedia = await Promise.allSettled(batch.filter((post) => post.media && !post.mediaResolved).map((post) => getMedia(post.postId, post.media, post.mediaType, rpcClientRef.current!)));
+                    await resolveNewTextForPosts(settledTexts.flatMap((result) => result.status === 'fulfilled' ? [Promise.resolve(result.value)] : []), postsRef);
+                    await resolveNewMediaForPosts(settledMedia.flatMap((result) => result.status === 'fulfilled' ? [Promise.resolve(result.value)] : []), postsRef);
+                    forceUpdate();
+                }
+            } while (resolveUnhiddenPostsAgainRef.current);
+        } finally {
+            resolvingUnhiddenPostsRef.current = false;
+        }
+    };
+
+    // Moderation: the poster record of the address in Settings, whose stake can make it a moderator.
+    useEffect(() => {
+        const ownAddress = postersAddress.toLowerCase();
+        if (!moderationConfig || !cacheLoaded || !rpcClientRef.current || ownAddress === zeroAddress) return;
+
+        const posterPromise = getPosterPromise(ownAddress, postersRef, findPostsWithRef.current === 'indexer-api', rpcClientRef.current, indexerApiUrlRef);
+        if (posterPromise instanceof Promise) posterPromise.then(() => forceUpdate());
+    }, [postersAddress, cacheLoaded]);
+
+    // Moderation: poll the contract's new events and the current epoch, and re-render when the hidden content changes.
+    useEffect(() => {
+        if (!moderationConfig || !cacheLoaded) return;
+
+        let cancelled = false;
+        let pollTimeoutId: NodeJS.Timeout | undefined;
+
+        (async function poll() {
+            try {
+                const [{ changed }, epochChanged] = await Promise.all([
+                    syncModeration(indexerApiUrlRef.current),
+                    refreshModerationEpoch(rpcClientRef.current!),
+                ]);
+                const pruned = pruneConfirmedTransactions();
+                if (!cancelled && (changed || epochChanged || pruned)) {
+                    forceUpdate();
+                    resolveUnhiddenPosts();
+                }
+
+                // Reports after the rest, a batch per poll: every report for moderators, your own for everyone else.
+                if (!cancelled && await syncModerationReports(indexerApiUrlRef.current, postersAddressRef.current, !!moderatorRoleRef.current)) {
+                    forceUpdate();
+                }
+
+                // Only a moderator who isn't verified yet looks for a witnessed transaction.
+                if (!cancelled && moderatorRoleRef.current && !witnessVerifiedRef.current && await checkWitnesses(indexerApiUrlRef.current, postersAddressRef.current)) {
+                    witnessVerifiedRef.current = true;
+                    forceUpdate();
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (!cancelled) pollTimeoutId = setTimeout(poll, POLLING_INTERVAL);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+            clearTimeout(pollTimeoutId);
+        };
+    }, [cacheLoaded]);
 
     const validatePostersAddress = (inputPostersAddress: string) => {
         setPostersAddress(inputPostersAddress);
@@ -718,6 +864,7 @@ function App() {
         };
 
         return async function postFinder() {
+            const address = postersAddressRef.current;
             // The backward indexer scan advances its page cursor before fetching the page's details: kept to rewind it if they fail.
             const pageCursor = isRecurseBackwardWithIndexerApi ? { contract: pastContractAddressRef.current, continuationToken: continuationTokenRef.current } : undefined;
 
@@ -885,7 +1032,7 @@ function App() {
                 for (let index = 0; index < transactions.length; index++) {
                     const transaction = transactions[index];
 
-                    if (cachedIgnoresRef.current[transaction.txHash]) {
+                    if (isIgnored(cachedIgnoresRef.current[transaction.txHash], address, sendMessageMethod)) {
                         continue;
                     } else if (cachedPostsRef.current[transaction.txHash]) {
                         const cachedItem = cachedPostsRef.current[transaction.txHash];
@@ -1028,9 +1175,9 @@ function App() {
                         profileActivity.tips = isRecurseForward ? [`${newTip!.postId}|${newTip!.txHash}`, ...profileActivity.tips] : [...profileActivity.tips, `${newTip!.postId}|${newTip!.txHash}`];
                         profileActivityRef.current[newTip!.tipper] = profileActivity;
 
-                        if (postsRef.current[newTip!.postId!]?.poster === postersAddress.toLowerCase()) {
+                        if (postsRef.current[newTip!.postId!]?.poster === address.toLowerCase()) {
                             const newPostActivity: PostActivityItem = { timestamp: newTip!.timestamp, postId: newTip!.postId, type: 'tip', read: false, tipTxHash: newTip!.txHash };
-                            const added = await addPostActivity(newPostActivity, postersAddress);
+                            const added = await addPostActivity(newPostActivity, address);
                             if (added) setUnreadPostActivities(current => current + 1);
                         }
 
@@ -1045,7 +1192,7 @@ function App() {
                                 latestMessagesBackwardQueueRef.current = [ ...latestMessagesBackwardQueueRef.current, transaction ];
                             }
                         } else {
-                            await cacheIgnore({ txHash: transaction.txHash, method: transaction.method, reason: 'non-compliance' });
+                            await cacheIgnore({ txHash: transaction.txHash, method: transaction.method, reason: MESSAGE_BEFORE_V12 });
                         }
 
                         transactionsAccepted = [ ...transactionsAccepted, transaction ];
@@ -1076,8 +1223,10 @@ function App() {
 
                     transactionsAccepted = [ ...transactionsAccepted, transaction ];
 
-                    const messagePromise = newPost!.message && !newPost!.messageResolved && getMessage(newPost!.postId, newPost!.message, rpcClientRef.current!);
-                    const mediaPromise = newPost!.media && !newPost!.mediaResolved && getMedia(newPost!.postId, newPost!.media, newPost!.mediaType, rpcClientRef.current!);
+                    // Hidden posts' text and media aren't fetched, so viewers' browsers don't download or keep them.
+                    const postHidden = !!getPostHiddenStatus(newPost!);
+                    const messagePromise = !postHidden && newPost!.message && !newPost!.messageResolved && getMessage(newPost!.postId, newPost!.message, rpcClientRef.current!);
+                    const mediaPromise = !postHidden && newPost!.media && !newPost!.mediaResolved && getMedia(newPost!.postId, newPost!.media, newPost!.mediaType, rpcClientRef.current!);
 
                     const posterPromise = getPosterPromise(
                         newPost!.poster,
@@ -1095,14 +1244,16 @@ function App() {
                         newLatestPosts.push(newPost!.postId);
                     }
 
-                    const newPostLatestActivity = getNewPostLatestActivity(
-                        isRecurseForward,
-                        newPost!,
-                        postsRef,
-                        postLatestActivityRef,
-                    );
+                    if (!postHidden || newPost!.postLevel === 'Post') {
+                        const newPostLatestActivity = getNewPostLatestActivity(
+                            isRecurseForward,
+                            newPost!,
+                            postsRef,
+                            postLatestActivityRef,
+                        );
 
-                    postLatestActivityRef.current = { ...postLatestActivityRef.current, ...newPostLatestActivity };
+                        postLatestActivityRef.current = { ...postLatestActivityRef.current, ...newPostLatestActivity };
+                    }
 
                     const newPosts = { [newPost!.postId]: newPost as Post };
 
@@ -1212,7 +1363,7 @@ function App() {
 
                     let newPostActivities: PostActivityItem[] = [];
 
-                    if (newPost!.poster === postersAddress.toLowerCase()) {
+                    if (newPost!.poster === address.toLowerCase()) {
                         const postTips = postTipsRef.current[newPost!.postId];
 
                         if (postTips) {
@@ -1226,17 +1377,22 @@ function App() {
                     }
 
                     if (!newPost!.orphaned) {
-                        newPostActivities = [ ...newPostActivities, ...getPostActivities(newPost!, postersAddress, postsRef) ];
+                        newPostActivities = [ ...newPostActivities, ...getPostActivities(newPost!, address, postsRef) ];
                     }
 
                     const updatedDeorphanedPostsArray = Object.keys(updatedDeorphanedPosts);
                     for (let index = 0; index < updatedDeorphanedPostsArray.length; index++) {
                         const post = updatedDeorphanedPosts[updatedDeorphanedPostsArray[index]];
-                        newPostActivities = post ? [ ...newPostActivities, ...getPostActivities(post, postersAddress, postsRef) ] : newPostActivities;
+                        newPostActivities = post ? [ ...newPostActivities, ...getPostActivities(post, address, postsRef) ] : newPostActivities;
                     }
 
+                    newPostActivities = newPostActivities.filter((postActivity) => {
+                        const activityPost = postsRef.current[postActivity.postId];
+                        return postActivity.type === 'tip' || !activityPost || !getPostHiddenStatus(activityPost);
+                    });
+
                     for (let index = 0; index < newPostActivities.length; index++) {
-                        const added = await addPostActivity(newPostActivities[index], postersAddress);
+                        const added = await addPostActivity(newPostActivities[index], address);
                         if (added) setUnreadPostActivities(current => current + 1);
                     }
                 }
@@ -1362,7 +1518,7 @@ function App() {
     type RecurseForwardMessages = () => Promise<void>;
     useEffect(() => {
         const canUseIdenaApp = makePostsWith === 'idena-app' && !credentialsInvalid;
-        const canUseRpc = makePostsWith === 'rpc' && !viewOnlyNode;
+        const canUseRpc = makePostsWith === 'rpc' && !viewOnlyNode && !!nodeKeyAddress;
 
         let recurseForwardIntervalId: NodeJS.Timeout | undefined;
 
@@ -1383,12 +1539,12 @@ function App() {
         } else {
             recurseForwardIntervalId && clearInterval(recurseForwardIntervalId);
         }
-    }, [initialBlock, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode]);
+    }, [initialBlock, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode, nodeKeyAddress]);
 
     type RecurseBackwardMessages = () => Promise<void>;
     useEffect(() => {
         const canUseIdenaApp = makePostsWith === 'idena-app' && !credentialsInvalid;
-        const canUseRpc = makePostsWith === 'rpc' && !viewOnlyNode;
+        const canUseRpc = makePostsWith === 'rpc' && !viewOnlyNode && !!nodeKeyAddress;
 
         let recurseBackwardIntervalId: NodeJS.Timeout | undefined;
 
@@ -1410,7 +1566,7 @@ function App() {
         } else {
             recurseBackwardIntervalId && clearInterval(recurseBackwardIntervalId);
         }
-    }, [initialBlock, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode, scanningPastBlocks, messagesCacheLoaded]);
+    }, [initialBlock, nodeAvailable, makePostsWith, credentialsInvalid, viewOnlyNode, scanningPastBlocks, messagesCacheLoaded, nodeKeyAddress]);
 
     const messagesProcessorFactory = (
         recurseDirection: string,
@@ -1420,42 +1576,57 @@ function App() {
         const isRecurseForward = recurseDirection === 'forward';
 
         return async function messageProcessor() {
+            const address = postersAddressRef.current;
+            const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKeyRef.current;
+            const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : passwordRef.current;
 
             try {
                 const posterPromises = [];
-                const messagePromises = [];
-                const mediaPromises = [];
-                const newMessages = [];
-
-                const encryptedPrivateKeyActual = makePostsWith === 'rpc' ? encryptedPrivateKeyFromNodeRef.current : encryptedPrivateKey;
-                const passwordyActual = makePostsWith === 'rpc' ? passwordFromNodeRef.current : password;
+                const messagePromises: MessagePromise[] = [];
+                const mediaPromises: MediaPromise[] = [];
+                const newMessages: Message[] = [];
 
                 while (latestMessagesQueueRef.current.length) {
-                    const firstMessage = latestMessagesQueueRef.current.shift();
+                    const firstMessage = latestMessagesQueueRef.current.shift()!;
                     const cachedTx = (firstMessage as TransactionCached).cachedItem;
 
-                    const { newMessage, continued: messageContinued } = cachedTx ? { newMessage: (cachedTx as Message) } : await processMessage(
-                        (firstMessage as EventTransaction),
-                        encryptedPrivateKeyActual,
-                        passwordyActual,
-                        postersAddress,
-                        messagesRef,
-                        thisChannelId,
-                    );
+                    let decoded: Awaited<ReturnType<typeof processMessage>>;
+                    try {
+                        decoded = cachedTx ? { newMessage: (cachedTx as Message) } : await processMessage(
+                            (firstMessage as EventTransaction),
+                            encryptedPrivateKeyActual,
+                            passwordyActual,
+                            address,
+                            messagesRef,
+                            thisChannelId,
+                        );
+                    } catch (error) {
+                        console.error(`message ${firstMessage.txHash} skipped`, error);
+                        continue;
+                    }
 
+                    const { newMessage, continued: messageContinued } = decoded;
                     const continued = newMessage && messagesRef.current[newMessage.messageId] ? 'already-captured' : messageContinued;
 
                     if (continued) {
                         if (continued === 'already-captured') {
                             // do nothing
                         } else {
-                            await cacheIgnore({ txHash: firstMessage!.txHash, method: firstMessage!.method, reason: 'non-compliance' });
+                            await cacheIgnore({ txHash: firstMessage.txHash, method: firstMessage.method, reason: 'non-compliance', owner: address.toLowerCase() });
                         }
                         continue;
                     }
 
-                    const messagePromise = newMessage!.message && !newMessage!.messageResolved && getMessage(newMessage!.messageId, newMessage!.message, rpcClientRef.current!, newMessage!.textPassword);
-                    const mediaPromise = newMessage!.media && !newMessage!.mediaResolved && getMedia(newMessage!.messageId, newMessage!.media, newMessage!.mediaType, rpcClientRef.current!, newMessage!.mediaPassword);
+                    const messagePromise = newMessage!.message && !newMessage!.messageResolved && getMessage(newMessage!.messageId, newMessage!.message, rpcClientRef.current!, newMessage!.textPassword)
+                        .catch((error) => {
+                            console.error(error);
+                            return { id: newMessage!.messageId, message: 'Issue loading message' };
+                        });
+                    const mediaPromise = newMessage!.media && !newMessage!.mediaResolved && getMedia(newMessage!.messageId, newMessage!.media, newMessage!.mediaType, rpcClientRef.current!, newMessage!.mediaPassword)
+                        .catch(async (error) => {
+                            console.error(error);
+                            return { id: newMessage!.messageId, image: await getErrorLoadingMediaFile(), video: undefined, audio: undefined, cid: '' };
+                        });
 
                     const allParticipants = [ newMessage!.sender, ...newMessage!.participants ];
 
@@ -1521,42 +1692,55 @@ function App() {
                     forwardOrphanedReplyPostsTreeRef.current = { ...forwardOrphanedReplyPostsTreeRef.current, ...newForwardOrphanedReplyPosts };
                     backwardOrphanedReplyPostsTreeRef.current = { ...backwardOrphanedReplyPostsTreeRef.current, ...newBackwardOrphanedReplyPosts };
 
-                    newMessages.push(newMessage);
+                    newMessages.push(newMessage!);
                 }
 
-                await Promise.all(posterPromises);
-                await resolveNewTextForMessages(messagePromises, postersAddress, encryptedPrivateKeyActual, passwordyActual, messagesRef);
-                await resolveNewMediaForMessages(mediaPromises, postersAddress, encryptedPrivateKeyActual, passwordyActual, messagesRef);
+                await Promise.allSettled(posterPromises);
+                await resolveNewTextForMessages(messagePromises, address, encryptedPrivateKeyActual, passwordyActual, messagesRef);
+                await resolveNewMediaForMessages(mediaPromises, address, encryptedPrivateKeyActual, passwordyActual, messagesRef);
 
                 const conversationKeys: string[] = [];
 
                 for (let index = 0; index < newMessages.length; index++) {
-                    const newMessage = newMessages[index] as Message;
+                    const newMessage = newMessages[index];
 
-                    const participants = newMessage.participants;
-                    for (let index = 0; index < participants.length; index++) {
-                        const participantAddress = participants[index];
-                        const participant = postersRef.current[participantAddress];
-                        if (participant && !participant.pubkey) {
-                            const pubkey = findPostsWithRef.current === 'indexer-api'
-                                ? await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, participantAddress)
-                                : await getPubkeyWithRpc(rpcClientRef.current!, participantAddress);
+                    try {
+                        const participants = newMessage.participants;
+                        for (let index = 0; index < participants.length; index++) {
+                            const participantAddress = participants[index];
+                            const participant = postersRef.current[participantAddress];
+                            if (participant && !participant.pubkey) {
+                                try {
+                                    const pubkey = findPostsWithRef.current === 'indexer-api'
+                                        ? await getPubkeyWithIdenaIndexerApi(indexerApiUrlRef.current, participantAddress)
+                                        : await getPubkeyWithRpc(rpcClientRef.current!, participantAddress);
 
-                            postersRef.current = { ...postersRef.current, [participantAddress]: { ...participant, pubkey } };
+                                    postersRef.current = { ...postersRef.current, [participantAddress]: { ...participant, pubkey } };
+                                } catch (error) {
+                                    console.error(error);
+                                }
+                            }
                         }
-                    }
 
-                    const conversationKey = newMessage.conversationKey;
-                    
-                    const messages = isRecurseForward ? [ newMessage.messageId, ...(conversationsRef.current[conversationKey]?.messages ?? []) ] : [ ...(conversationsRef.current[conversationKey]?.messages ?? []), newMessage!.messageId ];
-                    const conversation = { participants, messages };
-                    conversationsRef.current = { ...conversationsRef.current, [conversationKey]: conversation };
+                        const conversationKey = newMessage.conversationKey;
+                        const conversationMessages = conversationsRef.current[conversationKey]?.messages ?? [];
+                        const messages = isRecurseForward ? [ newMessage.messageId, ...conversationMessages ] : [ ...conversationMessages, newMessage.messageId ];
 
-                    conversationKeys.push(conversationKey);
+                        const conversation = { participants, messages };
+                        conversationsRef.current = { ...conversationsRef.current, [conversationKey]: conversation };
 
-                    if (newMessage.sender !== postersAddress.toLowerCase() && !newMessage.isLike) {
-                        const added = await addUnreadMessage(newMessage.messageId, postersAddress);
-                        if (added) setUnreadMessages(current => current + 1);
+                        conversationKeys.push(conversationKey);
+
+                        if (newMessage.sender !== address.toLowerCase() && !newMessage.isLike) {
+                            try {
+                                const added = await addUnreadMessage(newMessage.messageId, address);
+                                if (added) setUnreadMessages(current => current + 1);
+                            } catch (error) {
+                                console.error(error);
+                            }
+                        }
+                    } catch (error) {
+                        console.error(error);
                     }
                 }
 
@@ -1580,12 +1764,13 @@ function App() {
                 });
 
             } catch (error) {
-                // do nothing
+                console.error(error);
             } finally {
                 recurse();
             }
         };
     };
+
 
     useEffect(() => {
         let intervalSubmittingPost: NodeJS.Timeout;
@@ -2100,6 +2285,75 @@ function App() {
         setModalOpen('editProfile');
     };
 
+    const handleOpenModerationSheet = (e: MouseEventLocal | undefined, request: ModerationRequest) => {
+        e?.stopPropagation();
+        modalModerationRef.current = request;
+        setModalOpen('moderation');
+    };
+
+    const sendModerationCallHandler = (prepared: PreparedModerationCall) => {
+        return sendModerationCall(rpcClientRef.current!, postersAddress, prepared, makePostsWith, callbackUrl, webAppUrl);
+    };
+
+    const moderationChangedHandler = () => {
+        forceUpdate();
+        resolveUnhiddenPosts();
+    };
+
+    const handleOpenVerifyModal = () => {
+        setModalOpen('verifyModerator');
+    };
+
+    const revealPostHandler = async (postId: string) => {
+        if (!moderatorVerified) {
+            handleOpenVerifyModal();
+            return;
+        }
+
+        revealedPostIdsRef.current = new Set(revealedPostIdsRef.current).add(postId);
+        forceUpdate();
+
+        const post = postsRef.current[postId];
+        if (!post) return;
+
+        try {
+            const [text, media] = await Promise.all([
+                post.message && !post.messageResolved ? getMessage(post.postId, post.message, rpcClientRef.current!) : undefined,
+                post.media && !post.mediaResolved ? getMedia(post.postId, post.media, post.mediaType, rpcClientRef.current!) : undefined,
+            ]);
+            if (!text && !media) return;
+
+            const mediaFields = media ? Object.fromEntries(Object.entries(media).filter(([key]) => key !== 'id')) : {};
+            postsRef.current = {
+                ...postsRef.current,
+                [postId]: {
+                    ...postsRef.current[postId],
+                    ...(text && { message: text.message, messageResolved: true }),
+                    ...(media && { ...mediaFields, mediaResolved: true }),
+                },
+            };
+            forceUpdate();
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const concealPostHandler = (postId: string) => {
+        const revealed = new Set(revealedPostIdsRef.current);
+        revealed.delete(postId);
+        revealedPostIdsRef.current = revealed;
+        forceUpdate();
+    };
+
+    const reportsSeenHandler = () => {
+        forceUpdate();
+    };
+
+    const getProfileActivityPostIds = (address: string) => {
+        const profileActivity = profileActivityRef.current[address] ?? defaultProfileActivity;
+        return [...profileActivity.posts, ...profileActivity.replies, ...profileActivity.comments];
+    };
+
     const sendProfileCallHandler = (prepared: PreparedProfileCall) => {
         return sendProfileCall(rpcClientRef.current!, postersAddress, prepared, makePostsWith, callbackUrl, webAppUrl);
     };
@@ -2161,6 +2415,21 @@ function App() {
     };
 
     const isConversationPage = pathname.startsWith('/conversation/');
+
+    const moderatorAddress = postersAddress.toLowerCase();
+    const moderatorRole = getModeratorRole(moderatorAddress, postersRef.current[moderatorAddress]?.stake);
+    const moderatorVerified = !!moderatorRole && (
+        (makePostsWith === 'idena-app' && !credentialsInvalid) ||
+        (makePostsWith === 'rpc' && !!nodeKeyAddress && nodeKeyAddress.toLowerCase() === moderatorAddress) ||
+        !!readWitnessVerification(moderatorAddress)
+    );
+
+    useEffect(() => {
+        moderatorRoleRef.current = moderatorRole;
+    }, [moderatorRole]);
+
+    const newReportGroups = moderatorRole ? countNewReportGroups(moderatorAddress, postsRef.current) : 0;
+    const showModeration = !!moderatorRole || (!!moderationConfig && getVouchesGiven(moderatorAddress).length > 0);
 
     const appContextValue: AppContextValue = {
         // settings
@@ -2250,6 +2519,17 @@ function App() {
         handleExpandImageModal,
         handleSubmitPubkeyModal,
         handleOpenEditProfileModal,
+
+        // moderation
+        moderatorRole,
+        moderatorVerified,
+        handleOpenModerationSheet,
+        handleOpenVerifyModal,
+        revealedPostIdsRef,
+        revealPostHandler,
+        concealPostHandler,
+        getProfileActivityPostIds,
+        reportsSeenHandler,
     };
 
     return (
@@ -2262,7 +2542,7 @@ function App() {
                             <span className="hidden text-[26px]/8 font-extrabold xl:inline">Idena Social</span>
                         </span>
                     </Link>
-                    <MenuComponent postersAddress={postersAddress} unreadPostActivities={unreadPostActivities} unreadMessages={unreadMessages} variant="sidebar" />
+                    <MenuComponent postersAddress={postersAddress} unreadPostActivities={unreadPostActivities} unreadMessages={unreadMessages} showModeration={showModeration} newReportGroups={newReportGroups} variant="sidebar" />
                     <section className="mt-14 hidden flex-none xl:block" aria-label="Blockchain">
                         <ScanBlocksComponent
                             currentBlockCaptured={currentBlockCaptured}
@@ -2363,27 +2643,58 @@ function App() {
                 </div>
             </aside>
             <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-canvas/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
-                <MenuComponent postersAddress={postersAddress} unreadPostActivities={unreadPostActivities} unreadMessages={unreadMessages} variant="bottom" />
+                <MenuComponent postersAddress={postersAddress} unreadPostActivities={unreadPostActivities} unreadMessages={unreadMessages} showModeration={showModeration} newReportGroups={newReportGroups} variant="bottom" />
             </div>
             <ScrollToTopButtonComponent variant="fab" className="fixed right-4 bottom-[calc(69px+env(safe-area-inset-bottom))] z-30 sm:bottom-6 lg:hidden" />
             <div onClick={(e) => e.stopPropagation()}>
                 <Modal
                     isOpen={!!modalOpen} 
-                    onRequestClose={() => setModalOpen('')}
+                    onRequestClose={closeModal}
                     overlayClassName={modalOpen === 'expandImage' ? modalExpandImageClassNames.overlay : modalClassNames.overlay}
                     className={modalOpen === 'expandImage' ? modalExpandImageClassNames.content : modalClassNames.content}
                 >
-                    <button type="button" aria-label="Close" title="Close" className={`sticky top-2 z-10 mt-2 ml-2 -mb-11 flex size-9 cursor-pointer items-center justify-center rounded-full ${modalOpen === 'expandImage' ? modalExpandImageClassNames.closeButton : modalClassNames.closeButton}`} onClick={() => setModalOpen('')}>
+                    <button type="button" aria-label="Close" title="Close" className={`sticky top-2 z-10 mt-2 ml-2 -mb-11 flex size-9 cursor-pointer items-center justify-center rounded-full ${modalOpen === 'expandImage' ? modalExpandImageClassNames.closeButton : modalClassNames.closeButton}`} onClick={closeModal}>
                         <CloseIcon className="size-5" />
                     </button>
                     {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'tips' && <ModalLikesTipsComponent heading={'Tips'} modalItemsRef={modalTipsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'sendTip' && <ModalSendTipComponent modalSendTipRef={modalSendTipRef} idenaWalletBalance={idenaWalletBalance} submitSendTipHandler={submitSendTipHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'addMedia' && <ModalAddMediaComponent modalAddMediaRef={modalAddMediaRef} addMediaHandler={addMediaHandler} rpcClient={rpcClientRef.current!} postersAddress={postersAddress} makePostsWith={makePostsWith} closeModal={() => setModalOpen('')} />}
-                    {modalOpen === 'rpcMakePost' && <ModalRpcMakePostComponent modalRpcMakePostRef={modalRpcMakePostRef} submitPostHandler={submitPostHandler} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'rpcMakePost' && <ModalRpcMakePostComponent modalRpcMakePostRef={modalRpcMakePostRef} submitPostHandler={submitPostHandler} postersAddress={postersAddress} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'rpcSendMessage' && <ModalRpcSendMessageComponent modalRpcSendMessageRef={modalRpcSendMessageRef} submitMessageHandler={submitMessageHandler} closeModal={() => setModalOpen('')} />}
                     {modalOpen === 'expandImage' && <ModalExpandImageComponent modalExpandImageRef={modalExpandImageRef} />}
                     {modalOpen === 'submitPubkey' && <ModalSubmitPubkeyComponent modalSubmitPubkeyRef={modalSubmitPubkeyRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}
+                    {modalOpen === 'moderation' && <ModalModerationComponent
+                        request={modalModerationRef.current}
+                        rpcClient={rpcClientRef.current!}
+                        postersAddress={postersAddress}
+                        makePostsWith={makePostsWith}
+                        useIndexer={findPostsWithRef.current === 'indexer-api'}
+                        indexerApiUrlRef={indexerApiUrlRef}
+                        postersRef={postersRef}
+                        postsRef={postsRef}
+                        profileActivityPostIds={getProfileActivityPostIds}
+                        moderatorRole={moderatorRole}
+                        sendModerationCallHandler={sendModerationCallHandler}
+                        moderationChangedHandler={moderationChangedHandler}
+                        closeModal={closeModal}
+                        lockModal={(locked) => {
+                            modalLockedRef.current = locked;
+                        }}
+                    />}
+                    {modalOpen === 'verifyModerator' && <ModalVerifyModeratorComponent
+                        rpcClient={rpcClientRef.current!}
+                        postersAddress={postersAddress}
+                        makePostsWith={makePostsWith}
+                        webAppUrl={webAppUrl}
+                        callbackUrl={callbackUrl}
+                        indexerApiUrlRef={indexerApiUrlRef}
+                        verifiedHandler={() => {
+                            witnessVerifiedRef.current = true;
+                            forceUpdate();
+                        }}
+                        closeModal={() => setModalOpen('')}
+                    />}
                     {modalOpen === 'editProfile' && <ModalEditProfileComponent rpcClient={rpcClientRef.current!} postersAddress={postersAddress} makePostsWith={makePostsWith} sendProfileCallHandler={sendProfileCallHandler} profileUpdatedHandler={profileUpdatedHandler} />}
                 </Modal>
             </div>

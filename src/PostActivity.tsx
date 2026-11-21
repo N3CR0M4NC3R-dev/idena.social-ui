@@ -8,6 +8,8 @@ import { BellIcon, HeartIcon, ReplyIcon, TipIcon } from './components/icons';
 import { getPostActivityKey, getProfilePic, getSpotlightPostDetails } from './logic/utils';
 import { cachePostActivity } from './logic/postActivityStore';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
+import { createPostDisplayResolverFromRefs, isSpotlightShown } from './logic/postDisplay';
+import { getPostHiddenStatus } from './logic/moderation';
 
 const sortFn = (a: PostActivityItem, b: PostActivityItem) => b.timestamp - a.timestamp;
 
@@ -15,6 +17,8 @@ function PostActivity() {
 
     const {
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         postersRef,
         postActivityRef,
         unreadPostActivityThisVisitRef,
@@ -24,8 +28,34 @@ function PostActivity() {
 
     const { key: locationKey } = useLocation();
 
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
+
+    // No activity for hidden replies and comments, even ones shown as placeholders, or for posts in removed threads.
+    // Likes and tips still count, but what they're on can be removed.
+    const isPostActivityShown = (postActivity: PostActivityItem) => {
+        const post = postsRef.current[postActivity.postId];
+        if (!post) return true;
+        const spotlightPost = post.isLike ? postsRef.current[post.replyToPostId] : post;
+        const activityPostShown = post.isLike || postActivity.type === 'tip' || !getPostHiddenStatus(post);
+        return activityPostShown && isSpotlightShown(resolveDisplay, spotlightPost, postsRef);
+    };
+
+    const shownPostActivityKeys = [...postActivityRef.current.values()].sort(sortFn).filter((postActivity) => {
+        if (isPostActivityShown(postActivity)) return true;
+
+        // Unread activity that isn't listed counts as read on this visit, so the unread badge doesn't stay up for it.
+        if (postActivity.read === false) {
+            const postActivityKey = getPostActivityKey(postActivity);
+            unreadPostActivityThisVisitRef.current.add(postActivityKey);
+            const newPostActivity = { ...postActivity, read: true };
+            postActivityRef.current.set(postActivityKey, newPostActivity);
+            cachePostActivity(newPostActivity, postersAddress);
+        }
+        return false;
+    }).map(getPostActivityKey);
+
     const { visibleItems: visiblePostActivityKeys, hasMore, sentinelRef } = useInfiniteScroll(
-        [...postActivityRef.current.values()].sort(sortFn).map(getPostActivityKey),
+        shownPostActivityKeys,
         locationKey,
     );
 

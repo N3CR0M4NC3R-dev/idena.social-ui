@@ -2,6 +2,7 @@ import { useNavigate } from "react-router";
 import type { MouseEventLocal } from "../App.exports";
 import { getDisplayAddress, getIdentityStatus } from "../logic/utils";
 import ObjectUrlImageComponent from "./ObjectUrlImageComponent";
+import BannedLabelComponent from "./BannedLabelComponent";
 
 type PosterHeaderComponentProps = {
     address: string,
@@ -35,7 +36,10 @@ function PosterHeaderComponent(props: PosterHeaderComponentProps) {
         <div className="flex min-w-0 items-center gap-3">
             <ObjectUrlImageComponent className="size-10 flex-none rounded-full bg-surface object-cover" file={pic} />
             <div className="min-w-0 flex-1">
-                <p className="w-fit max-w-full truncate text-[15px]/5 font-bold text-ink hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${address}`)}>{name ?? getDisplayAddress(address)}</p>
+                <div className="flex min-w-0 items-center gap-1.5">
+                    <p className="w-fit min-w-0 truncate text-[15px]/5 font-bold text-ink hover:cursor-pointer hover:underline" onClick={(e) => handleClickAddress(e, `/profile/${address}`)}>{name ?? getDisplayAddress(address)}</p>
+                    <BannedLabelComponent address={address} />
+                </div>
                 <p className="truncate text-[13px]/4 text-ink-muted">{`Age ${age} · ${getIdentityStatus(state)} · Stake ${stake}`}</p>
             </div>
         </div>

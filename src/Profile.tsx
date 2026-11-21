@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router";
+import { Link, Navigate, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router";
 import { useAppContext } from "./AppContext";
 import { type Poster, getPosterPromise } from "./logic/asyncUtils";
 import { getDisplayAddress, getIdentityStatus, getProfilePic } from "./logic/utils";
@@ -7,9 +7,10 @@ import { zeroAddress, type MouseEventLocal } from "./App.exports";
 import LdsSpinnerComponent from "./components/LdsSpinnerComponent";
 import ObjectUrlImageComponent from "./components/ObjectUrlImageComponent";
 import PageHeaderComponent from "./components/PageHeaderComponent";
-import { ExternalLinkIcon, MessagesIcon, SpinnerIcon } from "./components/icons";
+import { ExternalLinkIcon, FlagIcon, MessagesIcon, SpinnerIcon } from "./components/icons";
 import { keccak256 } from "js-sha3";
 import { useState } from "react";
+import { describeAddressBanEnd, getAddressBan, isAddressBanned, moderationConfig, type ModeratorRole } from "./logic/moderation";
 
 type ProfileIdentityComponentProps = {
     poster: Poster,
@@ -17,6 +18,9 @@ type ProfileIdentityComponentProps = {
     handleConversationClick: () => void,
     handleOpenEditProfileModal?: (e: MouseEventLocal) => void,
     editProfileLoading: boolean,
+    handleModerateClick?: (e: MouseEventLocal) => void,
+    handleReportClick?: (e: MouseEventLocal) => void,
+    ownModeratorRole?: ModeratorRole,
 };
 
 function ProfileIdentityComponent(props: ProfileIdentityComponentProps) {
@@ -26,16 +30,23 @@ function ProfileIdentityComponent(props: ProfileIdentityComponentProps) {
         handleConversationClick,
         handleOpenEditProfileModal,
         editProfileLoading,
+        handleModerateClick,
+        handleReportClick,
+        ownModeratorRole,
     } = props;
 
     return (<>
         <div className="h-[60px] sm:h-[100px] bg-line" />
         <div className="flex flex-row items-start justify-between gap-3 px-4">
             <ObjectUrlImageComponent className="-mt-[45px] sm:-mt-[67px] size-[90px] sm:size-[134px] flex-none rounded-full border-4 border-canvas bg-surface object-cover" file={getProfilePic(poster)} />
-            <div className="flex flex-row gap-2 pt-3">
+            <div className="flex min-w-0 flex-row flex-wrap justify-end gap-2 pt-3">
                 {handleOpenEditProfileModal && <button type="button" className="btn-outline h-9 px-4 text-[15px]" disabled={editProfileLoading} aria-busy={editProfileLoading} onClick={handleOpenEditProfileModal}>
                     {editProfileLoading && <SpinnerIcon className="size-4" />}
                     Edit profile
+                </button>}
+                {handleModerateClick && <button type="button" className="btn-outline h-9 px-4 text-[15px]" onClick={handleModerateClick}>Moderate</button>}
+                {handleReportClick && <button type="button" aria-label="Report account" title="Report account" className="size-9 flex flex-none items-center justify-center rounded-full border border-line-strong cursor-pointer hover:bg-ink/10" onClick={handleReportClick}>
+                    <FlagIcon className="size-5" />
                 </button>}
                 <button type="button" aria-label="Message" title="Message" className="size-9 flex flex-none items-center justify-center rounded-full border border-line-strong cursor-pointer hover:bg-ink/10" onClick={handleConversationClick}>
                     <MessagesIcon className="size-5" />
@@ -47,16 +58,63 @@ function ProfileIdentityComponent(props: ProfileIdentityComponentProps) {
             </div>
         </div>
         <div className="px-4 pt-2 pb-3">
-            <div className="text-xl/6 font-extrabold">{posterDisplayAddress}</div>
+            <div className="flex min-w-0 items-center gap-2">
+                <div className="min-w-0 truncate text-xl/6 font-extrabold">{posterDisplayAddress}</div>
+                {ownModeratorRole && <span className="inline-flex h-[18px] flex-none items-center rounded-full bg-btn-hover px-1.5 text-[11px]/none font-bold text-btn-ink">
+                    <span className="[text-box:trim-both_cap_alphabetic]">{ownModeratorRole === 'staker' ? 'Moderator · staker' : 'Moderator · vouched'}</span>
+                </span>}
+            </div>
             <div className="text-[14px] sm:text-[15px] text-ink-muted break-all">{poster.address}</div>
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[15px]">
                 <span><span className="font-bold text-ink">{poster.age}</span> <span className="text-ink-muted">Age</span></span>
                 <span><span className="font-bold text-ink">{getIdentityStatus(poster.state)}</span> <span className="text-ink-muted">Status</span></span>
                 <span><span className="font-bold text-ink">{parseInt(poster.stake)}</span> <span className="text-ink-muted">Stake</span></span>
             </div>
-            {poster.bio && <p className="mt-3 whitespace-pre-line text-[15px]/5 text-ink [word-break:break-word]">{poster.bio}</p>}
+            {poster.bio && !isAddressBanned(poster.address) && <p className="mt-3 whitespace-pre-line text-[15px]/5 text-ink [word-break:break-word]">{poster.bio}</p>}
         </div>
     </>);
+}
+
+type ProfileBanBannerComponentProps = {
+    address: string,
+    postersAddress: string,
+    postersRef: React.RefObject<Record<string, Poster>>,
+    handleMessageModerator: (moderator: string) => void,
+};
+
+function ProfileBanBannerComponent(props: ProfileBanBannerComponentProps) {
+    const {
+        address,
+        postersAddress,
+        postersRef,
+        handleMessageModerator,
+    } = props;
+
+    const ban = getAddressBan(address);
+
+    if (!ban) {
+        return null;
+    }
+
+    if (ban.source === 'ui') {
+        return (
+            <div className="mx-4 mb-3 rounded-2xl border border-line px-4 py-3">
+                <p className="text-[15px]/5 font-bold text-ink">This account is hidden on idena.social</p>
+            </div>
+        );
+    }
+
+    const canMessageModerator = ban.moderator !== postersAddress.toLowerCase();
+
+    return (
+        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-line px-4 py-3">
+            <div className="min-w-0 flex-1">
+                <p className="text-[15px]/5 font-bold text-ink [word-break:break-word]">{`Banned ${describeAddressBanEnd(ban)}${ban.reason ? ` · ${ban.reason}` : ''}`}</p>
+                <p className="text-[13px] text-ink-muted">by <Link to={`/profile/${ban.moderator}`} className="hover:underline">{getDisplayAddress(ban.moderator, postersRef.current[ban.moderator])}</Link></p>
+            </div>
+            {canMessageModerator && <button type="button" className="btn-outline h-9 flex-none px-4 text-[15px]" onClick={() => handleMessageModerator(ban.moderator)}>Message moderator</button>}
+        </div>
+    );
 }
 
 type ProfileTabComponentProps = {
@@ -98,6 +156,8 @@ function Profile() {
         postersAddress,
         conversationsRef,
         handleOpenEditProfileModal,
+        moderatorRole,
+        handleOpenModerationSheet,
     } = useAppContext();
 
     const profilePath = `/profile/${encodeURIComponent(address!.toLowerCase())}`;
@@ -119,6 +179,7 @@ function Profile() {
     const posterDisplayAddress = poster.address ? getDisplayAddress(poster.address, poster) : '';
     const isOwnProfile = !!poster.address && poster.address === postersAddress.toLowerCase() && postersAddress !== zeroAddress;
     const canEditProfile = isOwnProfile && !inputPostDisabled;
+    const canReport = !!moderationConfig && !isOwnProfile && !!poster.address && !isAddressBanned(poster.address) && getAddressBan(postersAddress)?.source !== 'contract';
 
     const handleEditProfileClick = async (e: MouseEventLocal) => {
         e.stopPropagation();
@@ -147,13 +208,13 @@ function Profile() {
         navigate(-1);
     };
 
-    const handleConversationClick = () => {
-        const participants = [postersAddress, poster.address].map((item: string) => item.toLowerCase()).sort();
+    const openConversationWith = (otherAddress: string) => {
+        const participants = [postersAddress, otherAddress].map((item: string) => item.toLowerCase()).sort();
         const conversationKey = keccak256(participants.join('-'));
         const conversation = conversationsRef.current[conversationKey];
 
         if (!conversation) {
-            conversationsRef.current = { ...conversationsRef.current, [conversationKey]: { participants: [postersAddress.toLowerCase(), poster.address], messages: [] } };
+            conversationsRef.current = { ...conversationsRef.current, [conversationKey]: { participants: [postersAddress.toLowerCase(), otherAddress], messages: [] } };
         }
 
         const to = `/conversation/${conversationKey}`;
@@ -173,7 +234,8 @@ function Profile() {
         <PageHeaderComponent title={posterDisplayAddress || 'Profile'} subtitle={poster.address ? getIdentityStatus(poster.state) : undefined} onBack={handleGoBack} />
         {!poster.address && <LdsSpinnerComponent />}
         {poster.address && <>
-            <ProfileIdentityComponent poster={poster} posterDisplayAddress={posterDisplayAddress} handleConversationClick={handleConversationClick} handleOpenEditProfileModal={canEditProfile ? handleEditProfileClick : undefined} editProfileLoading={editProfileLoading} />
+            <ProfileIdentityComponent poster={poster} posterDisplayAddress={posterDisplayAddress} handleConversationClick={() => openConversationWith(poster.address)} handleOpenEditProfileModal={canEditProfile ? handleEditProfileClick : undefined} editProfileLoading={editProfileLoading} handleModerateClick={moderatorRole && !isOwnProfile ? (e) => handleOpenModerationSheet(e, { kind: 'moderate', address: poster.address }) : undefined} handleReportClick={canReport ? (e) => handleOpenModerationSheet(e, { kind: 'reportAccount', address: poster.address }) : undefined} ownModeratorRole={isOwnProfile ? moderatorRole : undefined} />
+            <ProfileBanBannerComponent address={poster.address} postersAddress={postersAddress} postersRef={postersRef} handleMessageModerator={openConversationWith} />
             <div className="flex flex-row px-2 sm:px-0 border-b border-line overflow-x-auto no-scrollbar" role="tablist">
                 <ProfileTabComponent label="Posts" isActive={location.pathname === profilePath} onClick={(e) => handleClickAddress(e, profilePath)} />
                 <ProfileTabComponent label="Replies" isActive={location.pathname === `${profilePath}/replies`} onClick={(e) => handleClickAddress(e, `${profilePath}/replies`)} />

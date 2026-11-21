@@ -18,6 +18,13 @@ import ProfileTips from './ProfileTips.tsx';
 import ProfileMedia from './ProfileMedia.tsx';
 import PostActivity from './PostActivity.tsx';
 import Topics from './Topics.tsx';
+import Moderation from './Moderation.tsx';
+import ModerationReports from './ModerationReports.tsx';
+import ModerationBanned from './ModerationBanned.tsx';
+import ModerationLog from './ModerationLog.tsx';
+import ModerationModerators from './ModerationModerators.tsx';
+import ModerationCleanup from './ModerationCleanup.tsx';
+import ModerationVouches from './ModerationVouches.tsx';
 import { initTheme } from './logic/theme.ts';
 
 initTheme();
@@ -34,6 +41,14 @@ createRoot(document.getElementById('root')!).render(
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/messages" element={<Messages />} />
                     <Route path="/postactivity" element={<PostActivity />} />
+                    <Route path="/moderation" element={<Moderation />}>
+                        <Route index element={<ModerationReports />} />
+                        <Route path="/moderation/banned" element={<ModerationBanned />} />
+                        <Route path="/moderation/log" element={<ModerationLog />} />
+                        <Route path="/moderation/moderators" element={<ModerationModerators />} />
+                        <Route path="/moderation/vouches" element={<ModerationVouches />} />
+                        <Route path="/moderation/banned/:address" element={<ModerationCleanup />} />
+                    </Route>
                     <Route path="/post/:postId" element={<PostOutlet />} />
                     <Route path="/conversation/:conversationKey" element={<ConversationOutlet />} />
                     <Route path="/profile/:address" element={<Profile />}>

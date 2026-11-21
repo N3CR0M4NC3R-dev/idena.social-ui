@@ -3,6 +3,7 @@ import { useAppContext } from './AppContext';
 import PostComponent from './components/PostComponent';
 import SortPostsByComponent from './components/SortPostsByComponent';
 import { useInfiniteScroll } from './logic/useInfiniteScroll';
+import { createPostDisplayResolverFromRefs } from './logic/postDisplay';
 
 function ProfilePosts() {
     const location = useLocation();
@@ -14,6 +15,8 @@ function ProfilePosts() {
         latestPosts,
         latestActivity,
         postsRef,
+        replyPostsTreeRef,
+        deOrphanedReplyPostsTreeRef,
         browserStateHistoryRef,
         setBrowserStateHistorySettings,
     } = useAppContext();
@@ -24,9 +27,11 @@ function ProfilePosts() {
 
     const sortPostsBy = browserStateHistoryRef.current[locationKey].sortPostsBy;
 
+    const resolveDisplay = createPostDisplayResolverFromRefs(postsRef, replyPostsTreeRef, deOrphanedReplyPostsTreeRef);
+
     const filteredOrderedPosts = (sortPostsBy === 'latest-posts' ? latestPosts : latestActivity).filter(postId => {
         const post = postsRef.current[postId];
-        return post.poster === address;
+        return post.poster === address && resolveDisplay(postId) !== 'removed';
     });
 
     const { visibleItems: visiblePostIds, hasMore, sentinelRef } = useInfiniteScroll(

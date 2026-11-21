@@ -2,6 +2,7 @@ import Decimal from 'decimal.js';
 import { CallContractAttachment, contractArgumentFormat } from 'idena-sdk-js-lite';
 import { getNonceAndEpoch, identityStateConversion, PROFILE_CONTRACT_ADDRESS, readProfileMapWithRpc, type RpcClient } from './asyncUtils';
 import { dnaBase, getCallTransaction } from './utils';
+import { recordBuiltTransaction } from './moderatorWitnesses';
 
 // Editing your own idena-profile (github.com/truongfelix/idena-profile, rules in assembly/index.ts): the name with
 // claimName and dropName, the bio and picture together with setProfile. The rules are checked here before anyone pays
@@ -203,6 +204,7 @@ export const sendProfileCall = async (
 
     const { nonce, epoch } = await getNonceAndEpoch(rpcClient, from);
     const txHex = getCallTransaction(PROFILE_CONTRACT_ADDRESS, amount, nonce, epoch, maxFee.mul(dnaBase).toFixed(0), getProfilePayload(call));
+    recordBuiltTransaction(from, txHex);
     window.open(`${webAppUrl}/dna/raw?tx=${txHex}&callback_format=html&callback_url=${callbackUrl}?method=${call.method}`, '_blank');
 
     return { error: undefined };

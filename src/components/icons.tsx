@@ -235,3 +235,19 @@ export function MoreIcon({ className }: IconProps) {
         </svg>
     );
 }
+
+export function ShieldIcon({ className, filled }: IconProps) {
+    return (
+        <svg {...svgProps} className={className}>
+            <path d="M12 3.25 4.75 6v5.5c0 4.5 3.1 8.3 7.25 9.25 4.15-.95 7.25-4.75 7.25-9.25V6z" fill={fillWhen(filled)} />
+        </svg>
+    );
+}
+
+export function FlagIcon({ className }: IconProps) {
+    return (
+        <svg {...svgProps} className={className}>
+            <path d="M5.75 20.75V4M5.75 4.75h11.5l-2.5 4.25 2.5 4.25H5.75" />
+        </svg>
+    );
+}
