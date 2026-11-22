@@ -18,7 +18,7 @@ The contract's own README is the reference for its methods, storage, events and 
 
 There are two kinds of moderator:
 
-- **Stakers** are identities with at least 1,000,000 iDNA staked. The contract checks the stake live on every action, so a staker whose stake drops below the threshold stops moderating straight away.
+- **Stakers** are identities with at least 1,000,000 iDNA staked. The contract checks the stake on a staker's first action in an epoch and trusts it until the epoch ends. Stake only drops at validation, when the epoch turns over and that trust lapses, so a staker whose stake drops below the threshold stops moderating straight away. The exception is an identity killed mid-epoch after its stake was confirmed: it keeps a staker's powers until the epoch ends.
 - **Vouched moderators** are accounts that at least one staker has vouched for. A staker can have at most 5 vouches in effect at a time. A vouch stays in effect until its staker withdraws it, or until any staker revokes every vouch for that account.
 
 Neither kind can be banned. A vouched moderator becomes bannable once a staker revokes their vouches.
@@ -316,14 +316,14 @@ Stakers make other accounts moderators by vouching for them.
 - **Withdraw vouch…** replaces it once you vouch for the account, and says whether the account stays a moderator through other vouches.
 - **Revoke moderator status…** removes every vouch for a vouched moderator, whoever made them: "Removes all 4 vouches for alice, from 0xab…, 0xcd…, …. alice stops being a moderator immediately and can then be banned." Each of those stakers gets their vouch back to use again. It isn't offered for an account that is also a staker, since that account moderates through its stake.
 - **My vouches (2/5)** lists your vouches with when you made them, whether others also vouch, and **Withdraw…** on each.
-- **If your stake drops below the threshold, or the contract bans you,** your vouches stay in effect, but you can't moderate. The Moderation menu item stays, and the page shows only My vouches, headed "You can no longer moderate, but your 3 vouches stay in effect."
+- **If your stake drops below the threshold, or the contract bans you,** your vouches stay in effect, but you can't moderate. A drop at validation takes effect with the new epoch. If your identity is killed mid-epoch, the contract keeps accepting your actions until the epoch ends, provided it confirmed your stake that epoch, but this app goes by your current stake and stops offering them. The Moderation menu item stays, and the page shows only My vouches, headed "You can no longer moderate, but your 3 vouches stay in effect."
 - **Near the threshold,** a staker within 5% of it sees "Stake 1,003,120: you stop moderating below 1,000,000." on the Moderation page.
 
 ### Fees
 
-Only the gas a transaction uses is charged. The **max fee** shown on each sheet is a cap that your balance must cover when you sign. Most of it is gas reserved for the contract's stake check, and that reserved gas isn't spent. A staker's 1,000,000 iDNA is locked in stake, so the max fee has to come from the account's liquid balance.
+Only the gas a transaction uses is charged. The **max fee** shown on each sheet is a cap that your balance must cover when you sign. Most of it is gas reserved for the contract's stake check, and that reserved gas isn't spent. A staker's max fee always includes it, even once the contract has confirmed their stake for the epoch and skips the check. A staker's 1,000,000 iDNA is locked in stake, so the max fee has to come from the account's liquid balance.
 
-Measured at a fee per gas of 0.000112 iDNA. Fees scale with the network's current fee per gas.
+Measured at a fee per gas of 0.000112 iDNA. Fees scale with the network's current fee per gas. The charged amounts were measured against the previous contract, which checked a staker's stake on every action; the current one uses less gas in every case.
 
 | Action | Charged | Max fee |
 |---|---|---|
@@ -339,7 +339,7 @@ Measured at a fee per gas of 0.000112 iDNA. Fees scale with the network's curren
 | Withdraw a vouch | 1.36 iDNA | 2.5 |
 | Revoke (one voucher) | 2.41 iDNA | 5.4 |
 
-A batch costs about 0.5 iDNA for each extra post with no reason, and up to about 1.5 iDNA per post with a 280-byte reason, because the reason is stored with every post. A full batch of 100 is roughly 50 iDNA or more. A vouched moderator's actions run directly in the contract, with no stake check, which is why they cost less.
+A batch costs about 0.5 iDNA for each extra post with no reason, and up to about 1.5 iDNA per post with a 280-byte reason, because the reason is stored with every post. A full batch of 100 is roughly 50 iDNA or more. A vouched moderator's actions run directly in the contract, with no stake check, which is why they cost less. So do a staker's after their first action in an epoch, except that a ban always checks that its target isn't a staker.
 
 ---
 
@@ -388,11 +388,13 @@ export const uiBannedTransactions: string[] = [
 - **Ban expiry** compares a ban's `endEpoch` with the current epoch from `dna_epoch`. The epoch is refreshed every 10 minutes, and every minute once the next validation is due.
 - **Storage:** the replayed events and the replay's position are kept in IndexedDB (`moderation_events`, `moderation_meta`). The cache is replayed from scratch when the contract address or the replay version changes, when it's inconsistent, and after Settings › clear cached content.
 - **Hidden content isn't fetched.** The text and media of hidden posts aren't downloaded or cached when posts are scanned. Otherwise every viewer's browser would download and keep content the moderators removed, which could include illegal images. They're fetched when a ban ends, or when a moderator reveals the post (without caching).
-- **Map keys** (for `contract_readMap`) are lowercase `0x` addresses or hashes, as UTF-8 and then hex. Address lists (`m:`, `v:`) come back as hex, 40 characters per address.
+- **Map keys** (for `contract_readMap`) are lowercase `0x` addresses or hashes, as UTF-8 and then hex. Address lists (`m:`, `v:`) come back as hex, 40 characters per address. A stake epoch (`s:`) comes back as hex too: a 2-byte little-endian u16, so `0xf000` is epoch 240.
 
 ### Checks before signing
 
-The default node (restricted.idena.io) can't dry-run contract calls: it blocks `contract_estimateCall`, and `bcn_estimateRawTx` runs a call as the zero address. A stake check that fails in the contract's callback still leaves a successful, charged transaction. So the app repeats the contract's checks with `contract_readMap` and `dna_identity` reads before anything is signed.
+The default node (restricted.idena.io) can't dry-run contract calls: it blocks `contract_estimateCall`, and `bcn_estimateRawTx` runs a call as the zero address. A refused action is still charged, and when a stake check in the contract's callback refuses it, the transaction even succeeds ([confirming actions](#confirming-actions)). So the app repeats the contract's checks with `contract_readMap` and `dna_identity` reads before anything is signed.
+
+**Who counts as a staker** in the table below follows the contract: an address whose `dna_identity` stake is at least `stakeThreshold`, or whose `s:<address>` holds the current epoch from `dna_epoch`. The second covers an identity killed after the contract confirmed its stake that epoch. A failed read of either counts as the node not answering, never as "not a staker". Only these checks read `s:`; badges, menus, the Moderate panel and the Moderation page go by live stake.
 
 | Action | Checks |
 |---|---|
@@ -409,7 +411,9 @@ The default node (restricted.idena.io) can't dry-run contract calls: it blocks `
 
 ### Confirming actions
 
-- **By receipt.** The app waits for the transaction's receipt and checks for the action's own event (for example `ban`, or a `banTransaction` per newly hidden post). A receipt without it means a callback refused the action; the error comes from its `actionResult.subActionResults`. A report is checked inside the call, so a refused report fails its transaction.
+- **By receipt.** The app waits for the transaction's receipt and checks for the action's own event (for example `ban`, or a `banTransaction` per newly hidden post). A refused action is charged either way, and shows in one of two ways:
+  - **In a callback,** the transaction succeeds without the event, and the error comes from its `actionResult.subActionResults`. Checks that follow an identity lookup run there: a ban's, since it always looks up its target, and the stake check on a staker's first action in an epoch.
+  - **Inside the call,** the transaction fails, with the error in the receipt's `error`. That's every other check, including every check on reports and withdrawals, and on a vouched moderator's or a confirmed staker's actions other than a ban.
 - **Finding the transaction.** With "Make posts with: RPC", the node returns the hash at once. With the Idena app, the app finds the mined transaction through the indexer, matching the one it built by epoch, nonce, recipient and payload. If another transaction takes that nonce first, the built one can never be mined, and the sheet says so.
 - **Shown at once.** The indexer can lag the chain by a minute. So a confirmed transaction's events are applied to the app's state straight away, and dropped once the replay lists the transaction, or after 3 minutes.
 - **One action per target at a time.** A second action on a target with one on its way would only be charged and refused, so it's blocked until the first settles.
@@ -417,9 +421,10 @@ The default node (restricted.idena.io) can't dry-run contract calls: it blocks `
 ### Gas
 
 - **Send 0 iDNA.** The contract never reads the amount sent: on mainnet, idena-go gives a call that sends nothing a nil amount, which fails the call if the contract reads it.
-- **Callback gas.** A staker's action, and every ban, checks stake in a callback after an identity lookup. The callback's gas (`_gasLimit`, in WASM gas, which is 100 times finer than the gas the node charges) is reserved out of the transaction's gas limit, so the max fee has to cover it. A ban reserves it twice, because it looks up the target too. The callbacks use under 2M WASM gas, so the app passes 2.5M rather than the contract's default 4M.
+- **Callback gas.** Every ban, and a staker's first action in an epoch, checks stake in a callback after an identity lookup. The callback's gas (`_gasLimit`, in WASM gas, which is 100 times finer than the gas the node charges) is reserved out of the transaction's gas limit, so the max fee has to cover it. A ban reserves it twice, because it looks up the target too. The callbacks use under 2M WASM gas (measured against the previous contract), so the app passes 2.5M rather than the contract's default 4M.
+- **Confirmed stakers.** A lookup that finds the stake confirms it in `s:` until the epoch ends, and the staker's later actions run inline and reserve nothing, apart from a ban's lookup of its target. The app still sizes a staker's max fee for the lookup, which covers the inline path too.
 - **Vouch and revoke** cost about 60,000 WASM gas more per voucher the target already has, so the app adds that for each voucher in `m:<target>`.
-- **Batches:** a hidden post costs about 0.5M WASM gas with no reason and 1.4M with a 280-byte one. The contract's default reservation is 4M plus 2M per post. The app passes a tighter `_gasLimit` from the post count and the reason's length. A vouched moderator's batch runs inline, so its max fee covers the whole batch.
+- **Batches:** a hidden post costs about 0.5M WASM gas with no reason and 1.4M with a 280-byte one. The contract's default reservation is 4M plus 2M per post. The app passes a tighter `_gasLimit` from the post count and the reason's length. A vouched moderator's batch runs inline, so its max fee covers the whole batch. A confirmed staker's batch runs inline too, and the max fee sized for its callback covers it.
 - **The charge** is the gas used × the fee per gas, plus the size fee (10 gas per byte). A receipt's `txFee` is only part of it: the indexer's `fee` is the full charge.
 
 ### Implementation notes

@@ -24,7 +24,7 @@ export type ModerationConfig = {
 // The idena.social-mod contract the UI follows. null turns the contract integration off: no event replay, no
 // contract bans; the UI ban lists below still apply. Typed explicitly so the code that reads it still handles null.
 export const moderationConfig: ModerationConfig | null = {
-    contractAddress: '0x2D063782FC18Fe29be8aaF65df9CDd3a1c53Bf6d', // deploy tx 0x04b6b960…, 2026-11-21
+    contractAddress: '0x8A44bA305c09375F6a1f553920e49daE4875A5E5', // deploy tx 0x47a94c52…, 2026-11-22
     stakeThreshold: 1_000_000,
     maxVouches: 5,
     maxReasonBytes: 280,

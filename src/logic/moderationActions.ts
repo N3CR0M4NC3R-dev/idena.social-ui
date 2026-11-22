@@ -8,8 +8,8 @@ import { hashPayload, recordBuiltTransaction } from './moderatorWitnesses';
 
 // Actions on the idena.social-mod contract (rules in its README and assembly/index.ts): moderators' bans and hides,
 // stakers' vouches, and everyone's reports. As with idena-profile, the rules are checked here before anyone pays a fee: the public
-// node's dry run runs a call as the zero address, and a callback that rejects an action still leaves a successful,
-// charged transaction.
+// node's dry run runs a call as the zero address, and a rejected action is charged, even when a callback rejects it
+// and the transaction still succeeds.
 
 export type ModerationCall =
     | { method: 'ban', args: { address: string, epochs: number, reason: string } }
@@ -27,23 +27,29 @@ export type PreparedModerationCall = { call: ModerationCall, role?: ModeratorRol
 
 const isReport = (call: ModerationCall) => call.method === 'report' || call.method === 'reportTransaction';
 const isVouchCall = (call: ModerationCall) => call.method === 'vouch' || call.method === 'withdrawVouch' || call.method === 'revokeVouches';
-// Vouching and revoking look up the caller's stake: only stakers can.
+// Only stakers can vouch and revoke.
 const isStakerCall = (call: ModerationCall) => call.method === 'vouch' || call.method === 'revokeVouches';
 
-// Gas, in the units the node charges (WASM gas is 100 times finer). A staker's action, and every ban, runs its
-// checks in a callback after an identity lookup; the callback's gas is reserved out of the call's gas limit, so the
-// max fee covers it, but only the gas used is charged. A vouched moderator's other actions run inline.
-// Measured on mainnet (the receipt's gas used, size fee excluded): hide 22.5k gas, unban 20.3k, ban 32.4k. So each
-// callback uses well under 2M WASM gas; 2.5M leaves room for a 280-byte reason. The contract's default is 4M.
+// Gas, in the units the node charges (WASM gas is 100 times finer). Every ban, and a staker's first action in an
+// epoch, runs its checks in a callback after an identity lookup; the callback's gas is reserved out of the call's gas
+// limit, so the max fee covers it, but only the gas used is charged. A lookup that finds the stake confirms it until
+// the epoch ends (s:), so the staker's later actions run inline, like a vouched moderator's, except that a ban still
+// looks up its target. The max fee for a staker is still sized for the lookup, which covers the inline path too.
+// The "measured on mainnet" figures in this file are from the previous contract, which looked up a staker on every
+// action; this one uses less gas on every path.
+// Measured on mainnet, previous contract (the receipt's gas used, size fee excluded): hide 22.5k gas, unban 20.3k,
+// ban 32.4k. So each callback uses well under 2M WASM gas; 2.5M leaves room for a 280-byte reason. The contract's
+// default is 4M.
 const CALLBACK_WASM_GAS = 2_500_000;
 const IDENTITY_PROMISE_WASM_GAS = 20_000; // the contract's IDENTITY_PROMISE_GAS
 const WASM_GAS_PER_GAS = 100;
 const PROMISE_CALL_GAS = 10_000;
 const INLINE_CALL_GAS = 30_000;
-// Withdrawing a vouch runs inline, rewriting two address lists: 10.3k gas measured on mainnet with one voucher.
+// Withdrawing a vouch runs inline, rewriting two address lists: 10.3k gas measured on mainnet (previous contract)
+// with one voucher.
 const WITHDRAW_CALL_GAS = 15_000;
-// A report runs inline: one ban read and an event. Measured on mainnet, size excluded: 8.7k gas with a 4-byte
-// reason, 11.8k with a 278-byte one (charged 1.23 and 1.85 iDNA, size included).
+// A report runs inline: one ban read and an event. Measured on mainnet, previous contract, size excluded: 8.7k gas
+// with a 4-byte reason, 11.8k with a 278-byte one (charged 1.23 and 1.85 iDNA, size included).
 const REPORT_CALL_GAS = 14_000;
 // A batched transaction ban costs about 0.5M WASM gas with no reason and 1.4M with a 280-byte one (the README).
 const BATCHED_BAN_WASM_GAS = 600_000;
@@ -60,11 +66,11 @@ export const getReasonBytes = (reason: string) => new TextEncoder().encode(reaso
 const contractAddress = () => normalizeHex(moderationConfig!.contractAddress);
 
 // Map keys are the UTF-8 of a lowercase 0x address or hash, hex-encoded for the RPC call. Returns '' when unset (the
-// node's "data is nil"), and undefined when the read failed: a failure must never pass for an empty map. Address lists
-// (m:, v:) come back as hex.
-export const readModerationMap = async (rpcClient: RpcClient, map: 'b:' | 't:' | 'm:' | 'v:', key: string) => {
+// node's "data is nil"), and undefined when the read failed: a failure must never pass for an empty map. Bans (b:, t:)
+// come back as JSON strings; address lists (m:, v:) and stake epochs (s:) as hex.
+export const readModerationMap = async (rpcClient: RpcClient, map: 'b:' | 't:' | 'm:' | 'v:' | 's:', key: string) => {
     const hexKey = toHexString(new TextEncoder().encode(normalizeHex(key)), true);
-    const { result, error } = await rpcClient('contract_readMap', [contractAddress(), map, hexKey, map === 'm:' || map === 'v:' ? 'hex' : 'string'], true);
+    const { result, error } = await rpcClient('contract_readMap', [contractAddress(), map, hexKey, map === 'b:' || map === 't:' ? 'string' : 'hex'], true);
     if (typeof result === 'string') return result;
     if (typeof error?.message === 'string' && error.message.includes('data is nil')) return '';
     return undefined;
@@ -87,28 +93,40 @@ const parseAddressList = (hex: string) => (hex.startsWith('0x') ? hex.slice(2) :
 
 export const isStoredBanActive = (ban: StoredBan | undefined, epoch: number) => !!ban && (ban.permanent || epoch < ban.endEpoch);
 
+// A stake epoch (s:) is a u16, little-endian: '0xf000' is epoch 240. undefined when unset or not 2 bytes.
+export const parseStakeEpoch = (hex: string) => {
+    const digits = hex.startsWith('0x') ? hex.slice(2) : hex;
+    return /^[0-9a-f]{4}$/i.test(digits) ? parseInt(digits.slice(2, 4) + digits.slice(0, 2), 16) : undefined;
+};
+
 // What the contract knows about an address: its stake, vouchers and ban. role is undefined for non-moderators.
+// Like the contract, it counts as a staker an address whose stake a lookup confirmed this epoch (s:), even if its
+// stake has dropped since: that happens when the identity is killed mid-epoch. Only the checks before signing use
+// this; what the UI displays goes by live stake.
 export const readModerationStanding = async (rpcClient: RpcClient, address: string) => {
-    const [ { result: identity }, { result: epochResult }, vouchersHex, banJson ] = await Promise.all([
+    const [ { result: identity }, { result: epochResult }, vouchersHex, banJson, stakeEpochHex ] = await Promise.all([
         rpcClient('dna_identity', [address], true),
         rpcClient('dna_epoch', [], true),
         readModerationMap(rpcClient, 'm:', address),
         readModerationMap(rpcClient, 'b:', address),
+        readModerationMap(rpcClient, 's:', address),
     ]);
 
     const epoch = epochResult?.epoch as number | undefined;
-    const staker = Number(identity?.stake ?? 0) >= moderationConfig!.stakeThreshold;
+    const confirmedStaker = epoch !== undefined && parseStakeEpoch(stakeEpochHex ?? '') === epoch;
+    const staker = Number(identity?.stake ?? 0) >= moderationConfig!.stakeThreshold || confirmedStaker;
     const vouchers = parseAddressList(vouchersHex ?? '');
     const ban = parseBan(banJson ?? '');
     const banned = epoch !== undefined && isStoredBanActive(ban, epoch);
     const role: ModeratorRole | undefined = banned ? undefined : staker ? 'staker' : vouchers.length ? 'vouched' : undefined;
 
-    return { known: !!identity && epoch !== undefined && vouchersHex !== undefined && banJson !== undefined, epoch, staker, vouchers, ban, banned, role };
+    const known = !!identity && epoch !== undefined && vouchersHex !== undefined && banJson !== undefined && stakeEpochHex !== undefined;
+    return { known, epoch, staker, vouchers, ban, banned, role };
 };
 
 // A vouch or revocation costs about gasPerExistingVoucher more per voucher the target already has (the README).
-// Measured on mainnet: a vouch for an address with no vouchers used 1.34M WASM gas in its callback (24.1k gas in
-// all, charged 2.93 iDNA).
+// Measured on mainnet, previous contract: a vouch for an address with no vouchers used 1.34M WASM gas in its callback
+// (24.1k gas in all, charged 2.93 iDNA).
 const getVouchCallbackGas = (existingVouchers: number) => CALLBACK_WASM_GAS + existingVouchers * moderationConfig!.gasPerExistingVoucher;
 
 const getCallbackGas = (call: ModerationCall, existingVouchers: number) => {
@@ -118,7 +136,8 @@ const getCallbackGas = (call: ModerationCall, existingVouchers: number) => {
 };
 
 const getArgs = (call: ModerationCall, role: ModeratorRole | undefined, existingVouchers = 0) => {
-    // Reports, withdrawals and a vouched moderator's batch run inline: there's no callback gas to set.
+    // Reports, withdrawals and a vouched moderator's batch run inline: there's no callback gas to set. A staker's calls
+    // set it even when the contract has confirmed their stake this epoch and will run them inline, ignoring it.
     const inline = isReport(call) || call.method === 'withdrawVouch' || (role === 'vouched' && call.method === 'banTransactions');
     const args = inline ? call.args : { ...call.args, _gasLimit: getCallbackGas(call, existingVouchers) };
     return [{ format: contractArgumentFormat.String, index: 0, value: JSON.stringify(args) }];
@@ -137,13 +156,15 @@ const getBatchCallbackGas = (count: number, reason: string) => CALLBACK_WASM_GAS
 const getCallGas = (call: ModerationCall, role: ModeratorRole | undefined, existingVouchers: number) => {
     if (isReport(call)) return REPORT_CALL_GAS;
     if (call.method === 'withdrawVouch') return WITHDRAW_CALL_GAS + existingVouchers * moderationConfig!.gasPerExistingVoucher / WASM_GAS_PER_GAS;
-    // Vouching and revoking always look up the caller.
+    // Vouching and revoking look up the caller, unless the contract confirmed their stake earlier this epoch, when
+    // they run inline. Sized for the lookup either way, which covers the inline path too.
     if (isStakerCall(call)) return PROMISE_CALL_GAS + (getVouchCallbackGas(existingVouchers) + IDENTITY_PROMISE_WASM_GAS) / WASM_GAS_PER_GAS;
     // Every ban looks up its target first, with room for the caller's lookup and its callback.
     if (call.method === 'ban') return PROMISE_CALL_GAS + (2 * CALLBACK_WASM_GAS + 2 * IDENTITY_PROMISE_WASM_GAS) / WASM_GAS_PER_GAS;
     if (role === 'vouched') {
         return call.method === 'banTransactions' ? INLINE_CALL_GAS + getBatchWasmGas(call.args.hashes.length, call.args.reason) / WASM_GAS_PER_GAS : INLINE_CALL_GAS;
     }
+    // A staker's: sized for the caller's lookup, though a staker confirmed this epoch runs inline.
     const callbackGas = call.method === 'banTransactions' ? getBatchCallbackGas(call.args.hashes.length, call.args.reason) : CALLBACK_WASM_GAS;
     return PROMISE_CALL_GAS + (callbackGas + IDENTITY_PROMISE_WASM_GAS) / WASM_GAS_PER_GAS;
 };
@@ -395,9 +416,13 @@ const getAppliedEvents = (call: ModerationCall, events: ReceiptEvent[]) => {
 
 export type ModerationCallResult = { applied: boolean, error?: string, txHash?: string, events?: ReceiptEvent[] };
 
-// Waits for the call's receipt and decides from it. A callback that rejects an action leaves a successful, charged
-// transaction without the action's event, so the events are what count, not the contract's state (which another
-// moderator can change meanwhile). A rejected report fails its transaction, which is charged too. The hash comes from the node, or, in the Idena web app's case, from the indexer
+// Waits for the call's receipt and decides from it. A rejected action is charged either way, but shows in one of two
+// ways. The checks that follow an identity lookup run in a callback: a ban's, which always looks up its target, and
+// the stake check on a staker's first action in an epoch. A callback that rejects leaves a successful transaction
+// without the action's event. Every other check runs inside the call and fails the transaction, with the reason in
+// receipt.error: that covers reports, withdrawals, and actions other than a ban by a vouched moderator or by a staker
+// the contract has confirmed this epoch. So the events are what count, not the contract's state (which another
+// moderator can change meanwhile). The hash comes from the node, or, in the Idena web app's case, from the indexer
 // once the transaction this browser built is mined.
 export const waitForModerationCall = async (rpcClient: RpcClient, caller: string, call: ModerationCall, sent: SentModerationCall, indexerApiUrl: string): Promise<ModerationCallResult> => {
     const deadline = Date.now() + CONFIRM_TIMEOUT_MS;

@@ -146,7 +146,7 @@ const runSync = async (indexerApiUrl: string): Promise<SyncResult> => {
         const timestamp = Math.floor(new Date(tx.timestamp!).getTime() / 1000);
 
         // A callback that rejects an action still leaves success: true, but emits no event: the events are the truth.
-        // A rejected report fails its transaction.
+        // A rejection inside the call fails the transaction, which is skipped.
         if (tx.type === 'CallContract' && tx.txReceipt?.success === true && REPLAYED_METHODS.has(method)) {
             const response = await getTxEventsWithIdenaIndexerApi(indexerApiUrl, txHash, EVENTS_LIMIT);
             if (response.error) return { changed: false, error: response.error };

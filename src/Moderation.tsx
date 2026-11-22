@@ -51,8 +51,8 @@ function Moderation() {
     const showVouchesTab = moderatorRole === 'staker' || vouchesGiven.length > 0 || location.pathname === VOUCHES_TAB.path;
     const tabs = !moderatorRole ? [VOUCHES_TAB] : showVouchesTab ? [...MODERATOR_TABS, VOUCHES_TAB] : MODERATOR_TABS;
 
-    // The contract checks stake on every action: warn a staker close to the threshold, unless vouches keep them a
-    // moderator anyway.
+    // Stake can drop at validation, and the contract checks it again each epoch: warn a staker close to the threshold,
+    // unless vouches keep them a moderator anyway.
     const stake = Number(postersRef.current[me]?.stake ?? 0);
     const threshold = moderationConfig.stakeThreshold;
     const stakeWarning = moderatorRole === 'staker' && !getVouchers(me).length && stake < threshold * (1 + STAKE_WARNING_MARGIN)
