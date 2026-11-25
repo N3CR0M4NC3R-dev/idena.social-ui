@@ -103,7 +103,7 @@ Max fee 2.42 iDNA: only the gas used is charged.
 - **Reason:** Report stays disabled until you pick a reason or type one. "Other" asks you to write it. Reasons can be up to 280 bytes; most characters are 1 byte, but accented letters, other alphabets and emoji take 2 to 4.
 - **Reports are public.** A report is a blockchain event that includes your address. Keep that in mind before reporting someone who might retaliate.
 - **Once is enough.** If you've already reported something, the sheet shows "You reported this on 21 Nov 2026: Spam" instead of the button.
-- **Cost:** about 1.2 iDNA with a short reason, up to about 1.9 iDNA with a 280-byte one ([fees](#fees)).
+- **Cost:** about 0.6 iDNA with a short reason, up to about 1.3 iDNA with a 280-byte one ([fees](#fees)).
 
 Moderators can report too, alongside their own tools.
 
@@ -323,21 +323,26 @@ Stakers make other accounts moderators by vouching for them.
 
 Only the gas a transaction uses is charged. The **max fee** shown on each sheet is a cap that your balance must cover when you sign. Most of it is gas reserved for the contract's stake check, and that reserved gas isn't spent. A staker's max fee always includes it, even once the contract has confirmed their stake for the epoch and skips the check. A staker's 1,000,000 iDNA is locked in stake, so the max fee has to come from the account's liquid balance.
 
-Measured at a fee per gas of 0.000112 iDNA. Fees scale with the network's current fee per gas. The charged amounts were measured against the previous contract, which checked a staker's stake on every action; the current one uses less gas in every case.
+Fees scale with the network's fee per gas, so they're given here at 0.000112 iDNA. Measured rows were measured on mainnet at 0.000123 iDNA and scaled to match; their reasons were 7 to 24 bytes, and a longer reason costs more.
+
+Rows marked *est.* haven't been measured on the current contract yet. They're conservative estimates: the previous contract's measured cost, less 5,000 gas for the call and for each callback, rounded up. The current contract saves more than that on every action measured so far. A staker's estimate is for their first action in an epoch; later ones skip the stake check and cost less.
 
 | Action | Charged | Max fee |
 |---|---|---|
-| Ban | 3.89 iDNA | 8.9 |
-| Hide a post | 2.80 iDNA | 5.4 |
-| Restore a post | 2.54 iDNA | 5.4 |
-| Unban | 2.52 iDNA | 5.4 |
-| Hide 2 posts in one batch | 3.38 iDNA | 7.2 |
-| Hide or restore, as a vouched moderator | 1.5–1.7 iDNA | 4.7 |
-| Report, short reason | 1.23 iDNA | 2.4 |
-| Report, 278-byte reason | 1.85 iDNA | 2.8 |
-| Vouch | 2.93 iDNA | 5.3 |
-| Withdraw a vouch | 1.36 iDNA | 2.5 |
-| Revoke (one voucher) | 2.41 iDNA | 5.4 |
+| Ban, as a vouched moderator | 1.42 iDNA | 8.9 |
+| Ban, as a staker | 2.3 iDNA *est.* | 8.9 |
+| Hide a post, as a vouched moderator | 1.11 iDNA | 4.7 |
+| Hide a post, as a staker | 1.7 iDNA *est.* | 5.4 |
+| Restore a post, as a vouched moderator | 0.78 iDNA | 4.7 |
+| Restore a post, as a staker | 1.5 iDNA *est.* | 5.4 |
+| Unban, as a vouched moderator | 0.75 iDNA | 4.6 |
+| Unban, as a staker | 1.4 iDNA *est.* | 5.4 |
+| Hide 2 posts in one batch, as a staker | 2.3 iDNA *est.* | 7.2 |
+| Report, 22-byte reason | 0.57 iDNA | 2.4 |
+| Report, 278-byte reason | 1.3 iDNA *est.* | 2.8 |
+| Vouch, as a staker's first action in the epoch | 1.65 iDNA | 5.3 |
+| Withdraw a vouch | 0.8 iDNA *est.* | 2.5 |
+| Revoke (one voucher), as a staker | 1.3 iDNA *est.* | 5.4 |
 
 A batch costs about 0.5 iDNA for each extra post with no reason, and up to about 1.5 iDNA per post with a 280-byte reason, because the reason is stored with every post. A full batch of 100 is roughly 50 iDNA or more. A vouched moderator's actions run directly in the contract, with no stake check, which is why they cost less. So do a staker's after their first action in an epoch, except that a ban always checks that its target isn't a staker.
 
@@ -421,7 +426,7 @@ The default node (restricted.idena.io) can't dry-run contract calls: it blocks `
 ### Gas
 
 - **Send 0 iDNA.** The contract never reads the amount sent: on mainnet, idena-go gives a call that sends nothing a nil amount, which fails the call if the contract reads it.
-- **Callback gas.** Every ban, and a staker's first action in an epoch, checks stake in a callback after an identity lookup. The callback's gas (`_gasLimit`, in WASM gas, which is 100 times finer than the gas the node charges) is reserved out of the transaction's gas limit, so the max fee has to cover it. A ban reserves it twice, because it looks up the target too. The callbacks use under 2M WASM gas (measured against the previous contract), so the app passes 2.5M rather than the contract's default 4M.
+- **Callback gas.** Every ban, and a staker's first action in an epoch, checks stake in a callback after an identity lookup. The callback's gas (`_gasLimit`, in WASM gas, which is 100 times finer than the gas the node charges) is reserved out of the transaction's gas limit, so the max fee has to cover it. A ban reserves it twice, because it looks up the target too. The callbacks use well under 2M WASM gas (on mainnet, a ban's used 0.64M and a staker's vouch 0.83M), so the app passes 2.5M rather than the contract's default 4M.
 - **Confirmed stakers.** A lookup that finds the stake confirms it in `s:` until the epoch ends, and the staker's later actions run inline and reserve nothing, apart from a ban's lookup of its target. The app still sizes a staker's max fee for the lookup, which covers the inline path too.
 - **Vouch and revoke** cost about 60,000 WASM gas more per voucher the target already has, so the app adds that for each voucher in `m:<target>`.
 - **Batches:** a hidden post costs about 0.5M WASM gas with no reason and 1.4M with a 280-byte one. The contract's default reservation is 4M plus 2M per post. The app passes a tighter `_gasLimit` from the post count and the reason's length. A vouched moderator's batch runs inline, so its max fee covers the whole batch. A confirmed staker's batch runs inline too, and the max fee sized for its callback covers it.

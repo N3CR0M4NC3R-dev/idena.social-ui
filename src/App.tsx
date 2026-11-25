@@ -123,13 +123,13 @@ if (!DEBUG) {
 const modalClassNames = {
     overlay: 'fixed inset-0 z-50 bg-overlay',
     content: 'absolute inset-0 overflow-y-auto overscroll-contain scrollbar-thin bg-canvas outline-none sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[90vh] sm:max-w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl',
-    closeButton: 'hover:bg-ink/10',
+    closeButton: 'sticky top-2 mt-2 ml-2 -mb-11 hover:bg-ink/10',
 };
 
 const modalExpandImageClassNames = {
     overlay: modalClassNames.overlay,
     content: 'absolute top-1/2 left-1/2 max-h-[90vh] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 outline-none',
-    closeButton: 'bg-black/60 text-white backdrop-blur-sm hover:bg-black/80',
+    closeButton: 'absolute top-2 left-2 bg-black/40 text-white hover:bg-black/60',
 };
 
 Modal.setAppElement('#root');
@@ -2653,7 +2653,7 @@ function App() {
                     overlayClassName={modalOpen === 'expandImage' ? modalExpandImageClassNames.overlay : modalClassNames.overlay}
                     className={modalOpen === 'expandImage' ? modalExpandImageClassNames.content : modalClassNames.content}
                 >
-                    <button type="button" aria-label="Close" title="Close" className={`sticky top-2 z-10 mt-2 ml-2 -mb-11 flex size-9 cursor-pointer items-center justify-center rounded-full ${modalOpen === 'expandImage' ? modalExpandImageClassNames.closeButton : modalClassNames.closeButton}`} onClick={closeModal}>
+                    <button type="button" aria-label="Close" title="Close" className={`z-10 flex size-9 cursor-pointer items-center justify-center rounded-full ${modalOpen === 'expandImage' ? modalExpandImageClassNames.closeButton : modalClassNames.closeButton}`} onClick={closeModal}>
                         <CloseIcon className="size-5" />
                     </button>
                     {modalOpen === 'likes' && <ModalLikesTipsComponent heading={'Likes'} modalItemsRef={modalLikePostsRef} postersRef={postersRef} closeModal={() => setModalOpen('')} />}

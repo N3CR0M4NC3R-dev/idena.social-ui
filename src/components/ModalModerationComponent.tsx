@@ -6,6 +6,7 @@ import { describeAddressBanEnd, getAddressBan, getModerationSnapshot, getOwnRepo
 import { getReasonBytes, prepareModerationCall, waitForModerationCall, type ModerationCall, type PreparedModerationCall, type SentModerationCall } from '../logic/moderationActions';
 import { applyConfirmedTransaction } from '../logic/moderationSync';
 import { getDisplayAddress, getDisplayAddressShort, getDisplayTimeAgo, getIdentityStatus } from '../logic/utils';
+import { SpinnerIcon } from './icons';
 
 type ModalModerationComponentProps = {
     request: ModerationRequest,
@@ -26,7 +27,8 @@ type ModalModerationComponentProps = {
     lockModal: (locked: boolean) => void,
 };
 
-type Status = { text: string, error?: boolean };
+// A pending status (waiting for the transaction to confirm, while the sheet is locked) shows prominently, with a detail line.
+type Status = { text: string, error?: boolean, pending?: boolean, detail?: string };
 
 const BAN_REASONS = ['Spam', 'Scam/phishing', 'Illegal', 'Harassment'];
 const LIFT_REASONS = ['Appeal accepted', 'Mistake'];
@@ -183,7 +185,13 @@ function ModalModerationComponent(props: ModalModerationComponentProps) {
             return false;
         }
 
-        setStatus({ text: `${prefix}${makePostsWith === 'rpc' ? 'Sent. Waiting for the next block…' : 'Sign the transaction in the Idena app tab. Waiting for it to reach a block…'}` });
+        setStatus({
+            text: `${prefix}Waiting for confirmation…`,
+            detail: makePostsWith === 'rpc'
+                ? 'Sent. It confirms when it reaches a block, usually within a minute. This window unlocks then.'
+                : 'Sign the transaction in the Idena app tab. It confirms when it reaches a block, and this window unlocks then.',
+            pending: true,
+        });
 
         const result = await waitForModerationCall(rpcClient, postersAddress, call, sent, indexerApiUrlRef.current);
         if (!result.applied) {
@@ -309,7 +317,13 @@ function ModalModerationComponent(props: ModalModerationComponentProps) {
     const actionDisabled = busy || done || !preview || !!preview.error || reasonBytes > maxReasonBytes || (kind === 'ban' && !epochsValid) || (isReport && !reason.trim());
 
     const actionRow = (label: string) => <div className="mt-4 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
-        {status ? <p className={`mr-auto text-[13px] ${status.error ? 'text-danger' : 'text-ink-muted'}`}>{status.text}</p> : preview?.error ? <p className="mr-auto text-[13px] text-danger">{preview.error}</p> : null}
+        {status?.pending ? <div role="status" className="flex w-full items-center gap-3 rounded-2xl bg-surface px-4 py-3">
+            <SpinnerIcon className="size-5 flex-none text-accent" />
+            <div>
+                <p className="text-[17px]/6 font-bold">{status.text}</p>
+                {status.detail && <p className="text-[13px] text-ink-muted">{status.detail}</p>}
+            </div>
+        </div> : status ? <p className={`mr-auto text-[13px] ${status.error ? 'text-danger' : 'text-ink-muted'}`}>{status.text}</p> : preview?.error ? <p className="mr-auto text-[13px] text-danger">{preview.error}</p> : null}
         {!preview && !status && <p className="mr-auto text-[13px] text-ink-muted">Checking…</p>}
         <button type="button" className="btn-outline h-9 px-4 text-[15px]" disabled={busy} onClick={closeModal}>{done ? 'Close' : 'Cancel'}</button>
         {!done && <button type="button" className="btn-primary h-9 px-4 text-[15px]" disabled={actionDisabled} onClick={submit}>{nextChunk ? `Sign transaction ${nextChunk + 1} of ${batchChunks.length}` : label}</button>}

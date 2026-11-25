@@ -35,11 +35,12 @@ const isStakerCall = (call: ModerationCall) => call.method === 'vouch' || call.m
 // limit, so the max fee covers it, but only the gas used is charged. A lookup that finds the stake confirms it until
 // the epoch ends (s:), so the staker's later actions run inline, like a vouched moderator's, except that a ban still
 // looks up its target. The max fee for a staker is still sized for the lookup, which covers the inline path too.
-// The "measured on mainnet" figures in this file are from the previous contract, which looked up a staker on every
-// action; this one uses less gas on every path.
-// Measured on mainnet, previous contract (the receipt's gas used, size fee excluded): hide 22.5k gas, unban 20.3k,
-// ban 32.4k. So each callback uses well under 2M WASM gas; 2.5M leaves room for a 280-byte reason. The contract's
-// default is 4M.
+// Figures marked "previous contract" are from the contract before this one, which looked up a staker on every action;
+// this one uses less gas on every path.
+// Measured on mainnet (the receipt's gas used, size fee excluded), as a vouched moderator with 7- to 24-byte reasons:
+// hide 7.3k gas, restore 4.5k, unban 4.5k, ban 10.4k, of which 0.64M WASM gas in the ban's callback. As a staker on the
+// previous contract: hide 22.5k, unban 20.3k, ban 32.4k. So each callback uses well under 2M WASM gas; 2.5M leaves
+// room for a 280-byte reason. The contract's default is 4M.
 const CALLBACK_WASM_GAS = 2_500_000;
 const IDENTITY_PROMISE_WASM_GAS = 20_000; // the contract's IDENTITY_PROMISE_GAS
 const WASM_GAS_PER_GAS = 100;
@@ -48,8 +49,9 @@ const INLINE_CALL_GAS = 30_000;
 // Withdrawing a vouch runs inline, rewriting two address lists: 10.3k gas measured on mainnet (previous contract)
 // with one voucher.
 const WITHDRAW_CALL_GAS = 15_000;
-// A report runs inline: one ban read and an event. Measured on mainnet, previous contract, size excluded: 8.7k gas
-// with a 4-byte reason, 11.8k with a 278-byte one (charged 1.23 and 1.85 iDNA, size included).
+// A report runs inline: one ban read and an event. Measured on mainnet, size excluded: 2.7k gas with a 22-byte reason
+// (charged 0.63 iDNA at a fee per gas of 0.000123, size included). On the previous contract, 8.7k with a 4-byte reason
+// and 11.8k with a 278-byte one.
 const REPORT_CALL_GAS = 14_000;
 // A batched transaction ban costs about 0.5M WASM gas with no reason and 1.4M with a 280-byte one (the README).
 const BATCHED_BAN_WASM_GAS = 600_000;
@@ -125,8 +127,9 @@ export const readModerationStanding = async (rpcClient: RpcClient, address: stri
 };
 
 // A vouch or revocation costs about gasPerExistingVoucher more per voucher the target already has (the README).
-// Measured on mainnet, previous contract: a vouch for an address with no vouchers used 1.34M WASM gas in its callback
-// (24.1k gas in all, charged 2.93 iDNA).
+// Measured on mainnet: a staker's first vouch in an epoch, for an address with no vouchers, used 0.83M WASM gas in its
+// callback (12.8k gas in all, charged 1.82 iDNA at a fee per gas of 0.000123). On the previous contract, 1.34M in
+// its callback (24.1k gas in all).
 const getVouchCallbackGas = (existingVouchers: number) => CALLBACK_WASM_GAS + existingVouchers * moderationConfig!.gasPerExistingVoucher;
 
 const getCallbackGas = (call: ModerationCall, existingVouchers: number) => {
